@@ -3,7 +3,7 @@
 [English](README.md) | [Русский](README_RU.md)
 
 <p align="center">
-  <img src="logo.png" alt="QTalk" width="420">
+  <img src="logo_2.svg" alt="QTalk" width="420">
 </p>
 
 QTalk — open-source кроссплатформенный SIP-клиент с упором на быстрый и современный интерфейс, гибкую настройку и единый пользовательский опыт на настольных и мобильных платформах.
@@ -102,8 +102,8 @@ shared/
 
 ## Лицензия
 
-QTalk — open-source проект.
+Исходный код QTalk распространяется под **GNU Affero General Public License, version 3 (AGPL-3.0-only)**. Полный текст находится в файле [LICENSE](LICENSE.txt).
 
-Для проекта планируется использование лицензии **GNU AGPLv3** с учётом лицензирования open-source версии Linphone SDK.
+Проект можно использовать, изменять и распространять при соблюдении условий лицензии. Программа предоставляется без гарантий.
 
-Окончательная лицензия проекта и информация о сторонних компонентах будут добавлены после интеграции конкретной версии Linphone SDK.
+Сторонние компоненты сохраняют собственные лицензии и уведомления об авторских правах. Linphone SDK 5.5.23 предоставляется по модели двойного лицензирования; в QTalk используется открытый вариант под AGPLv3. Подробности — в [README SDK](https://github.com/BelledonneCommunications/linphone-sdk/blob/5.5.23/README.md) и его [лицензии](https://github.com/BelledonneCommunications/linphone-sdk/blob/5.5.23/LICENSE.txt).
