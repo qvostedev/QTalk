@@ -1,0 +1,12 @@
+services:
+  asterisk:
+    image: andrius/asterisk:20
+    container_name: qtalk-asterisk
+    restart: unless-stopped
+
+    # Локальный Linux dev-сервер: localhost без маршрутизации Docker-сети через VPN.
+    network_mode: host
+
+    volumes:
+      - ./config/pjsip.conf:/etc/asterisk/pjsip.conf:ro
+      - ./config/extensions.conf:/etc/asterisk/extensions.conf:ro

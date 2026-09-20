@@ -31,7 +31,26 @@ kotlin {
         }
     }
 
+    // Определение ОС компьютера, на котором сейчас работает Gradle.
+    val hostOs = System.getProperty("os.name").lowercase()
+
+    // Выбор нативной сборки Linphone SDK для этой ОС.
+    val linphoneClassifier = when {
+        hostOs.contains("linux") -> "ubuntu.24.04"
+        hostOs.contains("windows") -> "windows"
+
+        else -> error(
+            "Unsupported desktop OS for Linphone SDK: $hostOs"
+        )
+    }
+
     sourceSets {
+        jvmMain.dependencies {
+            implementation(
+                "org.linphone:linphone-sdk:5.5.23:$linphoneClassifier"
+            )
+        }
+
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.compose.uiTooling)

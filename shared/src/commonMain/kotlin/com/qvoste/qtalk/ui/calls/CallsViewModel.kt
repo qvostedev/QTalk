@@ -20,13 +20,13 @@ class CallsViewModel (
 
     fun connect() {
         scope.launch {
-            connectSip(
-                SipAccount(
-                    username = "testname",
-                    password = "testpass",
-                    domain = "localhost"
-                )
+            val account = SipAccount(
+                username = "100",
+                password = "qtalk100",
+                domain = "127.0.0.1"
             )
+
+            connectSip(account)
         }
     }
 }
