@@ -2,6 +2,7 @@ package com.qvoste.qtalk.app
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import com.qvoste.qtalk.domain.calls.ConnectSipUseCase
 import com.qvoste.qtalk.ui.calls.CallsScreen
@@ -22,6 +23,10 @@ fun App(voipEngine: VoipEngine) {
     val callsViewModel = remember(voipEngine) {
         CallsViewModel(voipEngine, connectSipUseCase
         )
+    }
+
+    DisposableEffect(callsViewModel) {
+        onDispose { callsViewModel.close() }
     }
 
     MaterialTheme {

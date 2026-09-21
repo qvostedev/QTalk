@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.linphone.core.Call
+import org.linphone.core.AudioDevice
+import org.linphone.core.Reason
 import org.linphone.core.Account
 import org.linphone.core.Core
 import org.linphone.core.CoreListenerStub
@@ -41,6 +44,9 @@ class LinphoneVoipEngine : VoipEngine {
     private val scope = CoroutineScope(linphoneDispatcher)
     private var iterateJob: Job? = null
     private var currentAccount: Account? = null
+    private var currentCall: Call? = null
+    private val _callStatus = MutableStateFlow(CallStatus())
+    override val callStatus = _callStatus.asStateFlow()
 
     private val _registrationState =
         MutableStateFlow(RegistrationState.DISCONNECTED)
@@ -48,6 +54,31 @@ class LinphoneVoipEngine : VoipEngine {
         _registrationState.asStateFlow()
 
     private val coreListener = object : CoreListenerStub() {
+        override fun onCallStateChanged(core: Core, call: Call, state: Call.State, message: String) {
+            // На этом этапе поддерживается один исходящий аудиозвонок.
+            if (state == Call.State.IncomingReceived) {
+                call.decline(Reason.Busy)
+                return
+            }
+
+            if (state == Call.State.OutgoingInit && currentCall == null) currentCall = call
+            if (call != currentCall) return
+            println("QTALK: call = $state, $message")
+            val next = when (state) {
+                Call.State.OutgoingInit, Call.State.OutgoingProgress -> CallState.DIALING
+                Call.State.OutgoingRinging, Call.State.OutgoingEarlyMedia -> CallState.RINGING
+                Call.State.Connected, Call.State.StreamsRunning -> CallState.ACTIVE
+                Call.State.Error -> CallState.FAILED
+                Call.State.End -> if (_callStatus.value.state == CallState.FAILED) CallState.FAILED else CallState.ENDED
+                Call.State.Released -> {
+                    currentCall = null
+                    return
+                }
+                else -> return
+            }
+            _callStatus.value = _callStatus.value.copy(state = next, message = message)
+        }
+
         override fun onAccountRegistrationStateChanged(
             core: Core,
             account: Account,
@@ -102,6 +133,19 @@ class LinphoneVoipEngine : VoipEngine {
             error("Unable to start Linphone Core: $startResult")
         }
 
+        // ALSA default на Linux передаёт выбор микрофона и выхода PipeWire/PulseAudio.
+        if (System.getProperty("os.name").startsWith("Linux", ignoreCase = true)) {
+            core.extendedAudioDevices.firstOrNull {
+                it.driverName == "ALSA" && it.deviceName == "default" &&
+                    it.hasCapability(AudioDevice.Capabilities.CapabilityRecord) &&
+                    it.hasCapability(AudioDevice.Capabilities.CapabilityPlay)
+            }?.let { device ->
+                core.defaultInputAudioDevice = device
+                core.defaultOutputAudioDevice = device
+            }
+        }
+        println("QTALK: audio input = ${core.defaultInputAudioDevice?.id}")
+        println("QTALK: audio output = ${core.defaultOutputAudioDevice?.id}")
         println("QTALK: Linphone Core started")
 
         iterateJob = scope.launch {
@@ -117,6 +161,7 @@ class LinphoneVoipEngine : VoipEngine {
 
     override suspend fun register(account: SipAccount) =
         withContext(linphoneDispatcher) {
+            start()
             println("QTALK: register() called")
             println("QTALK: username = ${account.username}")
             println("QTALK: domain = ${account.domain}")
@@ -176,6 +221,35 @@ class LinphoneVoipEngine : VoipEngine {
         }
 
 
+    override suspend fun call(number: String) = withContext(linphoneDispatcher) {
+        check(_registrationState.value == RegistrationState.REGISTERED) { "Сначала подключитесь к SIP-серверу" }
+        check(currentCall == null) { "Предыдущий звонок ещё не завершён" }
+        val extension = number.trim()
+
+        require(extension.matches(Regex("[0-9]{1,20}"))) { "Введите номер" }
+        val server = checkNotNull(currentAccount?.params?.serverAddress).clone()
+        server.username = extension
+        val params = checkNotNull(core.createCallParams(null))
+        params.isVideoEnabled = false
+        _callStatus.value = CallStatus(CallState.DIALING, extension)
+        val call = core.inviteAddressWithParams(server, params)
+        if (call == null) {
+            _callStatus.value = CallStatus(CallState.FAILED, extension, "Не удалось начать звонок")
+        } else {
+            currentCall = call
+        }
+    }
+
+    override suspend fun hangUp() = withContext(linphoneDispatcher) {
+        val call = currentCall ?: return@withContext
+        val previous = _callStatus.value
+        _callStatus.value = previous.copy(state = CallState.ENDING)
+        if (call.terminate() != 0) {
+            _callStatus.value = previous
+            error("Не удалось завершить звонок")
+        }
+    }
+
     override suspend fun unregister() =
         withContext(linphoneDispatcher) {
             println("QTALK: unregister()")
@@ -195,8 +269,11 @@ class LinphoneVoipEngine : VoipEngine {
         withContext(linphoneDispatcher) {
             println("QTALK: stopping Linphone Core")
 
-            core.removeListener(coreListener)
             core.stop()
+            core.removeListener(coreListener)
+            currentCall = null
+            currentAccount = null
+            _callStatus.value = CallStatus()
             _registrationState.value = RegistrationState.DISCONNECTED
 
             println("QTALK: Linphone Core stopped")

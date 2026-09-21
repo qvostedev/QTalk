@@ -10,6 +10,15 @@ class FakeVoipEngine : VoipEngine {
     private val _registrationState = MutableStateFlow(RegistrationState.DISCONNECTED)
     override val registrationState: StateFlow<RegistrationState> = _registrationState.asStateFlow()
 
+    private val _callStatus = MutableStateFlow(CallStatus())
+    override val callStatus = _callStatus.asStateFlow()
+
+    override suspend fun call(number: String) {
+        _callStatus.value = CallStatus(CallState.FAILED, number, "Звонки доступны только в desktop-версии")
+    }
+
+    override suspend fun hangUp() {}
+
     override suspend fun start() {}
     override suspend fun stop() {}
 
