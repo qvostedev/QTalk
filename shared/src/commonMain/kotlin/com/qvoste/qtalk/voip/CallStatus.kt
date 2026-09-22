@@ -1,10 +1,11 @@
 package com.qvoste.qtalk.voip
 
 enum class CallState {
-    IDLE, DIALING, RINGING, ACTIVE, ENDING, ENDED, FAILED;
+    IDLE, INCOMING, DIALING, RINGING, ACTIVE, ENDING, ENDED, FAILED;
 
     val isInProgress: Boolean
-        get() = this == DIALING || this == RINGING || this == ACTIVE || this == ENDING
+        get() = this == INCOMING || this == DIALING || this == RINGING ||
+            this == ACTIVE || this == ENDING
 }
 
 data class CallStatus(

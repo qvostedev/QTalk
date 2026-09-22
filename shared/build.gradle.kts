@@ -31,16 +31,19 @@ kotlin {
         }
     }
 
-    // Определение ОС компьютера, на котором сейчас работает Gradle.
-    val hostOs = System.getProperty("os.name").lowercase()
+    // Для релиза можно выбрать зависимости другой ОС через -Pqtalk.targetOs.
+    val targetOs = providers.gradleProperty("qtalk.targetOs")
+        .orElse(System.getProperty("os.name"))
+        .get()
+        .lowercase()
 
-    // Выбор нативной сборки Linphone SDK для этой ОС.
+    // Linphone содержит отдельные нативные библиотеки для каждой ОС.
     val linphoneClassifier = when {
-        hostOs.contains("linux") -> "ubuntu.24.04"
-        hostOs.contains("windows") -> "windows"
+        targetOs.contains("linux") -> "ubuntu.24.04"
+        targetOs.contains("windows") -> "windows"
 
         else -> error(
-            "Unsupported desktop OS for Linphone SDK: $hostOs"
+            "Unsupported desktop OS for Linphone SDK: $targetOs"
         )
     }
 

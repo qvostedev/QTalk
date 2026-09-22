@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 class FakeVoipEngine : VoipEngine {
     private val _registrationState = MutableStateFlow(RegistrationState.DISCONNECTED)
     override val registrationState: StateFlow<RegistrationState> = _registrationState.asStateFlow()
+    override val registrationMessage: StateFlow<String> = MutableStateFlow("")
 
     private val _callStatus = MutableStateFlow(CallStatus())
     override val callStatus = _callStatus.asStateFlow()
@@ -17,6 +18,8 @@ class FakeVoipEngine : VoipEngine {
         _callStatus.value = CallStatus(CallState.FAILED, number, "Звонки доступны только в desktop-версии")
     }
 
+    override suspend fun acceptCall() {}
+    override suspend fun declineCall() {}
     override suspend fun hangUp() {}
 
     override suspend fun start() {}

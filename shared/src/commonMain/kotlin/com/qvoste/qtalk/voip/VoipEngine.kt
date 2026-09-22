@@ -4,10 +4,13 @@ import kotlinx.coroutines.flow.StateFlow
 
 interface VoipEngine {
     val registrationState: StateFlow<RegistrationState>
+    val registrationMessage: StateFlow<String>
 
     val callStatus: StateFlow<CallStatus>
 
     suspend fun call(number: String)
+    suspend fun acceptCall()
+    suspend fun declineCall()
     suspend fun hangUp()
 
     suspend fun start()

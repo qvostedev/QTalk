@@ -18,6 +18,7 @@ class CallsViewModel(
     private val connectSip: ConnectSipUseCase
 ) {
     val registrationState = voipEngine.registrationState
+    val registrationMessage = voipEngine.registrationMessage
     val callStatus = voipEngine.callStatus
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val commandMutex = Mutex()
@@ -40,11 +41,19 @@ class CallsViewModel(
         }
     }
 
-    fun connect() = execute {
-        connectSip(SipAccount(username = "100", password = "qtalk100", domain = "127.0.0.1"))
+    fun connect(username: String, password: String, domain: String) = execute {
+        connectSip(
+            SipAccount(
+                username = username.trim(),
+                password = password,
+                domain = domain.trim()
+            )
+        )
     }
 
     fun call(number: String) = execute { voipEngine.call(number) }
+    fun acceptCall() = execute { voipEngine.acceptCall() }
+    fun declineCall() = execute { voipEngine.declineCall() }
     fun hangUp() = execute { voipEngine.hangUp() }
     fun close() = scope.cancel()
 }

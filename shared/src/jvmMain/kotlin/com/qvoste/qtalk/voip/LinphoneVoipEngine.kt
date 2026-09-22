@@ -52,12 +52,21 @@ class LinphoneVoipEngine : VoipEngine {
         MutableStateFlow(RegistrationState.DISCONNECTED)
     override val registrationState: StateFlow<RegistrationState> =
         _registrationState.asStateFlow()
+    private val _registrationMessage = MutableStateFlow("")
+    override val registrationMessage: StateFlow<String> =
+        _registrationMessage.asStateFlow()
 
     private val coreListener = object : CoreListenerStub() {
         override fun onCallStateChanged(core: Core, call: Call, state: Call.State, message: String) {
-            // На этом этапе поддерживается один исходящий аудиозвонок.
             if (state == Call.State.IncomingReceived) {
-                call.decline(Reason.Busy)
+                if (currentCall != null) {
+                    call.decline(Reason.Busy)
+                    return
+                }
+
+                currentCall = call
+                val caller = call.remoteAddress?.username.orEmpty()
+                _callStatus.value = CallStatus(CallState.INCOMING, caller, message)
                 return
             }
 
@@ -87,6 +96,13 @@ class LinphoneVoipEngine : VoipEngine {
         ) {
             println("QTALK: registration = $state")
             println("QTALK: registration message = $message")
+
+            val errorPhrase = account.errorInfo?.phrase.orEmpty()
+            _registrationMessage.value = if (errorPhrase.isNotBlank()) {
+                "$message: $errorPhrase"
+            } else {
+                message
+            }
 
             _registrationState.value =
                 when (state) {
@@ -121,10 +137,14 @@ class LinphoneVoipEngine : VoipEngine {
 
         core.addListener(coreListener)
 
-        // Локальный 5060 занят Asterisk; -1 выбирает свободный порт.
+        // TCP получает свободный порт для SIP-сигнализации.
         val transports = core.transports
-        transports.udpPort = -1
-        core.setTransports(transports)
+        transports.udpPort = 0
+        transports.tcpPort = -1
+        transports.tlsPort = 0
+        check(core.setTransports(transports) == 0) {
+            "Не удалось настроить SIP-транспорт"
+        }
 
         val startResult = core.start()
         if (startResult != 0) {
@@ -132,6 +152,12 @@ class LinphoneVoipEngine : VoipEngine {
             _registrationState.value = RegistrationState.FAILED
             error("Unable to start Linphone Core: $startResult")
         }
+
+        // На Windows автоопределение сети иногда не срабатывает.
+        core.registerOnlyWhenNetworkIsUp = false
+        core.isNetworkReachable = true
+        core.setSipNetworkReachable(true)
+        core.setMediaNetworkReachable(true)
 
         // ALSA default на Linux передаёт выбор микрофона и выхода PipeWire/PulseAudio.
         if (System.getProperty("os.name").startsWith("Linux", ignoreCase = true)) {
@@ -162,6 +188,9 @@ class LinphoneVoipEngine : VoipEngine {
     override suspend fun register(account: SipAccount) =
         withContext(linphoneDispatcher) {
             start()
+            require(account.username.matches(Regex("[0-9]{1,20}"))) { "Введите номер учётной записи" }
+            require(account.password.isNotBlank()) { "Введите пароль" }
+            require(account.domain.isNotBlank()) { "Введите адрес SIP-сервера" }
             println("QTALK: register() called")
             println("QTALK: username = ${account.username}")
             println("QTALK: domain = ${account.domain}")
@@ -174,6 +203,7 @@ class LinphoneVoipEngine : VoipEngine {
 
             _registrationState.value =
                 RegistrationState.CONNECTING
+            _registrationMessage.value = "Подключение к ${account.domain}"
 
             val authInfo = factory.createAuthInfo(
                 account.username,
@@ -194,9 +224,9 @@ class LinphoneVoipEngine : VoipEngine {
             ) ?: error("Unable to create SIP identity")
 
 
-            // Asterisk UDP, порт 5060
+            // TCP стабильнее работает в Windows-сборке Linphone.
             val serverAddress = factory.createAddress(
-                "sip:${account.domain}:5060;transport=udp"
+                "sip:${account.domain}:5070;transport=tcp"
             ) ?: error("Unable to create SIP server address")
 
             println(
@@ -240,6 +270,26 @@ class LinphoneVoipEngine : VoipEngine {
         }
     }
 
+    override suspend fun acceptCall() = withContext(linphoneDispatcher) {
+        val call = checkNotNull(currentCall) { "Нет входящего звонка" }
+        check(_callStatus.value.state == CallState.INCOMING) { "Звонок уже обработан" }
+
+        val params = checkNotNull(core.createCallParams(call))
+        params.isVideoEnabled = false
+        if (call.acceptWithParams(params) != 0) {
+            error("Не удалось принять звонок")
+        }
+    }
+
+    override suspend fun declineCall() = withContext(linphoneDispatcher) {
+        val call = checkNotNull(currentCall) { "Нет входящего звонка" }
+        check(_callStatus.value.state == CallState.INCOMING) { "Звонок уже обработан" }
+
+        if (call.decline(Reason.Declined) != 0) {
+            error("Не удалось отклонить звонок")
+        }
+    }
+
     override suspend fun hangUp() = withContext(linphoneDispatcher) {
         val call = currentCall ?: return@withContext
         val previous = _callStatus.value
@@ -275,6 +325,7 @@ class LinphoneVoipEngine : VoipEngine {
             currentAccount = null
             _callStatus.value = CallStatus()
             _registrationState.value = RegistrationState.DISCONNECTED
+            _registrationMessage.value = ""
 
             println("QTALK: Linphone Core stopped")
         }

@@ -16,7 +16,7 @@ The goal of the project is to create a modern and customizable softphone while k
 
 QTalk is currently under active development and is not yet intended for everyday or production use.
 
-The basic application architecture and VoIP abstraction layer are already implemented. SIP functionality and Linphone SDK integration are currently in development.
+The basic application architecture, VoIP abstraction, and local network audio calls are already implemented. SIP functionality and Linphone SDK integration continue to evolve.
 
 ## Platforms
 
