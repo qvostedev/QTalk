@@ -137,14 +137,11 @@ class LinphoneVoipEngine : VoipEngine {
 
         core.addListener(coreListener)
 
-        // TCP получает свободный порт для SIP-сигнализации.
-        val transports = core.transports
-        transports.udpPort = 0
-        transports.tcpPort = -1
-        transports.tlsPort = 0
-        check(core.setTransports(transports) == 0) {
-            "Не удалось настроить SIP-транспорт"
-        }
+        val initialTransports = core.transports
+        initialTransports.udpPort = 0
+        initialTransports.tcpPort = 0
+        initialTransports.tlsPort = 0
+        check(core.setTransports(initialTransports) == 0) { "Не удалось подготовить SIP-транспорт" }
 
         val startResult = core.start()
         if (startResult != 0) {
@@ -189,8 +186,10 @@ class LinphoneVoipEngine : VoipEngine {
         withContext(linphoneDispatcher) {
             start()
             require(account.username.matches(Regex("[0-9]{1,20}"))) { "Введите номер учётной записи" }
-            require(account.password.isNotBlank()) { "Введите пароль" }
+            require(!account.password.isNullOrBlank() || !account.ha1.isNullOrBlank()) { "Введите пароль или HA1" }
             require(account.domain.isNotBlank()) { "Введите адрес SIP-сервера" }
+            require(account.port in 1..65535) { "Порт должен быть от 1 до 65535" }
+            require(account.registrationExpires >= 60) { "Срок регистрации должен быть не меньше 60 секунд" }
             println("QTALK: register() called")
             println("QTALK: username = ${account.username}")
             println("QTALK: domain = ${account.domain}")
@@ -200,18 +199,26 @@ class LinphoneVoipEngine : VoipEngine {
                 core.removeAccount(it)
                 currentAccount = null
             }
+            core.clearAllAuthInfo()
 
             _registrationState.value =
                 RegistrationState.CONNECTING
             _registrationMessage.value = "Подключение к ${account.domain}"
 
+            val transports = core.transports
+            transports.udpPort = if (account.transport == SipTransport.UDP) -1 else 0
+            transports.tcpPort = if (account.transport == SipTransport.TCP) -1 else 0
+            transports.tlsPort = if (account.transport == SipTransport.TLS) -1 else 0
+            check(core.setTransports(transports) == 0) { "Не удалось настроить SIP-транспорт" }
+
             val authInfo = factory.createAuthInfo(
                 account.username,
                 null,
                 account.password,
-                null,
-                null,
-                account.domain
+                account.ha1,
+                account.realm,
+                account.domain,
+                "MD5"
             )
 
             core.addAuthInfo(authInfo)
@@ -224,9 +231,8 @@ class LinphoneVoipEngine : VoipEngine {
             ) ?: error("Unable to create SIP identity")
 
 
-            // TCP стабильнее работает в Windows-сборке Linphone.
             val serverAddress = factory.createAddress(
-                "sip:${account.domain}:5070;transport=tcp"
+                "sip:${account.domain}:${account.port};transport=${account.transport.uriValue}"
             ) ?: error("Unable to create SIP server address")
 
             println(
@@ -241,6 +247,8 @@ class LinphoneVoipEngine : VoipEngine {
             params.identityAddress = identity
             params.serverAddress = serverAddress
             params.isRegisterEnabled = true
+            params.expires = account.registrationExpires
+            params.realm = account.realm
 
             val linphoneAccount = core.createAccount(params)
             currentAccount = linphoneAccount
@@ -318,6 +326,16 @@ class LinphoneVoipEngine : VoipEngine {
 
         withContext(linphoneDispatcher) {
             println("QTALK: stopping Linphone Core")
+
+            currentAccount?.let { account ->
+                val params = account.params.clone()
+                params.isRegisterEnabled = false
+                account.params = params
+                repeat(5) {
+                    core.iterate()
+                    delay(20.milliseconds)
+                }
+            }
 
             core.stop()
             core.removeListener(coreListener)
