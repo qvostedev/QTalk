@@ -1,13 +1,17 @@
 package com.qvoste.qtalk.ui.calls
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -44,9 +48,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
@@ -83,54 +90,22 @@ import qtalk.shared.generated.resources.icon_position
 import qtalk.shared.generated.resources.icon_search
 import qtalk.shared.generated.resources.icon_settings
 import qtalk.shared.generated.resources.icon_telegram
+import qtalk.shared.generated.resources.icon_add_contact
+import qtalk.shared.generated.resources.icon_plus
 import qtalk.shared.generated.resources.logo_white_transparent
+import qtalk.shared.generated.resources.logo_black
+import com.qvoste.qtalk.ui.calls.model.*
+import com.qvoste.qtalk.ui.calls.theme.*
+import com.qvoste.qtalk.ui.calls.components.Sidebar
+import com.qvoste.qtalk.ui.calls.components.Avatar
+import com.qvoste.qtalk.ui.calls.components.CircleIconAction
+import com.qvoste.qtalk.ui.calls.components.CircleResourceAction
+import com.qvoste.qtalk.ui.calls.components.EmptyMessage
+import com.qvoste.qtalk.ui.calls.components.EmptySection
+import com.qvoste.qtalk.ui.calls.components.DialerPanel
+import com.qvoste.qtalk.ui.calls.components.IncomingCallOverlay
+import com.qvoste.qtalk.ui.calls.components.ActiveCallOverlay
 
-// Основные цвета макета собраны здесь, чтобы их было легко заменить.
-private val AppBackground = Color(0xFF0B0D10)
-private val PanelBackground = AppBackground
-private val ControlBackground = Color(0xFF191C20)
-private val DividerColor = Color(0xFF23262D)
-private val Primary = Color(0xFF4B6DC4)
-private val TextPrimary = Color(0xFFE8E9EC)
-private val TextSecondary = Color(0x80FFFFFF)
-private val Danger = Color(0xFF971818)
-private val Online = Color(0xFF58A800)
-
-private enum class AppSection(val title: String) {
-    CALLS("Звонки"),
-    CONTACTS("Контакты"),
-    SETTINGS("Настройки"),
-    NOTIFICATIONS("Уведомления")
-}
-
-private enum class CallFilter(val title: String) {
-    ALL("Все"), MISSED("Пропущенные"), OUTGOING("Исходящие"), INCOMING("Входящие")
-}
-
-private data class Contact(
-    val name: String,
-    val number: String,
-    val favorite: Boolean,
-    val position: String = "",
-    val department: String = "",
-    val company: String = "",
-    val telegram: String = ""
-) {
-    // Компания ПОРТ автоматически относит контакт к сотрудникам.
-    val isEmployee: Boolean get() = company.trim().equals("ПОРТ", ignoreCase = true)
-}
-
-private enum class ContactFilter(val title: String) {
-    ALL("Все"), CLIENTS("Клиенты"), EMPLOYEES("Сотрудники")
-}
-
-private data class HistoryItem(
-    val name: String,
-    val number: String,
-    val direction: String,
-    val time: String,
-    val missed: Boolean = false
-)
 
 @Composable
 fun CallsScreen(viewModel: CallsViewModel) {
@@ -370,13 +345,17 @@ private fun CallsContent(
         onCall(cleanNumber)
     }
 
-    Box(Modifier.fillMaxSize().background(AppBackground)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(AppBackground)) {
+        // На половине экрана освобождаем место центральной колонке.
+        // Windows пересчитывает половину экрана с учётом системного DPI.
+        val compact = maxWidth < 1100.dp
         // При любом звонке основной интерфейс остаётся виден через размытие.
         val showCallOverlay = call.state == CallState.INCOMING || call.state == CallState.ACTIVE
         Row(Modifier.fillMaxSize().then(if (showCallOverlay) Modifier.blur(8.dp) else Modifier)) {
             Sidebar(
                 selected = section,
                 registration = registration,
+                compact = compact,
                 onSelect = { section = it }
             )
 
@@ -384,6 +363,7 @@ private fun CallsContent(
             when (section) {
                 AppSection.CALLS -> CallsHome(
                     modifier = Modifier.weight(1f),
+                    compact = compact,
                     contacts = contacts,
                     history = history,
                     onAddContact = { showAddContact = true },
@@ -401,6 +381,7 @@ private fun CallsContent(
                 )
                 AppSection.CONTACTS -> ContactsSection(
                     modifier = Modifier.weight(1f),
+                    compact = compact,
                     contacts = contacts,
                     onAddContact = { showAddContact = true },
                     onSelectContact = {
@@ -442,6 +423,7 @@ private fun CallsContent(
                     registration = registration,
                     call = call,
                     error = error,
+                    compact = compact,
                     onNumberChange = {
                         number = it.filter { char -> char.isDigit() || char == '*' || char == '#' }
                         selectedContact = contacts.firstOrNull { contact -> contact.number == number }
@@ -488,92 +470,9 @@ private fun CallsContent(
 }
 
 @Composable
-private fun Sidebar(
-    selected: AppSection,
-    registration: RegistrationState,
-    onSelect: (AppSection) -> Unit
-) {
-    Column(
-        modifier = Modifier.width(214.dp).fillMaxHeight().padding(39.dp, 39.dp, 18.dp, 28.dp),
-        verticalArrangement = Arrangement.SpaceBetween
-    ) {
-        Column {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Image(
-                    painter = painterResource(Res.drawable.logo_white_transparent),
-                    contentDescription = "QTalk",
-                    modifier = Modifier.size(41.dp)
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    "QTalk",
-                    color = TextPrimary,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 2.dp)
-                )
-            }
-
-            Spacer(Modifier.height(38.dp))
-            SectionLabel("ОСНОВНОЕ")
-            NavItem(AppSection.CALLS, selected, onSelect)
-            NavItem(AppSection.CONTACTS, selected, onSelect)
-
-            Spacer(Modifier.height(22.dp))
-            SectionLabel("СИСТЕМА")
-            NavItem(AppSection.SETTINGS, selected, onSelect)
-            NavItem(AppSection.NOTIFICATIONS, selected, onSelect)
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar("QT", colorFor("QTalk"), 42)
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text("QTalk", color = TextPrimary, fontSize = 13.sp, maxLines = 1)
-                Text(
-                    registrationText(registration),
-                    color = if (registration == RegistrationState.REGISTERED) Online else TextSecondary,
-                    fontSize = 11.sp
-                )
-            }
-            Text("›", color = TextSecondary, fontSize = 22.sp)
-        }
-    }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(text, color = TextSecondary, fontSize = 10.sp, modifier = Modifier.padding(bottom = 9.dp))
-}
-
-@Composable
-private fun NavItem(section: AppSection, selected: AppSection, onSelect: (AppSection) -> Unit) {
-    val active = section == selected
-    Row(
-        modifier = Modifier.fillMaxWidth().height(44.dp).clickable { onSelect(section) },
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Image(
-            painter = painterResource(sectionIcon(section)),
-            contentDescription = section.title,
-            modifier = Modifier.size(21.dp),
-            colorFilter = ColorFilter.tint(if (active) TextPrimary else TextSecondary)
-        )
-        Spacer(Modifier.width(16.dp))
-        Text(
-            section.title,
-            color = if (active) TextPrimary else TextSecondary,
-            fontSize = 14.sp,
-            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal
-        )
-        Spacer(Modifier.weight(1f))
-        if (active) Box(Modifier.width(3.dp).height(28.dp).background(Primary, RoundedCornerShape(2.dp)))
-    }
-}
-
-@Composable
 private fun CallsHome(
     modifier: Modifier,
+    compact: Boolean,
     contacts: List<Contact>,
     history: List<HistoryItem>,
     onAddContact: () -> Unit,
@@ -595,22 +494,25 @@ private fun CallsHome(
         matchesSearch && matchesFilter
     }
 
-    Column(modifier.fillMaxHeight().padding(29.dp, 39.dp, 29.dp, 20.dp)) {
+    Column(modifier.fillMaxHeight().padding(if (compact) 12.dp else 29.dp, 39.dp, if (compact) 12.dp else 29.dp, 20.dp)) {
         SearchAndAddBar(search, { search = it }, onAddContact)
         Spacer(Modifier.height(35.dp))
         FavoritesSection(
             contacts = contacts,
+            compact = compact,
             trailingText = "Все  ›",
             onTrailingClick = onShowAllContacts,
             onSelectContact = onSelectContact,
             onAddContact = onAddContact
         )
 
-        Spacer(Modifier.height(32.dp))
-        FilterBar(filter) { filter = it }
-        Spacer(Modifier.height(24.dp))
-        Text("История", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(if (compact) 28.dp else 32.dp))
+        if (!compact) {
+            FilterBar(filter, false) { filter = it }
+            Spacer(Modifier.height(24.dp))
+            Text("История", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(10.dp))
+        }
 
         if (visibleHistory.isEmpty()) {
             EmptyMessage(if (history.isEmpty()) "История звонков пока пуста" else "Ничего не найдено")
@@ -657,7 +559,10 @@ private fun SearchField(value: String, onValueChange: (String) -> Unit) {
                         Text(
                             "Поиск контакта, номера или компании...",
                             color = TextSecondary,
-                            fontSize = 10.sp
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                     innerTextField()
@@ -676,7 +581,7 @@ private fun SearchAndAddBar(
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f)) { SearchField(search, onSearchChange) }
         Spacer(Modifier.width(14.dp))
-        CircleAction("+", 40, ControlBackground, onAddContact)
+        CircleResourceAction(Res.drawable.icon_add_contact, 40, 20, 16, ControlBackground, onAddContact)
     }
 }
 
@@ -702,28 +607,31 @@ private fun FavoriteItem(contact: Contact, onClick: () -> Unit) {
 @Composable
 private fun FavoritesSection(
     contacts: List<Contact>,
+    compact: Boolean,
     trailingText: String,
     onTrailingClick: () -> Unit,
     onSelectContact: (Contact) -> Unit,
     onAddContact: () -> Unit
 ) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("Избранное", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.weight(1f))
-        Text(
-            trailingText,
-            color = TextSecondary,
-            fontSize = 12.sp,
-            modifier = Modifier.clickable(onClick = onTrailingClick)
-        )
+    if (!compact) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Избранное", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.weight(1f))
+            Text(
+                trailingText,
+                color = TextSecondary,
+                fontSize = 12.sp,
+                modifier = Modifier.clickable(onClick = onTrailingClick)
+            )
+        }
+        Spacer(Modifier.height(18.dp))
     }
-    Spacer(Modifier.height(18.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-        contacts.filter { it.favorite }.take(7).forEach { contact ->
+    Row(horizontalArrangement = Arrangement.spacedBy(if (compact) 18.dp else 24.dp)) {
+        contacts.filter { it.favorite }.take(if (compact) 4 else 7).forEach { contact ->
             FavoriteItem(contact) { onSelectContact(contact) }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircleAction("+", 48, ControlBackground, onAddContact)
+            CircleResourceAction(Res.drawable.icon_plus, 48, 14, 14, ControlBackground, onAddContact)
             Spacer(Modifier.height(7.dp))
             Text("Добавить", color = TextSecondary, fontSize = 11.sp)
         }
@@ -731,11 +639,12 @@ private fun FavoritesSection(
 }
 
 @Composable
-private fun FilterBar(selected: CallFilter, onSelect: (CallFilter) -> Unit) {
+private fun FilterBar(selected: CallFilter, compact: Boolean, onSelect: (CallFilter) -> Unit) {
     SegmentedBar(
         options = CallFilter.entries.map { it.title },
         selectedIndex = CallFilter.entries.indexOf(selected),
-        onSelect = { onSelect(CallFilter.entries[it]) }
+        onSelect = { onSelect(CallFilter.entries[it]) },
+        fillWidth = compact
     )
 }
 
@@ -758,310 +667,6 @@ private fun HistoryRow(item: HistoryItem, onCall: (String) -> Unit) {
         Text(item.time, color = TextSecondary, fontSize = 10.sp, textAlign = TextAlign.End)
         Spacer(Modifier.width(14.dp))
         CircleIconAction(Res.drawable.icon_calls, 34, ControlBackground) { onCall(item.number) }
-    }
-}
-
-@Composable
-private fun DialerPanel(
-    number: String,
-    contact: Contact?,
-    accountNumber: String,
-    registration: RegistrationState,
-    call: CallStatus,
-    error: String?,
-    onNumberChange: (String) -> Unit,
-    onCall: () -> Unit,
-    onHangUp: () -> Unit
-) {
-    var infoTab by rememberSaveable { mutableStateOf("Информация") }
-    val uriHandler = LocalUriHandler.current
-    val shownNumber = if (call.state.isInProgress) call.number.ifBlank { number } else number
-
-    Column(
-        modifier = Modifier.width(416.dp).fillMaxHeight().background(PanelBackground).padding(37.dp, 39.dp),
-        horizontalAlignment = Alignment.Start
-    ) {
-        Row(Modifier.fillMaxWidth().height(62.dp), verticalAlignment = Alignment.CenterVertically) {
-            Avatar(
-                contact?.let { initialsForName(it.name) } ?: "?",
-                contact?.let { colorFor(it.name) } ?: ControlBackground,
-                62
-            )
-            Spacer(Modifier.width(18.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    contact?.name ?: "Контакт не выбран",
-                    color = TextPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    contact?.let { "Внутренний  •  ${it.number}" }
-                        ?: "Здесь появится информация о контакте.",
-                    color = TextSecondary,
-                    fontSize = 10.sp
-                )
-            }
-        }
-
-        Spacer(Modifier.height(18.dp))
-        Row(Modifier.width(285.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            listOf("Информация", "История", "Заметки").forEach { tab ->
-                InfoTab(tab, infoTab == tab) { infoTab = tab }
-            }
-        }
-        Spacer(Modifier.height(29.dp))
-        Box(Modifier.width(285.dp).height(246.dp)) {
-            when {
-                contact == null -> EmptyMessage("Выберите контакт или наберите номер")
-                infoTab == "Информация" -> Column(
-                    Modifier.padding(top = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(26.dp)
-                ) {
-                    ContactInfo(Res.drawable.icon_position, "Должность", contact.position.ifBlank { "Не указана" })
-                    ContactInfo(Res.drawable.icon_department, "Отдел", contact.department.ifBlank { "Не указан" })
-                    ContactInfo(Res.drawable.icon_company, "Компания", contact.company.ifBlank { "Не указана" })
-                    ContactInfo(
-                        icon = Res.drawable.icon_telegram,
-                        label = "Telegram",
-                        value = contact.telegram.ifBlank { "Не указан" },
-                        isLink = contact.telegram.isNotBlank(),
-                        onClick = {
-                            val username = contact.telegram.removePrefix("@").trim()
-                            if (username.isNotBlank()) uriHandler.openUri("https://t.me/$username")
-                        }
-                    )
-                }
-                else -> EmptyMessage(if (infoTab == "История") "Звонков пока нет" else "Заметок пока нет")
-            }
-        }
-
-        Spacer(Modifier.height(28.dp))
-        Row(Modifier.width(285.dp).height(15.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(
-                "Личная линия сотрудника",
-                color = TextSecondary,
-                fontSize = 12.sp,
-                lineHeight = 12.sp,
-                modifier = Modifier.align(Alignment.CenterVertically)
-            )
-            Text(
-                "•  ${accountNumber.ifBlank { "—" }}",
-                color = TextSecondary,
-                fontSize = 12.sp,
-                lineHeight = 12.sp,
-                modifier = Modifier.align(Alignment.CenterVertically)
-            )
-        }
-
-        Spacer(Modifier.height(28.dp))
-        Box(Modifier.width(285.dp).height(29.dp), contentAlignment = Alignment.Center) {
-            Text(
-                shownNumber.ifBlank { "—" },
-                color = TextPrimary,
-                fontSize = 24.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Image(
-                painter = painterResource(Res.drawable.icon_backspace),
-                contentDescription = "Удалить цифру",
-                modifier = Modifier.align(Alignment.CenterEnd).size(24.dp, 18.dp)
-                    .clickable(enabled = number.isNotEmpty() && !call.state.isInProgress) {
-                        onNumberChange(number.dropLast(1))
-                    }
-            )
-        }
-
-        Spacer(Modifier.height(28.dp))
-        Column(
-            Modifier.width(234.dp).align(Alignment.CenterHorizontally),
-            verticalArrangement = Arrangement.spacedBy(34.dp)
-        ) {
-            keypadRows.forEach { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    row.forEach { key ->
-                        KeypadButton(key.first, key.second) {
-                            if (!call.state.isInProgress) onNumberChange(number + key.first)
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(34.dp))
-        val canCall = registration == RegistrationState.REGISTERED && number.isNotBlank() && !call.state.isInProgress
-        if (call.state.isInProgress) {
-            CircleIconAction(
-                Res.drawable.icon_phone,
-                54,
-                Color(0xFFFF3545),
-                Modifier.align(Alignment.CenterHorizontally),
-                onHangUp
-            )
-        } else {
-            CircleIconAction(
-                Res.drawable.icon_phone,
-                54,
-                if (canCall) Primary else Color(0xFF293142),
-                Modifier.align(Alignment.CenterHorizontally)
-            ) { if (canCall) onCall() }
-        }
-        error?.let { Text(it, color = Danger, fontSize = 9.sp, modifier = Modifier.align(Alignment.CenterHorizontally)) }
-    }
-}
-
-@Composable
-private fun InfoTab(text: String, selected: Boolean, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(text, color = if (selected) Primary else TextSecondary, fontSize = 10.sp)
-        Spacer(Modifier.height(7.dp))
-        Box(Modifier.width(58.dp).height(1.dp).background(if (selected) Primary else Color.Transparent))
-    }
-}
-
-@Composable
-private fun ContactInfo(
-    icon: DrawableResource,
-    label: String,
-    value: String,
-    isLink: Boolean = false,
-    onClick: () -> Unit = {}
-) {
-    Row(
-        Modifier.fillMaxWidth().height(26.dp).clickable(enabled = isLink, onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Image(
-            painter = painterResource(icon),
-            contentDescription = label,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(Modifier.width(12.dp))
-        Column {
-            Text(label, color = TextPrimary, fontSize = 10.sp, lineHeight = 12.sp)
-            Text(value, color = if (isLink) Primary else TextSecondary, fontSize = 10.sp, lineHeight = 12.sp)
-        }
-    }
-}
-
-@Composable
-private fun KeypadButton(value: String, letters: String, onClick: () -> Unit) {
-    Box(
-        Modifier.size(54.dp).background(ControlBackground, CircleShape).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, color = TextPrimary, fontSize = 19.sp, lineHeight = 19.sp)
-            if (letters.isNotBlank()) Text(letters, color = TextSecondary, fontSize = 8.sp, lineHeight = 8.sp)
-        }
-    }
-}
-
-@Composable
-private fun IncomingCallOverlay(
-    number: String,
-    callerName: String?,
-    onAccept: () -> Unit,
-    onDecline: () -> Unit
-) {
-    Box(
-        Modifier.fillMaxSize().background(Color(0x880B0D10)),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Avatar(
-                callerName?.let(::initialsForName) ?: number.take(2),
-                colorFor(callerName ?: number),
-                88
-            )
-            Spacer(Modifier.height(20.dp))
-            Text(callerName ?: "Входящий вызов", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(9.dp))
-            Text("$number  •  Личная линия", color = TextSecondary, fontSize = 13.sp)
-            Spacer(Modifier.height(20.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(96.dp)) {
-                CircleIconAction(Res.drawable.icon_phone, 44, Color(0xFFFF3545)) { onDecline() }
-                CircleIconAction(Res.drawable.icon_phone, 44, Primary) { onAccept() }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ActiveCallOverlay(number: String, callerName: String?, onHangUp: () -> Unit) {
-    var seconds by remember(number) { mutableStateOf(0) }
-    var microphoneEnabled by rememberSaveable { mutableStateOf(true) }
-    var speakerEnabled by rememberSaveable { mutableStateOf(true) }
-    var onHold by rememberSaveable { mutableStateOf(false) }
-
-    LaunchedEffect(number) {
-        while (true) {
-            delay(1_000)
-            seconds++
-        }
-    }
-
-    Box(Modifier.fillMaxSize().background(Color(0x880B0D10)), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Avatar(callerName?.let(::initialsForName) ?: number.take(2), colorFor(callerName ?: number), 88)
-            Spacer(Modifier.height(20.dp))
-            Text(callerName ?: number, color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(9.dp))
-            Text("$number  •  Личная линия", color = TextSecondary, fontSize = 13.sp)
-            Spacer(Modifier.height(20.dp))
-            Text(formatDuration(seconds), color = TextSecondary, fontSize = 14.sp)
-            Spacer(Modifier.height(18.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(35.dp)) {
-                CallControl(Res.drawable.icon_call_microphone, "Микрофон", microphoneEnabled, 16, 25) {
-                    microphoneEnabled = !microphoneEnabled
-                }
-                CallControl(Res.drawable.icon_call_speaker, "Динамик", speakerEnabled, 22, 17) {
-                    speakerEnabled = !speakerEnabled
-                }
-                CallControl(Res.drawable.icon_call_hold, "Удержание", onHold, 18, 20) { onHold = !onHold }
-            }
-            Spacer(Modifier.height(18.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(35.dp)) {
-                CallControl(Res.drawable.icon_call_keypad, "Клавиатура", false, 22, 14) {}
-                CallControl(Res.drawable.icon_call_transfer, "Перевести", false, 12, 12) {}
-                CallControl(Res.drawable.icon_call_record, "Запись", false, 20, 20) {}
-            }
-            Spacer(Modifier.height(20.dp))
-            CircleIconAction(Res.drawable.icon_phone, 44, Color(0xFFFF3545)) { onHangUp() }
-        }
-    }
-}
-
-@Composable
-private fun CallControl(
-    icon: DrawableResource,
-    label: String,
-    active: Boolean,
-    iconWidth: Int,
-    iconHeight: Int,
-    onClick: () -> Unit
-) {
-    Column(Modifier.width(44.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            Modifier.size(44.dp).background(if (active) Primary else ControlBackground, CircleShape)
-                .clickable(onClick = onClick),
-            contentAlignment = Alignment.Center
-        ) {
-            Image(
-                painter = painterResource(icon),
-                contentDescription = label,
-                modifier = Modifier.size(iconWidth.dp, iconHeight.dp)
-            )
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(label, color = TextSecondary, fontSize = 8.sp, maxLines = 1)
     }
 }
 
@@ -1135,6 +740,7 @@ private fun DarkField(
 @Composable
 private fun ContactsSection(
     modifier: Modifier,
+    compact: Boolean,
     contacts: List<Contact>,
     onAddContact: () -> Unit,
     onSelectContact: (Contact) -> Unit,
@@ -1156,12 +762,13 @@ private fun ContactsSection(
     }.sortedBy { it.name.lowercase() }
     val groups = visibleContacts.groupBy { it.name.trim().firstOrNull()?.uppercase() ?: "#" }
 
-    Column(modifier.fillMaxHeight().padding(29.dp, 39.dp, 29.dp, 20.dp)) {
+    Column(modifier.fillMaxHeight().padding(if (compact) 12.dp else 29.dp, 39.dp, if (compact) 12.dp else 29.dp, 20.dp)) {
         SearchAndAddBar(search, { search = it }, onAddContact)
 
         Spacer(Modifier.height(35.dp))
         FavoritesSection(
             contacts = contacts,
+            compact = compact,
             trailingText = "${contacts.count { it.favorite }} контактов",
             onTrailingClick = {},
             onSelectContact = onSelectContact,
@@ -1173,8 +780,9 @@ private fun ContactsSection(
             selected = filter,
             allCount = contacts.size,
             clientsCount = contacts.count { !it.isEmployee },
-            employeesCount = contacts.count { it.isEmployee },
-            onSelect = { filter = it }
+        employeesCount = contacts.count { it.isEmployee },
+        onSelect = { filter = it },
+        compact = compact
         )
         Spacer(Modifier.height(18.dp))
 
@@ -1207,7 +815,8 @@ private fun ContactFilterBar(
     allCount: Int,
     clientsCount: Int,
     employeesCount: Int,
-    onSelect: (ContactFilter) -> Unit
+    onSelect: (ContactFilter) -> Unit,
+    compact: Boolean
 ) {
     val options = ContactFilter.entries.map { filter ->
         val count = when (filter) {
@@ -1220,7 +829,8 @@ private fun ContactFilterBar(
     SegmentedBar(
         options = options,
         selectedIndex = ContactFilter.entries.indexOf(selected),
-        onSelect = { onSelect(ContactFilter.entries[it]) }
+        onSelect = { onSelect(ContactFilter.entries[it]) },
+        fillWidth = compact
     )
 }
 
@@ -1228,23 +838,35 @@ private fun ContactFilterBar(
 private fun SegmentedBar(
     options: List<String>,
     selectedIndex: Int,
-    onSelect: (Int) -> Unit
+    onSelect: (Int) -> Unit,
+    fillWidth: Boolean = false
 ) {
     Row(
-        Modifier.background(ControlBackground, RoundedCornerShape(22.dp)).padding(3.dp),
+        Modifier.then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
+            .background(ControlBackground, RoundedCornerShape(22.dp)).padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         options.forEachIndexed { index, title ->
+            val selected = selectedIndex == index
+            val segmentColor by animateColorAsState(
+                if (selected) Primary else Color.Transparent,
+                tween(160)
+            )
             Box(
-                Modifier.clip(RoundedCornerShape(18.dp))
-                    .background(if (selectedIndex == index) Primary else Color.Transparent)
+                Modifier.then(if (fillWidth) Modifier.weight(1f) else Modifier)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(segmentColor)
                     .clickable { onSelect(index) }
-                    .padding(horizontal = 22.dp, vertical = 9.dp)
+                    .padding(horizontal = if (fillWidth) 5.dp else 22.dp, vertical = 9.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
                     title,
-                    color = if (selectedIndex == index) TextPrimary else TextSecondary,
-                    fontSize = 11.sp
+                    color = if (selected) TextPrimary else TextSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -1369,59 +991,6 @@ private fun AddContactDialog(
 }
 
 @Composable
-private fun EmptyMessage(text: String) {
-    Box(Modifier.fillMaxWidth().padding(vertical = 22.dp), contentAlignment = Alignment.Center) {
-        Text(text, color = TextSecondary, fontSize = 12.sp, textAlign = TextAlign.Center)
-    }
-}
-
-@Composable
-private fun EmptySection(modifier: Modifier, title: String, text: String) {
-    Column(modifier.fillMaxHeight().padding(48.dp)) {
-        Text(title, color = TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(12.dp))
-        Text(text, color = TextSecondary, fontSize = 13.sp)
-    }
-}
-
-@Composable
-private fun Avatar(initials: String, color: Color, size: Int) {
-    Box(Modifier.size(size.dp).background(color, CircleShape), contentAlignment = Alignment.Center) {
-        Text(initials, color = TextPrimary, fontSize = (size * 0.3).sp, fontWeight = FontWeight.Medium)
-    }
-}
-
-@Composable
-private fun CircleAction(text: String, size: Int, color: Color, onClick: () -> Unit) {
-    Box(
-        Modifier.size(size.dp).background(color, CircleShape).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text, color = TextPrimary, fontSize = (size * 0.4).sp)
-    }
-}
-
-@Composable
-private fun CircleIconAction(
-    icon: DrawableResource,
-    size: Int,
-    color: Color,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier.size(size.dp).background(color, CircleShape).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Image(
-            painter = painterResource(icon),
-            contentDescription = null,
-            modifier = Modifier.size((size * 0.42).dp)
-        )
-    }
-}
-
-@Composable
 private fun darkTextFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = TextPrimary,
     unfocusedTextColor = TextPrimary,
@@ -1438,14 +1007,14 @@ private fun darkTextFieldColors() = OutlinedTextFieldDefaults.colors(
     unfocusedLabelColor = TextSecondary
 )
 
-private fun sectionIcon(section: AppSection): DrawableResource = when (section) {
+internal fun sectionIcon(section: AppSection): DrawableResource = when (section) {
     AppSection.CALLS -> Res.drawable.icon_calls
     AppSection.CONTACTS -> Res.drawable.icon_contacts
     AppSection.SETTINGS -> Res.drawable.icon_settings
     AppSection.NOTIFICATIONS -> Res.drawable.icon_notifications
 }
 
-private fun registrationText(state: RegistrationState) = when (state) {
+internal fun registrationText(state: RegistrationState) = when (state) {
     RegistrationState.DISCONNECTED -> "Не подключено"
     RegistrationState.CONNECTING -> "Подключение"
     RegistrationState.REGISTERED -> "В сети"
@@ -1462,43 +1031,3 @@ private fun callStateText(call: CallStatus, registration: RegistrationState) = w
     CallState.ENDED -> "Звонок завершён"
     CallState.FAILED -> "Не удалось позвонить: ${call.message}"
 }
-
-private fun initialsForName(name: String): String = name.trim().split(Regex("\\s+"))
-    .filter(String::isNotBlank)
-    .take(2)
-    .joinToString("") { it.first().uppercase() }
-    .ifBlank { "?" }
-
-// Цвет аватара вычисляется из имени контакта.
-private fun colorFor(value: String): Color {
-    val colors = listOf(
-        Color(0xFF3659A2), Color(0xFF681466), Color(0xFF7A4A0D),
-        Color(0xFF4C0084), Color(0xFF60472F), Color(0xFF8D1558)
-    )
-    val index = (value.hashCode() and Int.MAX_VALUE) % colors.size
-    return colors[index]
-}
-
-// Храним Telegram в одном читаемом формате: @username.
-private fun normalizeTelegramInput(value: String): String {
-    val username = value.trim()
-        .removePrefix("https://t.me/")
-        .removePrefix("http://t.me/")
-        .removePrefix("t.me/")
-        .removePrefix("@")
-        .filter { it.isLetterOrDigit() || it == '_' }
-    return if (username.isBlank()) "" else "@$username"
-}
-
-private fun formatDuration(totalSeconds: Int): String {
-    val minutes = (totalSeconds / 60).toString().padStart(2, '0')
-    val seconds = (totalSeconds % 60).toString().padStart(2, '0')
-    return "$minutes:$seconds"
-}
-
-private val keypadRows = listOf(
-    listOf("1" to "", "2" to "АБВГ", "3" to "ДЕЖЗ"),
-    listOf("4" to "ИЙКЛ", "5" to "МНОП", "6" to "РСТУ"),
-    listOf("7" to "ФХЦЧ", "8" to "ШЩЪЫ", "9" to "ЬЭЮЯ"),
-    listOf("*" to "", "0" to "+", "#" to "")
-)

@@ -45,6 +45,9 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "com.qvoste.qtalk"
             packageVersion = "1.0.0"
+            windows {
+                iconFile.set(project.file("src/main/resources/logo_black.ico"))
+            }
         }
     }
 }
