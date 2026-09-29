@@ -20,8 +20,10 @@ dependencies {
         if (targetOs.contains("windows")) compose.desktop.windows_x64
         else compose.desktop.currentOs
     )
-    implementation(libs.kotlinx.coroutinesSwing)
+    // Used only by the guarded Windows DWM title-bar integration.
+    implementation("net.java.dev.jna:jna:5.17.0")
 
+    implementation(libs.kotlinx.coroutinesSwing)
     implementation(libs.compose.uiToolingPreview)
 }
 
