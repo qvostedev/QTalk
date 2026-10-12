@@ -17,41 +17,64 @@ internal enum class ContactFilter(val title: String) {
     ALL("Все"), CLIENTS("Клиенты"), EMPLOYEES("Сотрудники")
 }
 
-internal data class Contact(
+data class Contact(
     val name: String,
     val number: String,
     val favorite: Boolean,
     val position: String = "",
     val department: String = "",
     val company: String = "",
-    val telegram: String = ""
+    val telegram: String = "",
+    val office: String = "",
+    val phone: String = "",
+    val source: ContactSource = ContactSource.LEGACY
 ) {
     // Компания ПОРТ автоматически относит контакт к сотрудникам.
     val isEmployee: Boolean get() = company.trim().equals("ПОРТ", ignoreCase = true)
 }
 
-internal data class HistoryItem(
+enum class ContactSource { LEGACY, DIRECTORY, LOCAL }
+
+data class HistoryItem(
+    val id: String,
     val name: String,
     val number: String,
     val direction: String,
-    val time: String,
-    val missed: Boolean = false
-)
+    val startedAtEpochMillis: Long,
+    val telegram: String = "",
+    val missed: Boolean = false,
+    val durationSeconds: Long? = null,
+    private val legacyTime: String = ""
+) {
+    constructor(name: String, number: String, direction: String, time: String, missed: Boolean = false) :
+        this("legacy:$name:$number:$time", name, number, direction, 0L, missed = missed, legacyTime = time)
 
-// Цвет аватара стабильно вычисляется из имени.
-internal fun colorFor(value: String): Color {
-    val colors = listOf(
-        Color(0xFF3659A2), Color(0xFF681466), Color(0xFF7A4A0D),
-        Color(0xFF4C0084), Color(0xFF60472F), Color(0xFF8D1558)
-    )
-    return colors[(value.hashCode() and Int.MAX_VALUE) % colors.size]
+    val time: String get() = legacyTime
 }
 
-internal fun initialsForName(name: String): String = name.trim().split(Regex("\\s+"))
-    .filter(String::isNotBlank)
-    .take(2)
-    .joinToString("") { it.first().uppercase() }
-    .ifBlank { "?" }
+// Пара цветов аватара стабильно вычисляется из имени или номера.
+internal fun avatarGradientFor(value: String): List<Color> {
+    val gradients = listOf(
+        listOf(Color(0xFF17376B), Color(0xFF416FC9)),
+        listOf(Color(0xFF370067), Color(0xFF6D00CD)),
+        listOf(Color(0xFF123B52), Color(0xFF247EA0)),
+        listOf(Color(0xFF4A082D), Color(0xFFA91665)),
+        listOf(Color(0xFF0B403B), Color(0xFF168B7D)),
+        listOf(Color(0xFF352044), Color(0xFF8050A0))
+    )
+    return gradients[(value.hashCode() and Int.MAX_VALUE) % gradients.size]
+}
+
+internal fun colorFor(value: String): Color = avatarGradientFor(value).first()
+
+internal fun initialsForName(name: String): String {
+    if (name.none(Char::isLetter)) return "?"
+    return name.trim().split(Regex("\\s+"))
+        .filter { part -> part.any(Char::isLetter) }
+        .take(2)
+        .joinToString("") { part -> part.first(Char::isLetter).uppercase() }
+        .ifBlank { "?" }
+}
 
 // Храним Telegram в одном читаемом формате.
 internal fun normalizeTelegramInput(value: String): String {
