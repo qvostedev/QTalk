@@ -23,6 +23,8 @@ import org.linphone.core.RegistrationState as LinphoneRegistrationState
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.Executors
+import java.util.prefs.Preferences
+import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
 class LinphoneVoipEngine : VoipEngine {
@@ -47,6 +49,14 @@ class LinphoneVoipEngine : VoipEngine {
     private var currentCall: Call? = null
     private val _callStatus = MutableStateFlow(CallStatus())
     override val callStatus = _callStatus.asStateFlow()
+    private val audioPreferences = Preferences.userRoot().node("com/qvoste/qtalk/audio")
+    private val _audioSettings = MutableStateFlow(
+        AudioSettings(
+            microphoneSensitivity = audioPreferences.getFloat("microphoneSensitivity", 0.5f),
+            ringtoneVolume = audioPreferences.getFloat("ringtoneVolume", 0.5f)
+        )
+    )
+    override val audioSettings = _audioSettings.asStateFlow()
 
     private val _registrationState =
         MutableStateFlow(RegistrationState.DISCONNECTED)
@@ -66,7 +76,12 @@ class LinphoneVoipEngine : VoipEngine {
 
                 currentCall = call
                 val caller = call.remoteAddress?.username.orEmpty()
-                _callStatus.value = CallStatus(CallState.INCOMING, caller, message)
+                _callStatus.value = CallStatus(
+                    state = CallState.INCOMING,
+                    number = caller,
+                    message = message,
+                    startedAtEpochMillis = System.currentTimeMillis()
+                )
                 return
             }
 
@@ -85,7 +100,16 @@ class LinphoneVoipEngine : VoipEngine {
                 }
                 else -> return
             }
-            _callStatus.value = _callStatus.value.copy(state = next, message = message)
+            val previous = _callStatus.value
+            _callStatus.value = previous.copy(
+                state = next,
+                message = message,
+                connectedAtEpochMillis = if (next == CallState.ACTIVE && previous.connectedAtEpochMillis == 0L) {
+                    System.currentTimeMillis()
+                } else {
+                    previous.connectedAtEpochMillis
+                }
+            )
         }
 
         override fun onAccountRegistrationStateChanged(
@@ -167,6 +191,7 @@ class LinphoneVoipEngine : VoipEngine {
                 core.defaultOutputAudioDevice = device
             }
         }
+        refreshAudioDevicesInternal()
         println("QTALK: audio input = ${core.defaultInputAudioDevice?.id}")
         println("QTALK: audio output = ${core.defaultOutputAudioDevice?.id}")
         println("QTALK: Linphone Core started")
@@ -262,14 +287,16 @@ class LinphoneVoipEngine : VoipEngine {
     override suspend fun call(number: String) = withContext(linphoneDispatcher) {
         check(_registrationState.value == RegistrationState.REGISTERED) { "Сначала подключитесь к SIP-серверу" }
         check(currentCall == null) { "Предыдущий звонок ещё не завершён" }
-        val extension = number.trim()
-
-        require(extension.matches(Regex("[0-9]{1,20}"))) { "Введите номер" }
+        val extension = normalizeOutgoingNumber(number)
         val server = checkNotNull(currentAccount?.params?.serverAddress).clone()
         server.username = extension
         val params = checkNotNull(core.createCallParams(null))
         params.isVideoEnabled = false
-        _callStatus.value = CallStatus(CallState.DIALING, extension)
+        _callStatus.value = CallStatus(
+            state = CallState.DIALING,
+            number = extension,
+            startedAtEpochMillis = System.currentTimeMillis()
+        )
         val call = core.inviteAddressWithParams(server, params)
         if (call == null) {
             _callStatus.value = CallStatus(CallState.FAILED, extension, "Не удалось начать звонок")
@@ -306,6 +333,23 @@ class LinphoneVoipEngine : VoipEngine {
             _callStatus.value = previous
             error("Не удалось завершить звонок")
         }
+    }
+
+    override suspend fun sendDtmf(digit: Char) = withContext(linphoneDispatcher) {
+        require(digit in "0123456789*#") { "Недопустимый DTMF-символ" }
+        val call = checkNotNull(currentCall) { "Нет активного звонка" }
+        check(_callStatus.value.state == CallState.ACTIVE) { "Звонок ещё не установлен" }
+        if (call.sendDtmf(digit) != 0) error("Не удалось отправить DTMF")
+    }
+
+    override suspend fun setMicrophoneMuted(muted: Boolean) = withContext(linphoneDispatcher) {
+        val call = checkNotNull(currentCall) { "Нет активного звонка" }
+        call.setMicrophoneMuted(muted)
+    }
+
+    override suspend fun setSpeakerMuted(muted: Boolean) = withContext(linphoneDispatcher) {
+        val call = checkNotNull(currentCall) { "Нет активного звонка" }
+        call.setSpeakerMuted(muted)
     }
 
     override suspend fun unregister() =
@@ -348,4 +392,102 @@ class LinphoneVoipEngine : VoipEngine {
             println("QTALK: Linphone Core stopped")
         }
     }
+
+    override suspend fun refreshAudioDevices() = withContext(linphoneDispatcher) {
+        refreshAudioDevicesInternal()
+    }
+
+    override suspend fun selectInputAudioDevice(deviceId: String) = withContext(linphoneDispatcher) {
+        val device = core.extendedAudioDevices.firstOrNull {
+            it.id == deviceId && it.hasCapability(AudioDevice.Capabilities.CapabilityRecord)
+        } ?: return@withContext
+
+        core.defaultInputAudioDevice = device
+        core.inputAudioDevice = device
+        audioPreferences.put("inputDeviceId", device.id)
+        audioPreferences.flush()
+        _audioSettings.value = _audioSettings.value.copy(selectedInputDeviceId = device.id)
+    }
+
+    override suspend fun selectOutputAudioDevice(deviceId: String) = withContext(linphoneDispatcher) {
+        val device = core.extendedAudioDevices.firstOrNull {
+            it.id == deviceId && it.hasCapability(AudioDevice.Capabilities.CapabilityPlay)
+        } ?: return@withContext
+
+        core.defaultOutputAudioDevice = device
+        core.outputAudioDevice = device
+        core.setRingerDevice(device.id)
+        audioPreferences.put("outputDeviceId", device.id)
+        audioPreferences.flush()
+        _audioSettings.value = _audioSettings.value.copy(selectedOutputDeviceId = device.id)
+    }
+
+    override suspend fun setMicrophoneSensitivity(value: Float) = withContext(linphoneDispatcher) {
+        val normalized = value.coerceIn(0f, 1f)
+        core.micGainDb = normalized * 60f - 30f
+        audioPreferences.putFloat("microphoneSensitivity", normalized)
+        audioPreferences.flush()
+        _audioSettings.value = _audioSettings.value.copy(microphoneSensitivity = normalized)
+    }
+
+    override suspend fun setRingtoneVolume(value: Float) = withContext(linphoneDispatcher) {
+        val normalized = value.coerceIn(0f, 1f)
+        core.config.setInt("sound", "ring_level", (normalized * 100f).roundToInt())
+        audioPreferences.putFloat("ringtoneVolume", normalized)
+        audioPreferences.flush()
+        _audioSettings.value = _audioSettings.value.copy(ringtoneVolume = normalized)
+    }
+
+    private fun refreshAudioDevicesInternal() {
+        val devices = core.extendedAudioDevices.toList()
+        val inputDevices = devices
+            .filter { it.hasCapability(AudioDevice.Capabilities.CapabilityRecord) }
+            .distinctBy(AudioDevice::getId)
+        val outputDevices = devices
+            .filter { it.hasCapability(AudioDevice.Capabilities.CapabilityPlay) }
+            .distinctBy(AudioDevice::getId)
+
+        val preferredInputId = audioPreferences.get("inputDeviceId", "")
+        val preferredOutputId = audioPreferences.get("outputDeviceId", "")
+        val selectedInput = inputDevices.firstOrNull { it.id == preferredInputId }
+            ?: core.defaultInputAudioDevice
+            ?: inputDevices.firstOrNull()
+        val selectedOutput = outputDevices.firstOrNull { it.id == preferredOutputId }
+            ?: core.defaultOutputAudioDevice
+            ?: outputDevices.firstOrNull()
+
+        selectedInput?.let { core.defaultInputAudioDevice = it }
+        selectedOutput?.let {
+            core.defaultOutputAudioDevice = it
+            core.setRingerDevice(it.id)
+        }
+
+        val microphoneSensitivity = audioPreferences
+            .getFloat("microphoneSensitivity", 0.5f)
+            .coerceIn(0f, 1f)
+        val ringtoneVolume = audioPreferences
+            .getFloat("ringtoneVolume", 0.5f)
+            .coerceIn(0f, 1f)
+        core.micGainDb = microphoneSensitivity * 60f - 30f
+        core.config.setInt("sound", "ring_level", (ringtoneVolume * 100f).roundToInt())
+
+        _audioSettings.value = AudioSettings(
+            inputDevices = inputDevices.map { AudioDeviceInfo(it.id, it.displayName()) },
+            outputDevices = outputDevices.map { AudioDeviceInfo(it.id, it.displayName()) },
+            selectedInputDeviceId = selectedInput?.id,
+            selectedOutputDeviceId = selectedOutput?.id,
+            microphoneSensitivity = microphoneSensitivity,
+            ringtoneVolume = ringtoneVolume
+        )
+    }
+
+    private fun AudioDevice.displayName(): String = deviceName
+        .takeIf(String::isNotBlank)
+        ?: id
+}
+
+internal fun normalizeOutgoingNumber(number: String): String {
+    val normalized = number.filterNot(Char::isWhitespace)
+    require(normalized.matches(Regex("\\+?[0-9]{1,20}"))) { "Введите номер" }
+    return normalized
 }
