@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -797,11 +798,17 @@ private fun FavoritesSection(
         val gap = if (compact) 4.dp else 6.dp
         val visibleSlots = ((maxWidth + gap) / (104.dp + gap)).toInt().coerceAtLeast(1)
         val visibleFavorites = (visibleSlots - 1).coerceAtLeast(0)
-        Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+        Row(
+            modifier = Modifier.offset(x = (-25).dp),
+            horizontalArrangement = Arrangement.spacedBy(gap)
+        ) {
             contacts.filter { it.favorite }.take(visibleFavorites).forEach { contact ->
                 FavoriteItem(contact, canTransfer, onTransferEmployee) { onSelectContact(contact) }
             }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                modifier = Modifier.width(104.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 CircleResourceAction(Res.drawable.icon_plus, 54, 14, 14, ControlBackground, onAddContact)
                 Spacer(Modifier.height(2.dp))
                 Text("Добавить", color = TextSecondary, fontSize = 12.sp, lineHeight = 12.sp)

@@ -1,7 +1,5 @@
 package com.qvoste.qtalk.ui.calls.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -10,7 +8,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -173,7 +170,7 @@ private fun NavItem(
     onSelect: (AppSection) -> Unit
 ) {
     val active = section == selected
-    val itemColor by animateColorAsState(if (active) TextPrimary else TextSecondary, tween(160))
+    val itemColor = if (active) TextPrimary else TextSecondary
     Row(
         Modifier.fillMaxWidth().height(44.dp).clickable { onSelect(section) },
         verticalAlignment = Alignment.CenterVertically
