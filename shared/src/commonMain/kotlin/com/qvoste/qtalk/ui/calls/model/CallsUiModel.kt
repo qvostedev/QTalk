@@ -43,14 +43,8 @@ data class HistoryItem(
     val startedAtEpochMillis: Long,
     val telegram: String = "",
     val missed: Boolean = false,
-    val durationSeconds: Long? = null,
-    private val legacyTime: String = ""
-) {
-    constructor(name: String, number: String, direction: String, time: String, missed: Boolean = false) :
-        this("legacy:$name:$number:$time", name, number, direction, 0L, missed = missed, legacyTime = time)
-
-    val time: String get() = legacyTime
-}
+    val durationSeconds: Long? = null
+)
 
 // Пара цветов аватара стабильно вычисляется из имени или номера.
 internal fun avatarGradientFor(value: String): List<Color> {
@@ -64,8 +58,6 @@ internal fun avatarGradientFor(value: String): List<Color> {
     )
     return gradients[(value.hashCode() and Int.MAX_VALUE) % gradients.size]
 }
-
-internal fun colorFor(value: String): Color = avatarGradientFor(value).first()
 
 internal fun initialsForName(name: String): String {
     if (name.none(Char::isLetter)) return "?"
@@ -94,8 +86,8 @@ internal fun formatDuration(totalSeconds: Int): String {
 }
 
 internal val keypadRows = listOf(
-    listOf("1" to "", "2" to "АБВГ", "3" to "ДЕЖЗ"),
-    listOf("4" to "ИЙКЛ", "5" to "МНОП", "6" to "РСТУ"),
-    listOf("7" to "ФХЦЧ", "8" to "ШЩЪЫ", "9" to "ЬЭЮЯ"),
-    listOf("*" to "", "0" to "+", "#" to "")
+    listOf("1", "2", "3"),
+    listOf("4", "5", "6"),
+    listOf("7", "8", "9"),
+    listOf("*", "0", "#")
 )
