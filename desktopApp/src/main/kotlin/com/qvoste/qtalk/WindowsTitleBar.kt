@@ -11,6 +11,10 @@ private const val DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19
 private const val DWMWA_USE_IMMERSIVE_DARK_MODE = 20
 private const val DWMWA_CAPTION_COLOR = 35
 private const val DWMWA_TEXT_COLOR = 36
+private const val DWMWA_WINDOW_CORNER_PREFERENCE = 33
+private const val DWMWA_BORDER_COLOR = 34
+private const val DWMWCP_ROUND = 2
+private const val DWM_COLOR_NONE = -2
 private const val WM_GETICON = 0x007F
 private const val WM_SETICON = 0x0080
 private const val GA_ROOT = 2
@@ -33,6 +37,8 @@ private const val SW_SHOW = 5
 // DWM uses COLORREF (0x00BBGGRR), not the usual RGB byte order.
 private const val QTALK_CAPTION_COLOR = 0x00100D0B
 private const val LIGHT_TEXT_COLOR = 0x00FFFFFF
+private const val WHITE_CAPTION_COLOR = 0x00FFFFFF
+private const val DARK_TEXT_COLOR = 0x00101215
 
 private interface DwmApi : StdCallLibrary {
     fun DwmSetWindowAttribute(
@@ -94,7 +100,7 @@ private val isWindows = System.getProperty("os.name").startsWith("Windows", igno
  *
  * The OS check happens before DwmApi is loaded, so this file remains safe on Linux.
  */
-internal fun applyQTalkWindowsTitleBar(window: Window): () -> Unit {
+internal fun applyQTalkWindowsTitleBar(window: Window, light: Boolean = false): () -> Unit {
     if (!isWindows) return {}
 
     return runCatching {
@@ -207,12 +213,12 @@ internal fun applyQTalkWindowsTitleBar(window: Window): () -> Unit {
         val captionColorResult = dwmApi.setIntAttribute(
             windowHandle,
             DWMWA_CAPTION_COLOR,
-            QTALK_CAPTION_COLOR
+            if (light) WHITE_CAPTION_COLOR else QTALK_CAPTION_COLOR
         )
         val textColorResult = dwmApi.setIntAttribute(
             windowHandle,
             DWMWA_TEXT_COLOR,
-            LIGHT_TEXT_COLOR
+            if (light) DARK_TEXT_COLOR else LIGHT_TEXT_COLOR
         )
 
         // Windows versions without explicit caption/text color attributes can still
@@ -221,13 +227,13 @@ internal fun applyQTalkWindowsTitleBar(window: Window): () -> Unit {
             val modernResult = dwmApi.setIntAttribute(
                 windowHandle,
                 DWMWA_USE_IMMERSIVE_DARK_MODE,
-                1
+                if (light) 0 else 1
             )
             if (modernResult != 0) {
                 dwmApi.setIntAttribute(
                     windowHandle,
                     DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1,
-                    1
+                    if (light) 0 else 1
                 )
             }
         }
@@ -267,6 +273,24 @@ internal fun applyQTalkWindowsTitleBar(window: Window): () -> Unit {
 }
 
 internal fun qTalkNativeWindowTitle(): String = if (isWindows) "" else "QTalk"
+
+/** Lets Windows anti-alias the compact widget corners instead of using a pixelated AWT shape. */
+internal fun applyQTalkCompactWindowStyle(window: Window) {
+    if (!isWindows) return
+    runCatching {
+        val windowHandle = Native.getComponentPointer(window)
+        val dwmApi = Native.load("dwmapi", DwmApi::class.java)
+        dwmApi.setIntAttribute(
+            windowHandle,
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            DWMWCP_ROUND
+        )
+        dwmApi.setIntAttribute(windowHandle, DWMWA_BORDER_COLOR, DWM_COLOR_NONE)
+    }.onFailure { error ->
+        System.err.println("QTalk: failed to configure compact window corners")
+        error.printStackTrace()
+    }
+}
 
 private fun DwmApi.setIntAttribute(
     windowHandle: Pointer,
