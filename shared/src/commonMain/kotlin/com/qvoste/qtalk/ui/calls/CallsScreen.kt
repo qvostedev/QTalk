@@ -827,7 +827,8 @@ private fun FavoriteItem(
         modifier = Modifier.width(104.dp)
             .clip(RoundedCornerShape(12.dp))
             .transferOnRightClick(canTransfer && transferCodeFor(contact) != null) { onTransferEmployee(contact) }
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         ContactAvatarWithStatus(contact.name, contact.telegram, 54)
@@ -871,7 +872,7 @@ private fun FavoritesSection(
             modifier = Modifier.clickable(onClick = onTrailingClick)
         )
     }
-    Spacer(Modifier.height(18.dp))
+    Spacer(Modifier.height(12.dp))
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val gap = if (compact) 4.dp else 6.dp
         val visibleSlots = ((maxWidth + gap) / (104.dp + gap)).toInt().coerceAtLeast(1)
@@ -921,55 +922,50 @@ private fun HistoryRow(
         item.direction == "Исходящий" -> Res.drawable.icon_history_outgoing
         else -> Res.drawable.icon_history_incoming
     }
-    Row(
-        Modifier.fillMaxWidth().height(64.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
-            Row(
-                Modifier.offset(x = (-8).dp).requiredWidth(maxWidth + 16.dp).fillMaxHeight()
-                    .clip(RoundedCornerShape(12.dp)).clickable { onSelect(item) }
-                    .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ContactAvatar(item.name, item.telegram, 46)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(item.name, color = TextPrimary, fontSize = 13.sp, lineHeight = 13.sp,
-                        fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(3.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(painterResource(directionIcon), contentDescription = null, modifier = Modifier.size(9.dp))
-                        Spacer(Modifier.width(5.dp))
-                        Text(if (item.missed) "Пропущенный" else item.direction,
-                            color = if (item.missed) Danger else TextSecondary,
-                            fontSize = 11.sp, lineHeight = 13.sp)
-                    }
+    BoxWithConstraints(Modifier.fillMaxWidth().height(64.dp)) {
+        Row(
+            Modifier.offset(x = (-8).dp).requiredWidth(maxWidth + 16.dp).fillMaxHeight()
+                .clip(RoundedCornerShape(12.dp)).clickable { onSelect(item) }
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ContactAvatar(item.name, item.telegram, 46)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(item.name, color = TextPrimary, fontSize = 13.sp, lineHeight = 13.sp,
+                    fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(3.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(painterResource(directionIcon), contentDescription = null, modifier = Modifier.size(9.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text(if (item.missed) "Пропущенный" else item.direction,
+                        color = if (item.missed) Danger else TextSecondary,
+                        fontSize = 11.sp, lineHeight = 13.sp)
                 }
             }
-        }
-        Column(horizontalAlignment = Alignment.End) {
-            Text(formatHistoryTimestamp(item.startedAtEpochMillis, Clock.System.now().toEpochMilliseconds()).takeLast(5),
-                color = TextSecondary, fontSize = 11.sp, lineHeight = 13.sp, textAlign = TextAlign.End)
-            Text(formatCallDuration(item.durationSeconds).ifBlank { "—" },
-                color = TextSecondary, fontSize = 10.sp, lineHeight = 12.sp,
-                textAlign = TextAlign.End)
-        }
-        Spacer(Modifier.width(14.dp))
-        CircleIconAction(Res.drawable.icon_calls, 34, ControlBackground) { onCall(item.number) }
-        Spacer(Modifier.width(10.dp))
-        Box {
-            Text("⋮", color = TextSecondary, fontSize = 20.sp,
-                modifier = Modifier.clickable { menuExpanded = true }.padding(8.dp))
-            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                DropdownMenuItem(text = { Text("Позвонить") }, onClick = {
-                    menuExpanded = false
-                    onCall(item.number)
-                })
-                DropdownMenuItem(text = { Text("Копировать номер") }, onClick = {
-                    menuExpanded = false
-                    clipboard.setText(AnnotatedString(item.number))
-                })
+            Column(horizontalAlignment = Alignment.End) {
+                Text(formatHistoryTimestamp(item.startedAtEpochMillis, Clock.System.now().toEpochMilliseconds()).takeLast(5),
+                    color = TextSecondary, fontSize = 11.sp, lineHeight = 13.sp, textAlign = TextAlign.End)
+                Text(formatCallDuration(item.durationSeconds).ifBlank { "—" },
+                    color = TextSecondary, fontSize = 10.sp, lineHeight = 12.sp,
+                    textAlign = TextAlign.End)
+            }
+            Spacer(Modifier.width(14.dp))
+            CircleIconAction(Res.drawable.icon_calls, 34, ControlBackground) { onCall(item.number) }
+            Spacer(Modifier.width(10.dp))
+            Box {
+                Text("⋮", color = TextSecondary, fontSize = 20.sp,
+                    modifier = Modifier.clickable { menuExpanded = true }.padding(8.dp))
+                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(text = { Text("Позвонить") }, onClick = {
+                        menuExpanded = false
+                        onCall(item.number)
+                    })
+                    DropdownMenuItem(text = { Text("Копировать номер") }, onClick = {
+                        menuExpanded = false
+                        clipboard.setText(AnnotatedString(item.number))
+                    })
+                }
             }
         }
     }
