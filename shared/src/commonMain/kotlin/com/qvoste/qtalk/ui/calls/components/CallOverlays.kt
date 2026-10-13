@@ -82,7 +82,7 @@ internal fun ActiveCallOverlay(
     var speakerMuted by remember(number) { mutableStateOf(false) }
     var onHold by rememberSaveable { mutableStateOf(false) }
     var keypadVisible by rememberSaveable { mutableStateOf(false) }
-    var enteredDigits by rememberSaveable { mutableStateOf("") }
+    var enteredDigits by remember(number) { mutableStateOf("") }
 
     fun enterDtmf(digit: Char) {
         if (digit !in "0123456789*#") return
@@ -118,23 +118,18 @@ internal fun ActiveCallOverlay(
             Spacer(Modifier.height(20.dp))
 
             if (keypadVisible) {
-                Row(
-                    Modifier.width(280.dp).height(30.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
+                Box(Modifier.width(192.dp).height(30.dp), contentAlignment = Alignment.Center) {
                     Text(
-                        enteredDigits.ifEmpty { formatPhoneNumber(number) },
+                        enteredDigits,
                         color = TextPrimary,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Medium,
-                        modifier = Modifier.weight(1f),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                     Image(
                         painter = painterResource(Res.drawable.icon_backspace),
                         contentDescription = "Удалить символ",
-                        modifier = Modifier.size(22.dp).clickable {
+                        modifier = Modifier.align(Alignment.CenterEnd).size(22.dp).clickable {
                             if (enteredDigits.isNotEmpty()) enteredDigits = enteredDigits.dropLast(1)
                         }
                     )
@@ -161,19 +156,20 @@ internal fun ActiveCallOverlay(
                     }
                 }
                 Spacer(Modifier.height(20.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
-                    CallControl(Res.drawable.icon_call_collapse, "Свернуть", true, 16, 16, 42, onClick = onCollapse)
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.Top) {
+                    CallControl(Res.drawable.icon_call_collapse, "Свернуть", true, 16, 16, 48, columnWidth = 48, onClick = onCollapse)
                     CallControl(
                         Res.drawable.icon_phone,
                         "Завершить",
                         true,
                         20,
                         20,
-                        42,
+                        48,
                         overrideColor = Danger,
+                        columnWidth = 48,
                         onClick = onHangUp
                     )
-                    TextCallControl("×", "Отмена", 42) { keypadVisible = false }
+                    TextCallControl("×", "Отмена", 48, columnWidth = 48) { keypadVisible = false }
                 }
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -226,9 +222,10 @@ private fun CallControl(
     buttonSize: Int = 42,
     overrideColor: Color? = null,
     crossedOut: Boolean = false,
+    columnWidth: Int = 56,
     onClick: () -> Unit
 ) {
-    Column(Modifier.width(56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.width(columnWidth.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.size(buttonSize.dp).background(overrideColor ?: if (active) Primary else ControlBackground, CircleShape)
                 .clickable(onClick = onClick),
@@ -257,8 +254,8 @@ private fun CallControl(
 }
 
 @Composable
-private fun TextCallControl(symbol: String, label: String, buttonSize: Int = 42, onClick: () -> Unit) {
-    Column(Modifier.width(56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+private fun TextCallControl(symbol: String, label: String, buttonSize: Int = 42, columnWidth: Int = 56, onClick: () -> Unit) {
+    Column(Modifier.width(columnWidth.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.size(buttonSize.dp).background(ControlBackground, CircleShape).clickable(onClick = onClick),
             contentAlignment = Alignment.Center
