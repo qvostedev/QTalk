@@ -25,6 +25,14 @@ internal fun writeRingtoneAtVolume(source: Path, destination: Path, volume: Floa
     }
 }
 
+internal fun isPcm16Wav(source: Path): Boolean = runCatching {
+    if (!Files.isRegularFile(source)) return@runCatching false
+    AudioSystem.getAudioInputStream(source.toFile()).use { input ->
+        val format = input.format
+        format.encoding == AudioFormat.Encoding.PCM_SIGNED && format.sampleSizeInBits == 16
+    }
+}.getOrDefault(false)
+
 internal fun scalePcm16(bytes: ByteArray, volume: Float, bigEndian: Boolean = false) {
     for (index in 0 until bytes.size - 1 step 2) {
         val low = bytes[index + if (bigEndian) 1 else 0].toInt() and 0xff

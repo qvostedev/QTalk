@@ -45,6 +45,7 @@ class LinphoneVoipEngine : VoipEngine {
 
     private val scope = CoroutineScope(linphoneDispatcher)
     private var iterateJob: Job? = null
+    private var coreStarted = false
     private var currentAccount: Account? = null
     private var currentCall: Call? = null
     private var originalRingtone: Path? = null
@@ -160,19 +161,20 @@ class LinphoneVoipEngine : VoipEngine {
 
         println("QTALK: starting Linphone Core")
 
-        core.addListener(coreListener)
-
-        val initialTransports = core.transports
-        initialTransports.udpPort = 0
-        initialTransports.tcpPort = 0
-        initialTransports.tlsPort = 0
-        check(core.setTransports(initialTransports) == 0) { "Не удалось подготовить SIP-транспорт" }
-
-        val startResult = core.start()
-        if (startResult != 0) {
-            core.removeListener(coreListener)
-            _registrationState.value = RegistrationState.FAILED
-            error("Unable to start Linphone Core: $startResult")
+        if (!coreStarted) {
+            core.addListener(coreListener)
+            val initialTransports = core.transports
+            initialTransports.udpPort = 0
+            initialTransports.tcpPort = 0
+            initialTransports.tlsPort = 0
+            check(core.setTransports(initialTransports) == 0) { "Не удалось подготовить SIP-транспорт" }
+            val startResult = core.start()
+            if (startResult != 0) {
+                core.removeListener(coreListener)
+                _registrationState.value = RegistrationState.FAILED
+                error("Unable to start Linphone Core: $startResult")
+            }
+            coreStarted = true
         }
 
         // На Windows автоопределение сети иногда не срабатывает.
@@ -192,7 +194,10 @@ class LinphoneVoipEngine : VoipEngine {
                 core.defaultOutputAudioDevice = device
             }
         }
-        originalRingtone = core.ring?.let(Path::of)?.takeIf(Files::isRegularFile)
+        val managedRingtones = Path.of(factory.getDataDir(null), "qtalk-ringtones").toAbsolutePath().normalize()
+        originalRingtone = core.ring?.let(Path::of)?.takeIf { ringtone ->
+            !ringtone.toAbsolutePath().normalize().startsWith(managedRingtones) && isPcm16Wav(ringtone)
+        }
         refreshAudioDevicesInternal()
         println("QTALK: audio input = ${core.defaultInputAudioDevice?.id}")
         println("QTALK: audio output = ${core.defaultOutputAudioDevice?.id}")
@@ -383,8 +388,11 @@ class LinphoneVoipEngine : VoipEngine {
                 }
             }
 
-            core.stop()
-            core.removeListener(coreListener)
+            if (coreStarted) {
+                core.stop()
+                core.removeListener(coreListener)
+                coreStarted = false
+            }
             currentCall = null
             currentAccount = null
             _callStatus.value = CallStatus()

@@ -1,6 +1,7 @@
 package com.qvoste.qtalk
 
 import com.qvoste.qtalk.voip.scalePcm16
+import com.qvoste.qtalk.voip.isPcm16Wav
 import com.qvoste.qtalk.voip.writeRingtoneAtVolume
 import java.io.ByteArrayInputStream
 import java.nio.file.Files
@@ -12,6 +13,8 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class RingtoneAudioTest {
     @Test
@@ -43,12 +46,24 @@ class RingtoneAudioTest {
             AudioInputStream(ByteArrayInputStream(samples), format, 2).use {
                 AudioSystem.write(it, AudioFileFormat.Type.WAVE, source.toFile())
             }
+            assertTrue(isPcm16Wav(source))
             writeRingtoneAtVolume(source, output, 0.5f)
             AudioSystem.getAudioInputStream(output.toFile()).use {
                 assertContentEquals(byteArrayOf(0x88.toByte(), 0x13, 0x78, 0xec.toByte()), it.readBytes())
             }
         } finally {
             Files.deleteIfExists(output)
+            Files.deleteIfExists(source)
+        }
+    }
+
+    @Test
+    fun rejectsUnsupportedRingtoneWithoutInterruptingStartup() {
+        val source = Files.createTempFile("qtalk-ring-unsupported", ".mkv")
+        try {
+            Files.write(source, byteArrayOf(0x1a, 0x45, 0xdf.toByte(), 0xa3.toByte()))
+            assertFalse(isPcm16Wav(source))
+        } finally {
             Files.deleteIfExists(source)
         }
     }
