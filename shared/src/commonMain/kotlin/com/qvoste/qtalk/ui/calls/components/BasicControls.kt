@@ -25,7 +25,9 @@ import androidx.compose.ui.unit.sp
 import com.qvoste.qtalk.ui.calls.theme.TextPrimary
 import com.qvoste.qtalk.ui.calls.theme.TextSecondary
 import com.qvoste.qtalk.ui.calls.theme.ControlBackground
+import com.qvoste.qtalk.ui.calls.theme.AppBackground
 import com.qvoste.qtalk.ui.calls.theme.IsLightTheme
+import com.qvoste.qtalk.ui.calls.theme.Online
 import com.qvoste.qtalk.ui.calls.model.avatarGradientFor
 import com.qvoste.qtalk.ui.calls.model.initialsForName
 import org.jetbrains.compose.resources.DrawableResource
@@ -74,6 +76,50 @@ internal fun ContactAvatar(name: String, telegram: String, size: Int) {
             filterQuality = FilterQuality.High
         )
     }
+}
+
+@Composable
+internal fun ContactAvatarWithStatus(
+    name: String,
+    telegram: String,
+    size: Int,
+    statusColor: Color? = null
+) {
+    Box(Modifier.size(size.dp)) {
+        ContactAvatar(name, telegram, size)
+        AvatarStatusBadge(size, statusColor)
+    }
+}
+
+@Composable
+internal fun AvatarWithStatus(
+    initials: String,
+    seed: String?,
+    size: Int,
+    statusColor: Color? = null
+) {
+    Box(Modifier.size(size.dp)) {
+        Avatar(initials, seed, size)
+        AvatarStatusBadge(size, statusColor)
+    }
+}
+
+@Composable
+private fun BoxScope.AvatarStatusBadge(size: Int, statusColor: Color?) {
+    val centerX = size * (56.2592f / 62f)
+    val centerY = size * (49.3699f / 62f)
+    val cutoutRadius = size * (6.8889f / 62f)
+    val dotRadius = size * (4.59259f / 62f)
+    Box(
+        Modifier.offset((centerX - cutoutRadius).dp, (centerY - cutoutRadius).dp)
+            .size((cutoutRadius * 2).dp)
+            .background(AppBackground, CircleShape)
+    )
+    Box(
+        Modifier.offset((centerX - dotRadius).dp, (centerY - dotRadius).dp)
+            .size((dotRadius * 2).dp)
+            .background(statusColor ?: Online, CircleShape)
+    )
 }
 
 @Composable

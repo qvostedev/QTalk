@@ -123,7 +123,7 @@ fun main(args: Array<String>) {
         }
         val compactWindow = remember {
             lateinit var floatingWindow: JWindow
-            val initialBackground = if (themeMode == ThemeMode.LIGHT) java.awt.Color.WHITE else java.awt.Color(11, 13, 16)
+            val initialBackground = if (themeMode == ThemeMode.LIGHT) java.awt.Color.WHITE else java.awt.Color(9, 11, 13)
             val composePanel = ComposePanel().apply {
                 isOpaque = true
                 background = initialBackground
@@ -270,7 +270,7 @@ fun main(args: Array<String>) {
                 }
             }
 
-            Box(Modifier.fillMaxSize().background(if (themeMode == ThemeMode.LIGHT) Color.White else Color(0xFF0B0D10))) {
+            Box(Modifier.fillMaxSize().background(if (themeMode == ThemeMode.LIGHT) Color.White else Color(0xFF090B0D))) {
                 if (!widgetSmokeTest) {
                     App(
                         voipEngine = voipEngine,

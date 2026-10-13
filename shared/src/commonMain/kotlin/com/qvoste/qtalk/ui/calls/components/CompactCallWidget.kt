@@ -40,6 +40,7 @@ import com.qvoste.qtalk.ui.calls.theme.ControlBackground
 import com.qvoste.qtalk.ui.calls.theme.AppBackground
 import com.qvoste.qtalk.ui.calls.theme.IsLightTheme
 import com.qvoste.qtalk.ui.calls.theme.Primary
+import com.qvoste.qtalk.ui.calls.theme.Online
 import com.qvoste.qtalk.ui.calls.theme.TextPrimary
 import com.qvoste.qtalk.ui.calls.theme.TextSecondary
 import com.qvoste.qtalk.voip.CallState
@@ -165,7 +166,7 @@ fun CompactCallWidget(
 private fun IncomingWidgetAction(accept: Boolean, onClick: () -> Unit) {
     Box(
         Modifier.size(30.dp)
-            .background(if (accept) Color(0xFF27B86F) else Color(0xFFFF3545), CircleShape)
+            .background(if (accept) Online else Color(0xFFFF3545), CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {

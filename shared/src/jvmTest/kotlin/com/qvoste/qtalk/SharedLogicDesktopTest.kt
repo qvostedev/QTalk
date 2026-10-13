@@ -17,6 +17,8 @@ import com.qvoste.qtalk.ui.calls.model.formatPhoneNumber
 import com.qvoste.qtalk.ui.calls.model.dialablePhoneNumber
 import com.qvoste.qtalk.ui.calls.model.mergeDownloadedContacts
 import com.qvoste.qtalk.ui.calls.model.transferCodeFor
+import com.qvoste.qtalk.ui.calls.model.matchesSearch
+import com.qvoste.qtalk.ui.calls.model.telegramMatchesQuery
 import com.qvoste.qtalk.ui.calls.model.DisabledContactDatabaseService
 import com.qvoste.qtalk.ui.calls.model.InMemoryCallHistoryStore
 import com.qvoste.qtalk.ui.calls.model.InMemoryContactNoteStore
@@ -43,6 +45,16 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SharedLogicDesktopTest {
+
+    @Test
+    fun contactSearchMatchesTelegramWithOrWithoutAtSign() {
+        val contact = Contact("Лариса Небельская", "207", false, telegram = "@Larisa_Nebelskaya")
+        assertTrue(contact.matchesSearch("@larisa_nebelskaya"))
+        assertTrue(contact.matchesSearch("Larisa_Nebelskaya"))
+        assertTrue(contact.matchesSearch("207"))
+        assertFalse(contact.matchesSearch("@unknown"))
+        assertFalse(telegramMatchesQuery(contact.telegram, "@"))
+    }
 
     @Test
     fun employeeRightClickSendsTransferCodeDuringExistingCall() = runBlocking {

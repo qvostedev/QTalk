@@ -39,7 +39,7 @@ internal fun IncomingCallOverlay(
     onDecline: () -> Unit
 ) {
     Box(
-        Modifier.fillMaxSize().background(Color(0x880B0D10)),
+        Modifier.fillMaxSize().background(Color(0x88090B0D)),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -102,7 +102,7 @@ internal fun ActiveCallOverlay(
         0
     }
 
-    Box(Modifier.fillMaxSize().background(Color(0x880B0D10)), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().background(Color(0x88090B0D)), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             if (callerName == null) {
                 Avatar("?", number, 124)

@@ -7,8 +7,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -119,6 +117,7 @@ import com.qvoste.qtalk.ui.calls.theme.*
 import com.qvoste.qtalk.ui.calls.components.Sidebar
 import com.qvoste.qtalk.ui.calls.components.Avatar
 import com.qvoste.qtalk.ui.calls.components.ContactAvatar
+import com.qvoste.qtalk.ui.calls.components.ContactAvatarWithStatus
 import com.qvoste.qtalk.ui.calls.components.CircleIconAction
 import com.qvoste.qtalk.ui.calls.components.CircleResourceAction
 import com.qvoste.qtalk.ui.calls.components.EmptyMessage
@@ -432,6 +431,16 @@ private fun CallsContent(
                         selectedContact = it
                         number = formatPhoneNumber(it.number)
                     },
+                    onSelectHistory = { item ->
+                        val normalizedNumber = item.number.normalizedContactNumber()
+                        selectedContact = contacts.firstOrNull { contact ->
+                            normalizedNumber.isNotEmpty() &&
+                                contact.number.normalizedContactNumber() == normalizedNumber
+                        }
+                        number = formatPhoneNumber(item.number)
+                        showAddContact = false
+                        editingContact = null
+                    },
                     onQuickCall = {
                         number = formatPhoneNumber(it)
                         if (registration == RegistrationState.REGISTERED && !call.state.isInProgress) {
@@ -643,9 +652,7 @@ private fun NotificationsSection(
         SearchAndAddBar(search, { search = it }, onAddContact)
         Spacer(Modifier.height(35.dp))
         FavoritesSection(
-            contacts = if (search.isBlank()) contacts else contacts.filter {
-                it.name.contains(search, ignoreCase = true) || it.number.contains(search)
-            },
+            contacts = if (search.isBlank()) contacts else contacts.filter { it.matchesSearch(search) },
             compact = compact,
             trailingText = "Все  ›",
             onTrailingClick = onShowAllContacts,
@@ -669,6 +676,7 @@ private fun CallsHome(
     onAddContact: () -> Unit,
     onShowAllContacts: () -> Unit,
     onSelectContact: (Contact) -> Unit,
+    onSelectHistory: (HistoryItem) -> Unit,
     onQuickCall: (String) -> Unit,
     canTransfer: Boolean,
     onTransferEmployee: (Contact) -> Unit
@@ -677,7 +685,7 @@ private fun CallsHome(
     var filter by rememberSaveable { mutableStateOf(CallFilter.ALL) }
     val visibleHistory = history.filter {
         val matchesSearch = search.isBlank() || it.name.contains(search, ignoreCase = true) ||
-            it.number.contains(search)
+            it.number.contains(search) || telegramMatchesQuery(it.telegram, search)
         val matchesFilter = when (filter) {
             CallFilter.ALL -> true
             CallFilter.MISSED -> it.missed
@@ -728,7 +736,9 @@ private fun CallsHome(
                             modifier = Modifier.padding(top = 8.dp, bottom = 6.dp)
                         )
                     }
-                    items(calls, key = { it.id }) { item -> HistoryRow(item, onQuickCall) }
+                    items(calls, key = { it.id }) { item ->
+                        HistoryRow(item, onQuickCall, onSelectHistory)
+                    }
                 }
             }
         }
@@ -737,23 +747,14 @@ private fun CallsHome(
 
 @Composable
 private fun SearchField(value: String, onValueChange: (String) -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val focused by interactionSource.collectIsFocusedAsState()
-
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = Modifier.fillMaxWidth().height(41.dp)
-            .background(ControlBackground, RoundedCornerShape(35.dp))
-            .border(
-                width = 1.dp,
-                color = if (focused) Primary else DividerColor,
-                shape = RoundedCornerShape(35.dp)
-            ),
+            .background(ControlBackground, RoundedCornerShape(35.dp)),
         singleLine = true,
         textStyle = TextStyle(color = TextPrimary, fontSize = 13.sp),
         cursorBrush = SolidColor(Primary),
-        interactionSource = interactionSource,
         decorationBox = { innerTextField ->
             Row(
                 Modifier.fillMaxSize().padding(horizontal = 14.dp),
@@ -812,13 +813,7 @@ private fun FavoriteItem(
             .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box {
-            ContactAvatar(contact.name, contact.telegram, 54)
-            Box(
-                Modifier.align(Alignment.BottomEnd).size(10.dp)
-                    .background(Online, CircleShape).border(2.dp, AppBackground, CircleShape)
-            )
-        }
+        ContactAvatarWithStatus(contact.name, contact.telegram, 54)
         Spacer(Modifier.height(2.dp))
         Text(
             displayName,
@@ -897,7 +892,11 @@ private fun FilterBar(selected: CallFilter, compact: Boolean, missedCount: Int, 
 }
 
 @Composable
-private fun HistoryRow(item: HistoryItem, onCall: (String) -> Unit) {
+private fun HistoryRow(
+    item: HistoryItem,
+    onCall: (String) -> Unit,
+    onSelect: (HistoryItem) -> Unit
+) {
     var menuExpanded by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
     val directionIcon = when {
@@ -909,18 +908,23 @@ private fun HistoryRow(item: HistoryItem, onCall: (String) -> Unit) {
         Modifier.fillMaxWidth().height(64.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ContactAvatar(item.name, item.telegram, 46)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(item.name, color = TextPrimary, fontSize = 13.sp, lineHeight = 13.sp,
-                fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(3.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(painterResource(directionIcon), contentDescription = null, modifier = Modifier.size(9.dp))
-                Spacer(Modifier.width(5.dp))
-                Text(if (item.missed) "Пропущенный" else item.direction,
-                    color = if (item.missed) Danger else TextSecondary,
-                    fontSize = 11.sp, lineHeight = 13.sp)
+        Row(
+            Modifier.weight(1f).fillMaxHeight().clickable { onSelect(item) },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ContactAvatar(item.name, item.telegram, 46)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(item.name, color = TextPrimary, fontSize = 13.sp, lineHeight = 13.sp,
+                    fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(3.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(painterResource(directionIcon), contentDescription = null, modifier = Modifier.size(9.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text(if (item.missed) "Пропущенный" else item.direction,
+                        color = if (item.missed) Danger else TextSecondary,
+                        fontSize = 11.sp, lineHeight = 13.sp)
+                }
             }
         }
         Column(horizontalAlignment = Alignment.End) {
@@ -1009,9 +1013,7 @@ private fun SipSettings(
         SearchAndAddBar(search, { search = it }, onAddContact)
         Spacer(Modifier.height(35.dp))
         FavoritesSection(
-            contacts = if (search.isBlank()) contacts else contacts.filter {
-                it.name.contains(search, ignoreCase = true) || it.number.contains(search)
-            },
+            contacts = if (search.isBlank()) contacts else contacts.filter { it.matchesSearch(search) },
             compact = compact,
             trailingText = "Все  ›",
             onTrailingClick = onShowAllContacts,
@@ -1423,12 +1425,7 @@ private fun ContactsSection(
     var search by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(ContactFilter.ALL) }
     val visibleContacts = contacts.filter {
-        val matchesSearch = search.isBlank() || it.name.contains(search, ignoreCase = true) ||
-            it.number.contains(search) || it.company.contains(search, ignoreCase = true) ||
-            it.department.contains(search, ignoreCase = true) ||
-            it.position.contains(search, ignoreCase = true) ||
-            it.office.contains(search, ignoreCase = true) ||
-            it.phone.contains(search, ignoreCase = true)
+        val matchesSearch = search.isBlank() || it.matchesSearch(search)
         val matchesType = when (filter) {
             ContactFilter.ALL -> true
             ContactFilter.CLIENTS -> !it.isEmployee

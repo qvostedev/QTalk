@@ -46,6 +46,22 @@ data class HistoryItem(
     val durationSeconds: Long? = null
 )
 
+internal fun telegramMatchesQuery(telegram: String, query: String): Boolean {
+    val handle = query.trim().removePrefix("@")
+    return handle.isNotEmpty() && telegram.trim().removePrefix("@")
+        .contains(handle, ignoreCase = true)
+}
+
+internal fun Contact.matchesSearch(query: String): Boolean =
+    name.contains(query, ignoreCase = true) ||
+        number.contains(query) ||
+        company.contains(query, ignoreCase = true) ||
+        department.contains(query, ignoreCase = true) ||
+        position.contains(query, ignoreCase = true) ||
+        office.contains(query, ignoreCase = true) ||
+        phone.contains(query, ignoreCase = true) ||
+        telegramMatchesQuery(telegram, query)
+
 // Пара цветов аватара стабильно вычисляется из имени или номера.
 internal fun avatarGradientFor(value: String): List<Color> {
     val gradients = listOf(

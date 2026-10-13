@@ -139,21 +139,16 @@ internal fun Sidebar(
 private fun AccountAvatar(contact: Contact?, registration: RegistrationState) {
     Box(Modifier.size(46.dp)) {
         if (contact == null) {
-            Avatar("QT", "QTalk", 46)
+            AvatarWithStatus(
+                "QT", "QTalk", 46,
+                if (registration == RegistrationState.REGISTERED) Online else TextSecondary
+            )
         } else {
-            ContactAvatar(contact.name, contact.telegram, 46)
+            ContactAvatarWithStatus(
+                contact.name, contact.telegram, 46,
+                if (registration == RegistrationState.REGISTERED) Online else TextSecondary
+            )
         }
-        Box(
-            Modifier.offset(x = 36.5.dp, y = 31.5.dp).size(10.25.dp)
-                .background(AppBackground, androidx.compose.foundation.shape.CircleShape)
-        )
-        Box(
-            Modifier.offset(x = 38.33.dp, y = 33.22.dp).size(6.82.dp)
-                .background(
-                    if (registration == RegistrationState.REGISTERED) Color(0xFF22A343) else TextSecondary,
-                    androidx.compose.foundation.shape.CircleShape
-                )
-        )
     }
 }
 
