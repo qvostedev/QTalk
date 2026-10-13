@@ -470,6 +470,8 @@ private fun CallsContent(
                 )
                 AppSection.SETTINGS -> SipSettings(
                     modifier = Modifier.weight(1f),
+                    compact = compact,
+                    contacts = contacts,
                     account = account,
                     audioSettings = audioSettings,
                     registration = registration,
@@ -484,7 +486,20 @@ private fun CallsContent(
                     onThemeModeChange = onThemeModeChange,
                     onSaveContactDatabaseUrl = onSaveContactDatabaseUrl,
                     onSyncContactDatabase = onSyncContactDatabase,
-                    onDisconnectContactDatabase = onDisconnectContactDatabase
+                    onDisconnectContactDatabase = onDisconnectContactDatabase,
+                    onAddContact = {
+                        section = AppSection.CONTACTS
+                        editingContact = null
+                        showAddContact = true
+                    },
+                    onShowAllContacts = { section = AppSection.CONTACTS },
+                    onSelectContact = {
+                        section = AppSection.CONTACTS
+                        selectedContact = it
+                        number = formatPhoneNumber(it.number)
+                    },
+                    canTransfer = call.state == CallState.ACTIVE,
+                    onTransferEmployee = onTransferEmployee
                 )
                 AppSection.NOTIFICATIONS -> EmptySection(
                     modifier = Modifier.weight(1f),
@@ -887,6 +902,8 @@ private fun HistoryRow(item: HistoryItem, onCall: (String) -> Unit) {
 @Composable
 private fun SipSettings(
     modifier: Modifier,
+    compact: Boolean,
+    contacts: List<Contact>,
     account: SipAccount?,
     audioSettings: AudioSettings,
     registration: RegistrationState,
@@ -901,13 +918,19 @@ private fun SipSettings(
     onThemeModeChange: (ThemeMode) -> Unit,
     onSaveContactDatabaseUrl: (String) -> Unit,
     onSyncContactDatabase: () -> Unit,
-    onDisconnectContactDatabase: () -> Unit
+    onDisconnectContactDatabase: () -> Unit,
+    onAddContact: () -> Unit,
+    onShowAllContacts: () -> Unit,
+    onSelectContact: (Contact) -> Unit,
+    canTransfer: Boolean,
+    onTransferEmployee: (Contact) -> Unit
 ) {
     var showAccount by remember { mutableStateOf(false) }
     var showInputDevices by remember { mutableStateOf(false) }
     var showOutputDevices by remember { mutableStateOf(false) }
     var showDatabase by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
+    var search by rememberSaveable { mutableStateOf("") }
     var databaseUrl by remember(contactDatabaseState.sourceUrl) {
         mutableStateOf(contactDatabaseState.sourceUrl)
     }
@@ -924,10 +947,33 @@ private fun SipSettings(
 
     LaunchedEffect(Unit) { onRefreshAudioDevices() }
 
-    LazyColumn(
-        modifier.fillMaxHeight().padding(horizontal = 48.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 16.dp, bottom = 40.dp)
+    Column(
+        modifier.fillMaxHeight().padding(
+            start = if (compact) 40.dp else 38.dp,
+            top = 16.dp,
+            end = if (compact) 13.dp else 18.dp,
+            bottom = 20.dp
+        )
     ) {
+        SearchAndAddBar(search, { search = it }, onAddContact)
+        Spacer(Modifier.height(35.dp))
+        FavoritesSection(
+            contacts = if (search.isBlank()) contacts else contacts.filter {
+                it.name.contains(search, ignoreCase = true) || it.number.contains(search)
+            },
+            compact = compact,
+            trailingText = "Все  ›",
+            onTrailingClick = onShowAllContacts,
+            onSelectContact = onSelectContact,
+            onAddContact = onAddContact,
+            canTransfer = canTransfer,
+            onTransferEmployee = onTransferEmployee
+        )
+        Spacer(Modifier.height(if (compact) 28.dp else 32.dp))
+        LazyColumn(
+            Modifier.fillMaxWidth().weight(1f),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 40.dp)
+        ) {
         item {
             SettingsSectionTitle("Аккаунт", "Профиль и безопасность")
             Spacer(Modifier.height(12.dp))
@@ -1025,6 +1071,7 @@ private fun SipSettings(
                 onClick = onLogout
             )
         }
+    }
     }
 
     if (showAccount) {

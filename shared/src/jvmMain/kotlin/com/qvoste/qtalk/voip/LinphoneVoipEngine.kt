@@ -47,6 +47,7 @@ class LinphoneVoipEngine : VoipEngine {
     private var iterateJob: Job? = null
     private var currentAccount: Account? = null
     private var currentCall: Call? = null
+    private var originalRingtone: Path? = null
     private val _callStatus = MutableStateFlow(CallStatus())
     override val callStatus = _callStatus.asStateFlow()
     private val audioPreferences = Preferences.userRoot().node("com/qvoste/qtalk/audio")
@@ -191,6 +192,7 @@ class LinphoneVoipEngine : VoipEngine {
                 core.defaultOutputAudioDevice = device
             }
         }
+        originalRingtone = core.ring?.let(Path::of)?.takeIf(Files::isRegularFile)
         refreshAudioDevicesInternal()
         println("QTALK: audio input = ${core.defaultInputAudioDevice?.id}")
         println("QTALK: audio output = ${core.defaultOutputAudioDevice?.id}")
@@ -432,7 +434,7 @@ class LinphoneVoipEngine : VoipEngine {
 
     override suspend fun setRingtoneVolume(value: Float) = withContext(linphoneDispatcher) {
         val normalized = value.coerceIn(0f, 1f)
-        core.config.setInt("sound", "ring_level", (normalized * 100f).roundToInt())
+        applyRingtoneVolume(normalized)
         audioPreferences.putFloat("ringtoneVolume", normalized)
         audioPreferences.flush()
         _audioSettings.value = _audioSettings.value.copy(ringtoneVolume = normalized)
@@ -469,7 +471,7 @@ class LinphoneVoipEngine : VoipEngine {
             .getFloat("ringtoneVolume", 0.5f)
             .coerceIn(0f, 1f)
         core.micGainDb = microphoneSensitivity * 60f - 30f
-        core.config.setInt("sound", "ring_level", (ringtoneVolume * 100f).roundToInt())
+        applyRingtoneVolume(ringtoneVolume)
 
         _audioSettings.value = AudioSettings(
             inputDevices = inputDevices.map { AudioDeviceInfo(it.id, it.displayName()) },
@@ -479,6 +481,30 @@ class LinphoneVoipEngine : VoipEngine {
             microphoneSensitivity = microphoneSensitivity,
             ringtoneVolume = ringtoneVolume
         )
+    }
+
+    private fun applyRingtoneVolume(value: Float) {
+        val source = originalRingtone ?: bundledRingtone().also { originalRingtone = it }
+        if (value >= 1f) {
+            core.ring = source.toString()
+            return
+        }
+        val level = (value * 100f).roundToInt()
+        val destination = Path.of(factory.getDataDir(null), "qtalk-ringtones", "ring-$level.wav")
+        if (!Files.isRegularFile(destination)) writeRingtoneAtVolume(source, destination, value)
+        core.ring = destination.toString()
+    }
+
+    private fun bundledRingtone(): Path {
+        val destination = Path.of(factory.getDataDir(null), "qtalk-ringtones", "original.wav")
+        if (!Files.isRegularFile(destination)) {
+            Files.createDirectories(destination.parent)
+            val resource = "assets/org.linphone.core/share/sounds/linphone/rings/oldphone-mono.wav"
+            val input = javaClass.classLoader.getResourceAsStream(resource)
+                ?: error("Bundled Linphone ringtone is unavailable")
+            input.use { Files.copy(it, destination) }
+        }
+        return destination
     }
 
     private fun AudioDevice.displayName(): String = deviceName
