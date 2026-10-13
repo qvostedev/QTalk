@@ -1,109 +1,96 @@
 # QTalk
 
-[English](README.md) | [Русский](README_RU.md)
-
 <p align="center">
-  <img src="logo_2.svg" alt="QTalk" width="420">
+  <img src="logo_2.svg" alt="QTalk logo" width="300">
 </p>
 
-QTalk is an open-source, cross-platform SIP client focused on a fast and modern interface, flexible configuration, and a consistent user experience across desktop and mobile platforms.
+<p align="center">
+  Open-source SIP calling with a clean, focused desktop interface.
+</p>
 
-The goal of the project is to create a modern and customizable softphone while keeping the application open-source and platform-independent.
+<p align="center">
+  <strong>English</strong> · <a href="README_RU.md">Русский</a>
+</p>
 
-## Status
+QTalk brings calls, contacts, favorites, and call history into one app. The desktop interface is built with Kotlin Multiplatform and Compose Multiplatform; liblinphone handles SIP and audio.
 
-> **Early development**
+<p align="center">
+  <a href="https://github.com/qvostedev/QTalk/releases/latest">Download the latest release</a> · <a href="#build-from-source">Build from source</a> · <a href="LICENSE.txt">License</a>
+</p>
 
-QTalk is currently under active development and is not yet intended for everyday or production use.
+## Interface preview
 
-The basic application architecture, VoIP abstraction, and local network audio calls are already implemented. SIP functionality and Linphone SDK integration continue to evolve.
+These screenshots show the dark and light themes with sample data.
 
-## Platforms
+<table width="100%">
+  <tr><th width="50%">Dark</th><th width="50%">Light</th></tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/dark-preview.png" alt="QTalk dark theme preview" width="100%"></td>
+    <td width="50%"><img src="docs/screenshots/light-preview.png" alt="QTalk light theme preview" width="100%"></td>
+  </tr>
+</table>
+
+## Features
+
+- Incoming and outgoing SIP audio calls, in-call controls, and transfer to an internal extension.
+- Contacts, favorites, notes, and searchable call history.
+- Optional contact synchronization from Google Sheets; locally added contacts are kept separately.
+- Dark and light themes, plus a compact in-call widget.
+- Audio device selection, microphone sensitivity, and ringtone volume settings.
+- An in-app check for newer GitHub releases.
+
+## Platform status
 
 | Platform | Status |
 | --- | --- |
-| Linux | 🚧 In development |
-| Android | 🚧 In development |
-| Windows | 🚧 In development |
-| iOS | 🚧 In development |
+| Windows (x64) | ✅ Ready; installer in [Releases](https://github.com/qvostedev/QTalk/releases/latest) |
+| Linux (x86_64) | ✅ Ready; build from source |
+| Android | In development |
+| iOS | In development |
 
-Development is currently focused on the Desktop version and the shared Kotlin Multiplatform codebase.
+Desktop builds are usable and continue to evolve. Calls require your own SIP account and server; QTalk does not provide a telephony service. Contact synchronization is optional and configured locally.
 
-## Build & Run
+## Install
 
-### Requirements
+On Windows, download the `QTalk-Setup-*.exe` installer from the [latest release](https://github.com/qvostedev/QTalk/releases/latest) and run it. Linux users can build the desktop app using the instructions below.
 
-- JDK 21
-- Git
-- Gradle
-- Any compatible IDE (I use IntelliJ IDEA)
+## Build from source
 
-## Tech Stack
+You need **JDK 21**. The repository includes the Gradle wrapper, so a separate Gradle installation is not required.
 
-- **Kotlin**
-- **Kotlin Multiplatform**
-- **Compose Multiplatform**
-- **Kotlin Coroutines / Flow**
-- **Linphone SDK / liblinphone** — SIP and VoIP engine
-- **Gradle**
-- **Nix** — Linux development environment
+### Windows
 
-## Architecture
-
-QTalk separates application logic from the underlying VoIP implementation.
-
-```text
-              QTalk
-                │
-       ┌────────▼────────┐
-       │       UI        │
-       │    Compose MP   │
-       └────────┬────────┘
-                │
-       ┌────────▼────────┐
-       │    ViewModel    │
-       └────────┬────────┘
-                │
-       ┌────────▼────────┐
-       │     Domain      │
-       │    Use Cases    │
-       └────────┬────────┘
-                │
-       ┌────────▼────────┐
-       │   VoipEngine    │
-       │   abstraction   │
-       └────────┬────────┘
-                │
-       ┌────────▼────────┐
-       │Linphone adapter │
-       └────────┬────────┘
-                │
-       ┌────────▼────────┐
-       │  Linphone SDK   │
-       └─────────────────┘
+```powershell
+.\gradlew.bat :desktopApp:run
 ```
 
-The shared code is divided into several main layers:
+To build the Windows installer, install Inno Setup 6 and run:
 
-```text
-shared/
-└── src/commonMain/
-    └── kotlin/com/qvoste/qtalk/
-        ├── app/        # Application initialization and dependency wiring
-        ├── data/       # Data sources and persistence
-        ├── domain/     # Application logic and use cases
-        ├── ui/         # Compose UI and ViewModels
-        └── voip/       # Platform-independent VoIP abstraction
+```powershell
+.\gradlew.bat :desktopApp:packageQTalkInstaller
 ```
 
-The `VoipEngine` interface separates the application from a specific SIP implementation. This allows the shared QTalk logic to interact with VoIP functionality without directly depending on the Linphone API.
+The installer will be in `desktopApp/build/compose/binaries/main/exe/`. See the [installer notes](installer/windows/README.md) for details.
 
-Platform-specific Linphone integration will be implemented behind this abstraction.
+### Linux
+
+On x86_64 Linux, use the provided Nix development shell or install JDK 21 and the required system libraries yourself:
+
+```bash
+nix develop
+./gradlew :desktopApp:run
+```
+
+## How it is built
+
+```text
+Compose UI → ViewModel / use cases → VoipEngine → Linphone SDK
+```
+
+The shared Kotlin Multiplatform module contains the UI and application logic. The desktop-specific Linphone adapter implements `VoipEngine`, keeping SIP details separate from the rest of the app.
 
 ## License
 
-QTalk’s source code is licensed under the **GNU Affero General Public License, version 3 only (AGPL-3.0-only)**. The full license text is available in [LICENSE](LICENSE.txt).
+QTalk is licensed under **AGPL-3.0-only**. See [LICENSE](LICENSE.txt). The software is provided without warranty.
 
-You may use, modify, and distribute the project under the terms of this license. The software is provided without warranty.
-
-Third-party components retain their own licenses and copyright notices. Linphone SDK 5.5.23 is dual-licensed; QTalk uses the open-source version under AGPLv3. See the [SDK README](https://github.com/BelledonneCommunications/linphone-sdk/blob/5.5.23/README.md) and its [license](https://github.com/BelledonneCommunications/linphone-sdk/blob/5.5.23/LICENSE.txt) for details.
+Third-party components retain their own licenses. Linphone SDK 5.5.23 is dual-licensed; QTalk uses its open-source AGPLv3 option. See the [SDK README](https://github.com/BelledonneCommunications/linphone-sdk/blob/5.5.23/README.md) and [license](https://github.com/BelledonneCommunications/linphone-sdk/blob/5.5.23/LICENSE.txt).
