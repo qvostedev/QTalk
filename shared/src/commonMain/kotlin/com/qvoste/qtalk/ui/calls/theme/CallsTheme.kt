@@ -26,12 +26,12 @@ private data class CallsPalette(
 private val darkPalette = CallsPalette(
     Color(0xFF090B0D), Color(0xFF101215), Color(0xFF23262D),
     Color(0xFF0088FF), Color.White, Color(0xFFE8E9EC), Color(0x80FFFFFF),
-    Color(0xFF971818), Color(0xFF34C759)
+    Color(0xFFFF383C), Color(0xFF34C759)
 )
 private val lightPalette = CallsPalette(
     Color.White, Color(0xFFE9EAEC), Color(0xFFD2D5D9),
     Color(0xFF0088FF), Color.White, Color(0xFF101215), Color(0xFF505760),
-    Color(0xFFDB272F), Color(0xFF34C759)
+    Color(0xFFFF383C), Color(0xFF34C759)
 )
 private val LocalCallsPalette = staticCompositionLocalOf { darkPalette }
 

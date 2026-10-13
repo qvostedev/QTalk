@@ -27,6 +27,7 @@ import com.qvoste.qtalk.ui.calls.model.GoogleSheetsContactDatabaseService
 import com.qvoste.qtalk.ui.calls.model.PreferencesContactStore
 import com.qvoste.qtalk.ui.calls.model.PreferencesContactNoteStore
 import com.qvoste.qtalk.ui.calls.model.PreferencesCallHistoryStore
+import com.qvoste.qtalk.ui.calls.model.matchesCallNumber
 import com.qvoste.qtalk.ui.calls.theme.qTalkWindowIcon
 import com.qvoste.qtalk.ui.calls.theme.PreferencesThemeStore
 import com.qvoste.qtalk.ui.calls.theme.CallsTheme
@@ -84,12 +85,7 @@ fun main(args: Array<String>) {
         }
 
         val caller = remember(call.number, call.state) {
-            val exactNumber = call.number.trim()
-            val normalizedNumber = exactNumber.filter(Char::isDigit)
-            contactStore.load().firstOrNull { contact ->
-                contact.number.trim() == exactNumber ||
-                    normalizedNumber.isNotEmpty() && contact.phone.filter(Char::isDigit) == normalizedNumber
-            }
+            contactStore.load().firstOrNull { it.matchesCallNumber(call.number) }
         }
         val callCanUseWidget = widgetCall.state.isInProgress
         val compactCallVisible = if (widgetSmokeTest) {

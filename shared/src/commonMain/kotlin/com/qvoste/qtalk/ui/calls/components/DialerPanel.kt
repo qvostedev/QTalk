@@ -398,7 +398,7 @@ internal fun DialerPanel(
         CircleIconAction(
             Res.drawable.icon_phone,
             54,
-            if (call.state.isInProgress) Color(0xFFFF3545) else if (canCall) Primary
+            if (call.state.isInProgress) Danger else if (canCall) Primary
                 else if (IsLightTheme) ControlBackground else Color(0xFF293142),
             Modifier.align(Alignment.CenterHorizontally)
         ) {

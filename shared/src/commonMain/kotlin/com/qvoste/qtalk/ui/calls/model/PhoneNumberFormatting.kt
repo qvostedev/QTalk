@@ -14,3 +14,13 @@ internal fun formatPhoneNumber(number: String): String {
 
 internal fun dialablePhoneNumber(number: String): String =
     number.filter { it.isDigit() || it == '+' || it == '*' || it == '#' }
+
+fun Contact.matchesCallNumber(number: String): Boolean {
+    fun normalized(value: String): String {
+        val digits = value.filter(Char::isDigit)
+        return if (digits.length == 11 && digits.startsWith('8')) "7${digits.drop(1)}" else digits
+    }
+    val target = normalized(number)
+    return target.isNotEmpty() && sequenceOf(this.number, phone)
+        .any { normalized(it) == target }
+}

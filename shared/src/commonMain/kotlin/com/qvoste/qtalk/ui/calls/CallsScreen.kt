@@ -599,7 +599,7 @@ private fun CallsContent(
         }
 
         if (call.state == CallState.INCOMING && !callOverlayCollapsed) {
-            val caller = contacts.firstOrNull { it.number == call.number }
+            val caller = contacts.firstOrNull { it.matchesCallNumber(call.number) }
             IncomingCallOverlay(
                 number = call.number.ifBlank { "Неизвестный номер" },
                 callerName = caller?.name,
@@ -611,7 +611,7 @@ private fun CallsContent(
 
 
         if (call.state == CallState.ACTIVE && !callOverlayCollapsed) {
-            val activeContact = contacts.firstOrNull { it.number == call.number }
+            val activeContact = contacts.firstOrNull { it.matchesCallNumber(call.number) }
             ActiveCallOverlay(
                 number = call.number,
                 callerName = activeContact?.name,

@@ -56,7 +56,7 @@ internal fun IncomingCallOverlay(
             Text("${formatPhoneNumber(number)}  •  Личная линия", color = TextSecondary, fontSize = 13.sp)
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(96.dp)) {
-                CircleIconAction(Res.drawable.icon_phone, 44, Color(0xFFFF3545)) { onDecline() }
+                CircleIconAction(Res.drawable.icon_phone, 44, Danger) { onDecline() }
                 CircleIconAction(Res.drawable.icon_phone, 44, Primary) { onAccept() }
             }
         }
@@ -139,44 +139,44 @@ internal fun ActiveCallOverlay(
                         }
                     )
                 }
-                Spacer(Modifier.height(35.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(26.dp)) {
+                Spacer(Modifier.height(22.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     listOf(
                         listOf('1', '2', '3'),
                         listOf('4', '5', '6'),
                         listOf('7', '8', '9'),
                         listOf('*', '0', '#')
                     ).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(52.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                             row.forEach { digit ->
                                 Box(
-                                    Modifier.size(60.dp).background(ControlBackground, CircleShape)
+                                    Modifier.size(48.dp).background(ControlBackground, CircleShape)
                                         .clickable { enterDtmf(digit) },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(digit.toString(), color = TextPrimary, fontSize = 21.sp)
+                                    Text(digit.toString(), color = TextPrimary, fontSize = 19.sp)
                                 }
                             }
                         }
                     }
                 }
-                Spacer(Modifier.height(26.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(52.dp), verticalAlignment = Alignment.Top) {
-                    CallControl(Res.drawable.icon_call_collapse, "Свернуть", true, 22, 22, 60, onClick = onCollapse)
+                Spacer(Modifier.height(20.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+                    CallControl(Res.drawable.icon_call_collapse, "Свернуть", true, 16, 16, 42, onClick = onCollapse)
                     CallControl(
                         Res.drawable.icon_phone,
                         "Завершить",
                         true,
-                        22,
-                        22,
-                        60,
-                        overrideColor = Color(0xFFFF3545),
+                        20,
+                        20,
+                        42,
+                        overrideColor = Danger,
                         onClick = onHangUp
                     )
-                    TextCallControl("×", "Отмена", 60) { keypadVisible = false }
+                    TextCallControl("×", "Отмена", 42) { keypadVisible = false }
                 }
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(35.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CallControl(
                         Res.drawable.icon_call_microphone,
                         "Микрофон",
@@ -201,16 +201,16 @@ internal fun ActiveCallOverlay(
                     }
                     CallControl(Res.drawable.icon_call_hold, "Удержание", onHold, 18, 20) { onHold = !onHold }
                 }
-                Spacer(Modifier.height(18.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(35.dp)) {
-                    CallControl(Res.drawable.icon_call_collapse, "Свернуть", false, 19, 19, onClick = onCollapse)
+                Spacer(Modifier.height(14.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CallControl(Res.drawable.icon_call_collapse, "Свернуть", false, 15, 15, onClick = onCollapse)
                     CallControl(Res.drawable.icon_call_keypad, "Клавиатура", false, 22, 14) {
                         keypadVisible = true
                     }
                     CallControl(Res.drawable.icon_call_record, "Запись", false, 20, 20) {}
                 }
-                Spacer(Modifier.height(20.dp))
-                CircleIconAction(Res.drawable.icon_phone, 44, Color(0xFFFF3545)) { onHangUp() }
+                Spacer(Modifier.height(18.dp))
+                CircleIconAction(Res.drawable.icon_phone, 42, Danger) { onHangUp() }
             }
         }
     }
@@ -223,12 +223,12 @@ private fun CallControl(
     active: Boolean,
     iconWidth: Int,
     iconHeight: Int,
-    buttonSize: Int = 44,
+    buttonSize: Int = 42,
     overrideColor: Color? = null,
     crossedOut: Boolean = false,
     onClick: () -> Unit
 ) {
-    Column(Modifier.width(buttonSize.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.width(56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.size(buttonSize.dp).background(overrideColor ?: if (active) Primary else ControlBackground, CircleShape)
                 .clickable(onClick = onClick),
@@ -257,8 +257,8 @@ private fun CallControl(
 }
 
 @Composable
-private fun TextCallControl(symbol: String, label: String, buttonSize: Int = 44, onClick: () -> Unit) {
-    Column(Modifier.width(buttonSize.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+private fun TextCallControl(symbol: String, label: String, buttonSize: Int = 42, onClick: () -> Unit) {
+    Column(Modifier.width(56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.size(buttonSize.dp).background(ControlBackground, CircleShape).clickable(onClick = onClick),
             contentAlignment = Alignment.Center

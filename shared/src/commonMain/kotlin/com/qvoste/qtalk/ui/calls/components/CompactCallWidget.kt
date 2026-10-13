@@ -41,6 +41,7 @@ import com.qvoste.qtalk.ui.calls.theme.AppBackground
 import com.qvoste.qtalk.ui.calls.theme.IsLightTheme
 import com.qvoste.qtalk.ui.calls.theme.Primary
 import com.qvoste.qtalk.ui.calls.theme.Online
+import com.qvoste.qtalk.ui.calls.theme.Danger
 import com.qvoste.qtalk.ui.calls.theme.TextPrimary
 import com.qvoste.qtalk.ui.calls.theme.TextSecondary
 import com.qvoste.qtalk.voip.CallState
@@ -156,7 +157,7 @@ fun CompactCallWidget(
                     onSpeakerMutedChange(speakerMuted)
                 }
                 Spacer(Modifier.width(5.dp))
-                CircleIconAction(Res.drawable.icon_phone, 30, Color(0xFFFF3545)) { onHangUp() }
+                CircleIconAction(Res.drawable.icon_phone, 30, Danger) { onHangUp() }
             }
         }
     }
@@ -166,7 +167,7 @@ fun CompactCallWidget(
 private fun IncomingWidgetAction(accept: Boolean, onClick: () -> Unit) {
     Box(
         Modifier.size(30.dp)
-            .background(if (accept) Online else Color(0xFFFF3545), CircleShape)
+            .background(if (accept) Online else Danger, CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {

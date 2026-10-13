@@ -18,6 +18,7 @@ import com.qvoste.qtalk.ui.calls.model.dialablePhoneNumber
 import com.qvoste.qtalk.ui.calls.model.mergeDownloadedContacts
 import com.qvoste.qtalk.ui.calls.model.transferCodeFor
 import com.qvoste.qtalk.ui.calls.model.matchesSearch
+import com.qvoste.qtalk.ui.calls.model.matchesCallNumber
 import com.qvoste.qtalk.ui.calls.model.telegramMatchesQuery
 import com.qvoste.qtalk.ui.calls.model.DisabledContactDatabaseService
 import com.qvoste.qtalk.ui.calls.model.InMemoryCallHistoryStore
@@ -47,11 +48,20 @@ import kotlin.test.assertTrue
 class SharedLogicDesktopTest {
 
     @Test
+    fun callMatchesManuallyCreatedContactAcrossNumberFormats() {
+        val contact = Contact("Тестовый контакт", "+8 000 000 00 00", true, phone = "")
+        assertTrue(contact.matchesCallNumber("80000000000"))
+        assertTrue(contact.matchesCallNumber("+7 000 000 00 00"))
+        assertFalse(contact.matchesCallNumber("+7 000 000 00 01"))
+        assertFalse(contact.matchesCallNumber(""))
+    }
+
+    @Test
     fun contactSearchMatchesTelegramWithOrWithoutAtSign() {
-        val contact = Contact("Лариса Небельская", "207", false, telegram = "@Larisa_Nebelskaya")
-        assertTrue(contact.matchesSearch("@larisa_nebelskaya"))
-        assertTrue(contact.matchesSearch("Larisa_Nebelskaya"))
-        assertTrue(contact.matchesSearch("207"))
+        val contact = Contact("Тестовый контакт", "123", false, telegram = "@sample_contact")
+        assertTrue(contact.matchesSearch("@sample_contact"))
+        assertTrue(contact.matchesSearch("sample_contact"))
+        assertTrue(contact.matchesSearch("123"))
         assertFalse(contact.matchesSearch("@unknown"))
         assertFalse(telegramMatchesQuery(contact.telegram, "@"))
     }
