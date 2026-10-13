@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -44,6 +45,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -66,6 +68,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlin.time.Clock
 import com.qvoste.qtalk.ui.calls.model.formatPhoneNumber
@@ -131,6 +135,8 @@ fun CallsScreen(
     viewModel: CallsViewModel,
     themeMode: ThemeMode = ThemeMode.DARK,
     onThemeModeChange: (ThemeMode) -> Unit = {},
+    appVersion: String = "1.0.0",
+    onCheckForUpdates: suspend ((String) -> Unit) -> Unit = { it("Проверка обновлений недоступна") },
     callOverlayCollapsed: Boolean = false,
     onCollapseCall: () -> Unit = {}
 ) {
@@ -171,6 +177,8 @@ fun CallsScreen(
         contactDatabaseState = contactDatabaseState,
         themeMode = themeMode,
         onThemeModeChange = onThemeModeChange,
+        appVersion = appVersion,
+        onCheckForUpdates = onCheckForUpdates,
         onCall = viewModel::call,
         onAccept = viewModel::acceptCall,
         onDecline = viewModel::declineCall,
@@ -362,6 +370,8 @@ private fun CallsContent(
     contactDatabaseState: ContactDatabaseState,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
+    appVersion: String,
+    onCheckForUpdates: suspend ((String) -> Unit) -> Unit,
     onCall: (String) -> Unit,
     onAccept: () -> Unit,
     onDecline: () -> Unit,
@@ -492,6 +502,8 @@ private fun CallsContent(
                     contactDatabaseState = contactDatabaseState,
                     themeMode = themeMode,
                     onThemeModeChange = onThemeModeChange,
+                    appVersion = appVersion,
+                    onCheckForUpdates = onCheckForUpdates,
                     onSaveContactDatabaseUrl = onSaveContactDatabaseUrl,
                     onSyncContactDatabase = onSyncContactDatabase,
                     onDisconnectContactDatabase = onDisconnectContactDatabase,
@@ -971,6 +983,8 @@ private fun SipSettings(
     contactDatabaseState: ContactDatabaseState,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
+    appVersion: String,
+    onCheckForUpdates: suspend ((String) -> Unit) -> Unit,
     onSaveContactDatabaseUrl: (String) -> Unit,
     onSyncContactDatabase: () -> Unit,
     onDisconnectContactDatabase: () -> Unit,
@@ -985,6 +999,9 @@ private fun SipSettings(
     var showOutputDevices by remember { mutableStateOf(false) }
     var showDatabase by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
+    var updateMessage by remember { mutableStateOf<String?>(null) }
+    var updating by remember { mutableStateOf(false) }
+    val updateScope = rememberCoroutineScope()
     var search by rememberSaveable { mutableStateOf("") }
     var databaseUrl by remember(contactDatabaseState.sourceUrl) {
         mutableStateOf(contactDatabaseState.sourceUrl)
@@ -1258,15 +1275,40 @@ private fun SipSettings(
             },
             title = { Text("QTalk", color = TextPrimary) },
             text = {
-                Text(
-                    "Версия 1.0.0\nКорпоративный SIP-клиент для звонков и работы с контактами.",
-                    color = TextSecondary,
-                    fontSize = 12.sp,
-                    textAlign = TextAlign.Center
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "Версия $appVersion\nКорпоративный SIP-клиент для звонков и работы с контактами.",
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center
+                    )
+                    updateMessage?.let { message ->
+                        Spacer(Modifier.height(12.dp))
+                        Text(message, color = TextSecondary, fontSize = 11.sp, textAlign = TextAlign.Center)
+                    }
+                }
             },
             confirmButton = {
                 TextButton(onClick = { showAbout = false }) { Text("Готово", color = TextPrimary) }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !updating,
+                    onClick = {
+                        updateScope.launch {
+                            updating = true
+                            try {
+                                onCheckForUpdates { updateMessage = it }
+                            } catch (error: CancellationException) {
+                                throw error
+                            } catch (error: Exception) {
+                                updateMessage = "Ошибка обновления: ${error.message ?: "проверьте подключение"}"
+                            } finally {
+                                updating = false
+                            }
+                        }
+                    }
+                ) { Text("Обновить", color = Primary) }
             }
         )
     }
@@ -1287,31 +1329,34 @@ private fun SettingsActionRow(
     titleColor: Color = TextPrimary,
     onClick: () -> Unit
 ) {
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(Modifier.width(28.dp), contentAlignment = Alignment.CenterStart) {
-            Image(painterResource(icon), contentDescription = null, modifier = Modifier.size(20.dp),
-                colorFilter = if (IsLightTheme) ColorFilter.tint(TextSecondary) else null)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.offset(x = (-10).dp).requiredWidth(maxWidth + 20.dp)
+                .clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(Modifier.width(28.dp), contentAlignment = Alignment.CenterStart) {
+                Image(painterResource(icon), contentDescription = null, modifier = Modifier.size(20.dp),
+                    colorFilter = if (IsLightTheme) ColorFilter.tint(TextSecondary) else null)
+            }
+            Column(Modifier.weight(1f)) {
+                Text(title, color = titleColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                subtitle?.let { Text(it, color = TextSecondary, fontSize = 10.sp) }
+            }
+            value?.let {
+                Text(
+                    it,
+                    color = TextSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 260.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+            }
+            if (subtitle != null) Text("›", color = TextSecondary, fontSize = 22.sp)
         }
-        Column(Modifier.weight(1f)) {
-            Text(title, color = titleColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            subtitle?.let { Text(it, color = TextSecondary, fontSize = 10.sp) }
-        }
-        value?.let {
-            Text(
-                it,
-                color = TextSecondary,
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 260.dp)
-            )
-            Spacer(Modifier.width(12.dp))
-        }
-        if (subtitle != null) Text("›", color = TextSecondary, fontSize = 22.sp)
     }
 }
 

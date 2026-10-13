@@ -65,6 +65,10 @@ fun main(args: Array<String>) {
         val callHistoryStore = remember { PreferencesCallHistoryStore() }
         val contactDatabaseService = remember { GoogleSheetsContactDatabaseService() }
         val themeStore = remember { PreferencesThemeStore() }
+        val appVersion = remember {
+            GitHubReleaseUpdater::class.java.`package`?.implementationVersion ?: "1.0.0"
+        }
+        val updater = remember(appVersion) { GitHubReleaseUpdater(appVersion) }
         var themeMode by remember { mutableStateOf(themeStore.load()) }
         val scope = rememberCoroutineScope()
         val windowState = rememberWindowState(width = 1440.dp, height = 1024.dp)
@@ -279,6 +283,10 @@ fun main(args: Array<String>) {
                         onThemeModeChange = { selected ->
                             themeStore.save(selected)
                             themeMode = selected
+                        },
+                        appVersion = appVersion,
+                        onCheckForUpdates = { onStatus ->
+                            if (updater.checkAndInstall(onStatus)) closeApplication()
                         },
                         callOverlayCollapsed = callOverlayCollapsed,
                         onCollapseCall = { callOverlayCollapsed = true }

@@ -17,6 +17,7 @@ val qTalkPackageVersion = "1.0.0"
 
 dependencies {
     implementation(project(":shared"))
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
     implementation(
         if (targetOs.contains("windows")) compose.desktop.windows_x64
@@ -27,6 +28,11 @@ dependencies {
 
     implementation(libs.kotlinx.coroutinesSwing)
     implementation(libs.compose.uiToolingPreview)
+    testImplementation(libs.kotlin.testJunit)
+}
+
+tasks.jar {
+    manifest.attributes["Implementation-Version"] = qTalkPackageVersion
 }
 
 val prepareWindowsJpackageInput by tasks.registering(Copy::class) {
@@ -47,6 +53,7 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Exe, TargetFormat.Deb)
+            modules("java.net.http")
             packageName = "QTalk"
             packageVersion = qTalkPackageVersion
             description = "QTalk desktop SIP client"
