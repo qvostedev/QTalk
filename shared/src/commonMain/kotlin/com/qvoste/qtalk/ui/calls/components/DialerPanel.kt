@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
@@ -639,7 +640,7 @@ private fun InlineTextField(
 
 @Composable
 private fun KeypadButton(value: String, onClick: () -> Unit) {
-    Box(Modifier.size(54.dp).background(ControlBackground, CircleShape).clickable(onClick = onClick), Alignment.Center) {
+    Box(Modifier.size(54.dp).clip(CircleShape).background(ControlBackground).clickable(onClick = onClick), Alignment.Center) {
         Text(value, color = TextPrimary, fontSize = 19.sp, lineHeight = 19.sp)
     }
 }

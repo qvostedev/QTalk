@@ -274,6 +274,38 @@ internal fun applyQTalkWindowsTitleBar(window: Window, light: Boolean = false): 
 
 internal fun qTalkNativeWindowTitle(): String = if (isWindows) "" else "QTalk"
 
+internal fun updateQTalkWindowsCaptionColors(window: Window, light: Boolean) {
+    if (!isWindows) return
+    runCatching {
+        val dwmApi = Native.load("dwmapi", DwmApi::class.java)
+        val user32Api = Native.load("user32", User32Api::class.java)
+        val componentHandle = Native.getComponentPointer(window)
+        val windowHandle = user32Api.GetAncestor(componentHandle, GA_ROOT) ?: componentHandle
+        val captionResult = dwmApi.setIntAttribute(
+            windowHandle, DWMWA_CAPTION_COLOR,
+            if (light) WHITE_CAPTION_COLOR else QTALK_CAPTION_COLOR
+        )
+        val textResult = dwmApi.setIntAttribute(
+            windowHandle, DWMWA_TEXT_COLOR,
+            if (light) DARK_TEXT_COLOR else LIGHT_TEXT_COLOR
+        )
+        if (captionResult != 0 || textResult != 0) {
+            val modernResult = dwmApi.setIntAttribute(
+                windowHandle, DWMWA_USE_IMMERSIVE_DARK_MODE, if (light) 0 else 1
+            )
+            if (modernResult != 0) {
+                dwmApi.setIntAttribute(
+                    windowHandle, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1,
+                    if (light) 0 else 1
+                )
+            }
+        }
+    }.onFailure { error ->
+        System.err.println("QTalk: failed to update the native Windows title bar colors")
+        error.printStackTrace()
+    }
+}
+
 /** Lets Windows anti-alias the compact widget corners instead of using a pixelated AWT shape. */
 internal fun applyQTalkCompactWindowStyle(window: Window) {
     if (!isWindows) return

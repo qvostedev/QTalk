@@ -29,6 +29,7 @@ import com.qvoste.qtalk.ui.calls.model.PreferencesContactNoteStore
 import com.qvoste.qtalk.ui.calls.model.PreferencesCallHistoryStore
 import com.qvoste.qtalk.ui.calls.model.matchesCallNumber
 import com.qvoste.qtalk.ui.calls.theme.qTalkWindowIcon
+import com.qvoste.qtalk.ui.calls.theme.qTalkTrayIcon
 import com.qvoste.qtalk.ui.calls.theme.PreferencesThemeStore
 import com.qvoste.qtalk.ui.calls.theme.CallsTheme
 import com.qvoste.qtalk.ui.calls.theme.ThemeMode
@@ -208,7 +209,7 @@ fun main(args: Array<String>) {
         }
         LaunchedEffect(themeMode, compactWindow) {
             EventQueue.invokeLater {
-                val background = if (themeMode == ThemeMode.LIGHT) java.awt.Color.WHITE else java.awt.Color(11, 13, 16)
+                val background = if (themeMode == ThemeMode.LIGHT) java.awt.Color.WHITE else java.awt.Color(9, 11, 13)
                 compactWindow.background = background
                 compactWindow.contentPane.background = background
                 (compactWindow.contentPane.getComponent(0) as? ComposePanel)?.background = background
@@ -236,7 +237,7 @@ fun main(args: Array<String>) {
         }
         if (traySupported) {
             Tray(
-                icon = qTalkWindowIcon(),
+                icon = qTalkTrayIcon(),
                 tooltip = "QTalk",
                 onAction = ::openMainWindow,
                 menu = {
@@ -259,9 +260,14 @@ fun main(args: Array<String>) {
             undecorated = false,
             resizable = true
         ) {
+            val callOverlayVisible = !callOverlayCollapsed &&
+                (call.state == CallState.INCOMING || call.state == CallState.ACTIVE)
             DisposableEffect(window, themeMode) {
                 val restoreWindowsTitleBar = applyQTalkWindowsTitleBar(window, themeMode == ThemeMode.LIGHT)
                 onDispose(restoreWindowsTitleBar)
+            }
+            LaunchedEffect(window, themeMode, callOverlayVisible) {
+                updateQTalkWindowsCaptionColors(window, themeMode == ThemeMode.LIGHT && !callOverlayVisible)
             }
             LaunchedEffect(mainWindowVisible) {
                 if (mainWindowVisible) {

@@ -130,7 +130,7 @@ internal fun CircleIconAction(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    Box(modifier.size(size.dp).background(color, CircleShape).clickable(onClick = onClick), Alignment.Center) {
+    Box(modifier.size(size.dp).clip(CircleShape).background(color).clickable(onClick = onClick), Alignment.Center) {
         Image(painterResource(icon), null, Modifier.size((size * 0.42).dp),
             colorFilter = if (IsLightTheme && color == ControlBackground) ColorFilter.tint(TextPrimary) else null)
     }
@@ -146,7 +146,7 @@ internal fun CircleResourceAction(
     onClick: () -> Unit
 ) {
     Box(
-        Modifier.size(buttonSize.dp).background(color, CircleShape).clickable(onClick = onClick),
+        Modifier.size(buttonSize.dp).clip(CircleShape).background(color).clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Image(painterResource(icon), null, Modifier.size(iconWidth.dp, iconHeight.dp),

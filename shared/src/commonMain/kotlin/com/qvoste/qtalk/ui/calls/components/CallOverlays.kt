@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.geometry.Offset
@@ -39,7 +40,7 @@ internal fun IncomingCallOverlay(
     onDecline: () -> Unit
 ) {
     Box(
-        Modifier.fillMaxSize().background(Color(0x88090B0D)),
+        Modifier.fillMaxSize().background(Color(0xD9090B0D)),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -102,7 +103,7 @@ internal fun ActiveCallOverlay(
         0
     }
 
-    Box(Modifier.fillMaxSize().background(Color(0x88090B0D)), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().background(Color(0xD9090B0D)), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             if (callerName == null) {
                 Avatar("?", number, 124)
@@ -129,7 +130,7 @@ internal fun ActiveCallOverlay(
                     Image(
                         painter = painterResource(Res.drawable.icon_backspace),
                         contentDescription = "Удалить символ",
-                        modifier = Modifier.align(Alignment.CenterEnd).size(22.dp).clickable {
+                        modifier = Modifier.align(Alignment.CenterEnd).size(22.dp).clip(CircleShape).clickable {
                             if (enteredDigits.isNotEmpty()) enteredDigits = enteredDigits.dropLast(1)
                         }
                     )
@@ -145,7 +146,7 @@ internal fun ActiveCallOverlay(
                         Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                             row.forEach { digit ->
                                 Box(
-                                    Modifier.size(48.dp).background(ControlBackground, CircleShape)
+                                    Modifier.size(48.dp).clip(CircleShape).background(ControlBackground)
                                         .clickable { enterDtmf(digit) },
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -227,7 +228,8 @@ private fun CallControl(
 ) {
     Column(Modifier.width(columnWidth.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
-            Modifier.size(buttonSize.dp).background(overrideColor ?: if (active) Primary else ControlBackground, CircleShape)
+            Modifier.size(buttonSize.dp).clip(CircleShape)
+                .background(overrideColor ?: if (active) Primary else ControlBackground)
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
@@ -257,7 +259,7 @@ private fun CallControl(
 private fun TextCallControl(symbol: String, label: String, buttonSize: Int = 42, columnWidth: Int = 56, onClick: () -> Unit) {
     Column(Modifier.width(columnWidth.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
-            Modifier.size(buttonSize.dp).background(ControlBackground, CircleShape).clickable(onClick = onClick),
+            Modifier.size(buttonSize.dp).clip(CircleShape).background(ControlBackground).clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
             Text(symbol, color = TextPrimary, fontSize = 25.sp)

@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.painter.Painter
 import org.jetbrains.compose.resources.painterResource
 import qtalk.shared.generated.resources.Res
 import qtalk.shared.generated.resources.logo_black
+import qtalk.shared.generated.resources.logo_tray
 
 enum class ThemeMode { DARK, LIGHT }
 
@@ -56,3 +57,6 @@ internal val IsLightTheme: Boolean @Composable get() = LocalCallsPalette.current
 
 @Composable
 fun qTalkWindowIcon(): Painter = painterResource(Res.drawable.logo_black)
+
+@Composable
+fun qTalkTrayIcon(): Painter = painterResource(Res.drawable.logo_tray)

@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.StrokeCap
 import com.qvoste.qtalk.ui.calls.model.formatPhoneNumber
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -166,8 +167,8 @@ fun CompactCallWidget(
 @Composable
 private fun IncomingWidgetAction(accept: Boolean, onClick: () -> Unit) {
     Box(
-        Modifier.size(30.dp)
-            .background(if (accept) Online else Danger, CircleShape)
+        Modifier.size(30.dp).clip(CircleShape)
+            .background(if (accept) Online else Danger)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -187,7 +188,7 @@ private fun WidgetIconAction(
     onClick: () -> Unit
 ) {
     Box(
-        Modifier.size(30.dp).background(if (active) Primary else ControlBackground, CircleShape)
+        Modifier.size(30.dp).clip(CircleShape).background(if (active) Primary else ControlBackground)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {

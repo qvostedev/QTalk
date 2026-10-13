@@ -612,29 +612,33 @@ private fun CallsContent(
 
         if (call.state == CallState.INCOMING && !callOverlayCollapsed) {
             val caller = contacts.firstOrNull { it.matchesCallNumber(call.number) }
-            IncomingCallOverlay(
-                number = call.number.ifBlank { "Неизвестный номер" },
-                callerName = caller?.name,
-                callerTelegram = caller?.telegram.orEmpty(),
-                onAccept = onAccept,
-                onDecline = onDecline
-            )
+            CallsTheme(ThemeMode.DARK) {
+                IncomingCallOverlay(
+                    number = call.number.ifBlank { "Неизвестный номер" },
+                    callerName = caller?.name,
+                    callerTelegram = caller?.telegram.orEmpty(),
+                    onAccept = onAccept,
+                    onDecline = onDecline
+                )
+            }
         }
 
 
         if (call.state == CallState.ACTIVE && !callOverlayCollapsed) {
             val activeContact = contacts.firstOrNull { it.matchesCallNumber(call.number) }
-            ActiveCallOverlay(
-                number = call.number,
-                callerName = activeContact?.name,
-                callerTelegram = activeContact?.telegram.orEmpty(),
-                connectedAtEpochMillis = call.connectedAtEpochMillis,
-                onHangUp = onHangUp,
-                onCollapse = onCollapseCall,
-                onDtmf = onDtmf,
-                onMicrophoneMutedChange = onMicrophoneMutedChange,
-                onSpeakerMutedChange = onSpeakerMutedChange
-            )
+            CallsTheme(ThemeMode.DARK) {
+                ActiveCallOverlay(
+                    number = call.number,
+                    callerName = activeContact?.name,
+                    callerTelegram = activeContact?.telegram.orEmpty(),
+                    connectedAtEpochMillis = call.connectedAtEpochMillis,
+                    onHangUp = onHangUp,
+                    onCollapse = onCollapseCall,
+                    onDtmf = onDtmf,
+                    onMicrophoneMutedChange = onMicrophoneMutedChange,
+                    onSpeakerMutedChange = onSpeakerMutedChange
+                )
+            }
         }
 
     }
@@ -821,6 +825,7 @@ private fun FavoriteItem(
         ?: contact.name.trim().substringBefore(' ')
     Column(
         modifier = Modifier.width(104.dp)
+            .clip(RoundedCornerShape(12.dp))
             .transferOnRightClick(canTransfer && transferCodeFor(contact) != null) { onTransferEmployee(contact) }
             .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -920,22 +925,26 @@ private fun HistoryRow(
         Modifier.fillMaxWidth().height(64.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            Modifier.weight(1f).fillMaxHeight().clickable { onSelect(item) },
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ContactAvatar(item.name, item.telegram, 46)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(item.name, color = TextPrimary, fontSize = 13.sp, lineHeight = 13.sp,
-                    fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(3.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Image(painterResource(directionIcon), contentDescription = null, modifier = Modifier.size(9.dp))
-                    Spacer(Modifier.width(5.dp))
-                    Text(if (item.missed) "Пропущенный" else item.direction,
-                        color = if (item.missed) Danger else TextSecondary,
-                        fontSize = 11.sp, lineHeight = 13.sp)
+        BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
+            Row(
+                Modifier.offset(x = (-8).dp).requiredWidth(maxWidth + 16.dp).fillMaxHeight()
+                    .clip(RoundedCornerShape(12.dp)).clickable { onSelect(item) }
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ContactAvatar(item.name, item.telegram, 46)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(item.name, color = TextPrimary, fontSize = 13.sp, lineHeight = 13.sp,
+                        fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(3.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(painterResource(directionIcon), contentDescription = null, modifier = Modifier.size(9.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text(if (item.missed) "Пропущенный" else item.direction,
+                            color = if (item.missed) Danger else TextSecondary,
+                            fontSize = 11.sp, lineHeight = 13.sp)
+                    }
                 }
             }
         }
@@ -1636,39 +1645,42 @@ private fun ContactRow(
     canTransfer: Boolean,
     onTransferEmployee: (Contact) -> Unit
 ) {
-    Row(
-        Modifier.fillMaxWidth().height(64.dp)
-            .transferOnRightClick(canTransfer && transferCodeFor(contact) != null) { onTransferEmployee(contact) }
-            .clickable { onSelect(contact) },
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        ContactAvatar(contact.name, contact.telegram, 46)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
+    BoxWithConstraints(Modifier.fillMaxWidth().height(64.dp)) {
+        Row(
+            Modifier.offset(x = (-8).dp).requiredWidth(maxWidth + 16.dp).fillMaxHeight()
+                .clip(RoundedCornerShape(12.dp))
+                .transferOnRightClick(canTransfer && transferCodeFor(contact) != null) { onTransferEmployee(contact) }
+                .clickable { onSelect(contact) }.padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ContactAvatar(contact.name, contact.telegram, 46)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    contact.name,
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    lineHeight = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    "${if (contact.isEmployee) "Сотрудник" else "Клиент"}  •  " +
+                        contact.position.ifBlank { contact.company.ifBlank { formatPhoneNumber(contact.number) } },
+                    color = TextSecondary,
+                    fontSize = 11.sp,
+                    lineHeight = 12.sp
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            CircleIconAction(Res.drawable.icon_calls, 34, ControlBackground) { onCall(contact) }
+            Spacer(Modifier.width(10.dp))
             Text(
-                contact.name,
-                color = TextPrimary,
-                fontSize = 13.sp,
-                lineHeight = 13.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                "${if (contact.isEmployee) "Сотрудник" else "Клиент"}  •  " +
-                    contact.position.ifBlank { contact.company.ifBlank { formatPhoneNumber(contact.number) } },
+                "⋮",
                 color = TextSecondary,
-                fontSize = 11.sp,
-                lineHeight = 12.sp
+                fontSize = 20.sp,
+                modifier = Modifier.clickable { onEdit(contact) }.padding(8.dp)
             )
         }
-        Spacer(Modifier.width(14.dp))
-        CircleIconAction(Res.drawable.icon_calls, 34, ControlBackground) { onCall(contact) }
-        Spacer(Modifier.width(10.dp))
-        Text(
-            "⋮",
-            color = TextSecondary,
-            fontSize = 20.sp,
-            modifier = Modifier.clickable { onEdit(contact) }.padding(8.dp)
-        )
     }
 }
 

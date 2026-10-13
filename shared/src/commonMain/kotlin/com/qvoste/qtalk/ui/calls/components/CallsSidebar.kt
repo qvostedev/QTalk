@@ -10,6 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.geometry.Offset
@@ -166,37 +167,41 @@ private fun NavItem(
 ) {
     val active = section == selected
     val itemColor = if (active) TextPrimary else TextSecondary
-    Row(
-        Modifier.fillMaxWidth().height(44.dp).clickable { onSelect(section) },
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (compact) {
-            Box(Modifier.width(46.dp).height(44.dp), contentAlignment = Alignment.Center) {
+    BoxWithConstraints(Modifier.fillMaxWidth().height(44.dp)) {
+        Row(
+            Modifier.offset(x = (-8).dp).requiredWidth(maxWidth + 16.dp).fillMaxHeight()
+                .clip(RoundedCornerShape(10.dp)).clickable { onSelect(section) }
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (compact) {
+                Box(Modifier.width(46.dp).height(44.dp), contentAlignment = Alignment.Center) {
+                    Image(
+                        painterResource(sectionIcon(section)),
+                        section.title,
+                        Modifier.size(26.dp),
+                        colorFilter = ColorFilter.tint(itemColor)
+                    )
+                }
+            } else {
                 Image(
                     painterResource(sectionIcon(section)),
                     section.title,
-                    Modifier.size(26.dp),
+                    Modifier.size(21.dp),
                     colorFilter = ColorFilter.tint(itemColor)
                 )
             }
-        } else {
-            Image(
-                painterResource(sectionIcon(section)),
-                section.title,
-                Modifier.size(21.dp),
-                colorFilter = ColorFilter.tint(itemColor)
-            )
+            if (!compact) {
+                Spacer(Modifier.width(16.dp))
+                Text(
+                    section.title,
+                    color = itemColor,
+                    fontSize = 14.sp,
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            if (active) Box(Modifier.width(3.dp).height(28.dp).background(Primary, RoundedCornerShape(2.dp)))
         }
-        if (!compact) {
-            Spacer(Modifier.width(16.dp))
-            Text(
-                section.title,
-                color = itemColor,
-                fontSize = 14.sp,
-                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal
-            )
-        }
-        Spacer(Modifier.weight(1f))
-        if (active) Box(Modifier.width(3.dp).height(28.dp).background(Primary, RoundedCornerShape(2.dp)))
     }
 }
