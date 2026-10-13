@@ -122,7 +122,6 @@ import com.qvoste.qtalk.ui.calls.components.ContactAvatar
 import com.qvoste.qtalk.ui.calls.components.CircleIconAction
 import com.qvoste.qtalk.ui.calls.components.CircleResourceAction
 import com.qvoste.qtalk.ui.calls.components.EmptyMessage
-import com.qvoste.qtalk.ui.calls.components.EmptySection
 import com.qvoste.qtalk.ui.calls.components.DialerPanel
 import com.qvoste.qtalk.ui.calls.components.IncomingCallOverlay
 import com.qvoste.qtalk.ui.calls.components.ActiveCallOverlay
@@ -494,21 +493,32 @@ private fun CallsContent(
                     },
                     onShowAllContacts = { section = AppSection.CONTACTS },
                     onSelectContact = {
-                        section = AppSection.CONTACTS
                         selectedContact = it
                         number = formatPhoneNumber(it.number)
                     },
                     canTransfer = call.state == CallState.ACTIVE,
                     onTransferEmployee = onTransferEmployee
                 )
-                AppSection.NOTIFICATIONS -> EmptySection(
+                AppSection.NOTIFICATIONS -> NotificationsSection(
                     modifier = Modifier.weight(1f),
-                    title = "Уведомления",
-                    text = "Новых уведомлений нет"
+                    compact = compact,
+                    contacts = contacts,
+                    onAddContact = {
+                        section = AppSection.CONTACTS
+                        editingContact = null
+                        showAddContact = true
+                    },
+                    onShowAllContacts = { section = AppSection.CONTACTS },
+                    onSelectContact = {
+                        selectedContact = it
+                        number = formatPhoneNumber(it.number)
+                    },
+                    canTransfer = call.state == CallState.ACTIVE,
+                    onTransferEmployee = onTransferEmployee
                 )
             }
 
-            if (section == AppSection.CALLS || section == AppSection.CONTACTS) {
+            run {
                 val contactBeingEdited = editingContact
                 val deletableContact = if (showAddContact) null else contactBeingEdited ?: selectedContact
                 DialerPanel(
@@ -606,6 +616,47 @@ private fun CallsContent(
             )
         }
 
+    }
+}
+
+@Composable
+private fun NotificationsSection(
+    modifier: Modifier,
+    compact: Boolean,
+    contacts: List<Contact>,
+    onAddContact: () -> Unit,
+    onShowAllContacts: () -> Unit,
+    onSelectContact: (Contact) -> Unit,
+    canTransfer: Boolean,
+    onTransferEmployee: (Contact) -> Unit
+) {
+    var search by rememberSaveable { mutableStateOf("") }
+
+    Column(
+        modifier.fillMaxHeight().padding(
+            start = if (compact) 40.dp else 38.dp,
+            top = 16.dp,
+            end = if (compact) 13.dp else 18.dp,
+            bottom = 20.dp
+        )
+    ) {
+        SearchAndAddBar(search, { search = it }, onAddContact)
+        Spacer(Modifier.height(35.dp))
+        FavoritesSection(
+            contacts = if (search.isBlank()) contacts else contacts.filter {
+                it.name.contains(search, ignoreCase = true) || it.number.contains(search)
+            },
+            compact = compact,
+            trailingText = "Все  ›",
+            onTrailingClick = onShowAllContacts,
+            onSelectContact = onSelectContact,
+            onAddContact = onAddContact,
+            canTransfer = canTransfer,
+            onTransferEmployee = onTransferEmployee
+        )
+        Spacer(Modifier.height(if (compact) 28.dp else 32.dp))
+        Text("Уведомления", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        EmptyMessage("Новых уведомлений нет")
     }
 }
 
