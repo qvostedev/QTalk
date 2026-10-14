@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import com.qvoste.qtalk.domain.calls.ConnectSipUseCase
 import com.qvoste.qtalk.ui.calls.CallsScreen
 import com.qvoste.qtalk.ui.calls.CallsViewModel
+import com.qvoste.qtalk.ui.calls.ExternalDialRequest
 import com.qvoste.qtalk.ui.calls.theme.CallsTheme
 import com.qvoste.qtalk.ui.calls.theme.ThemeMode
 import com.qvoste.qtalk.ui.calls.model.ContactStore
@@ -37,7 +38,9 @@ fun App(
     appVersion: String = "1.0.0",
     onCheckForUpdates: suspend ((String) -> Unit) -> Unit = { it("Проверка обновлений недоступна") },
     callOverlayCollapsed: Boolean = false,
-    onCollapseCall: () -> Unit = {}
+    onCollapseCall: () -> Unit = {},
+    externalDialRequest: ExternalDialRequest? = null,
+    onExternalDialRequestConsumed: (Long) -> Unit = {}
 ) {
     // Запускаем VoIP-движок один раз на всё время жизни приложения.
     LaunchedEffect(voipEngine) {
@@ -77,7 +80,8 @@ fun App(
         } else darkColorScheme()) {
             CallsScreen(
                 callsViewModel, themeMode, onThemeModeChange,
-                appVersion, onCheckForUpdates, callOverlayCollapsed, onCollapseCall
+                appVersion, onCheckForUpdates, callOverlayCollapsed, onCollapseCall,
+                externalDialRequest, onExternalDialRequestConsumed
             )
         }
     }

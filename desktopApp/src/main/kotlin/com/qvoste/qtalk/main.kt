@@ -22,6 +22,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.qvoste.qtalk.app.App
+import com.qvoste.qtalk.ui.calls.ExternalDialRequest
 import com.qvoste.qtalk.ui.calls.components.CompactCallWidget
 import com.qvoste.qtalk.ui.calls.model.GoogleSheetsContactDatabaseService
 import com.qvoste.qtalk.ui.calls.model.PreferencesContactStore
@@ -58,6 +59,24 @@ fun main(args: Array<String>) {
     // Telegram может быть доступен только через системный прокси Windows.
     System.setProperty("java.net.useSystemProxies", "true")
 
+    var externalDialRequest by mutableStateOf<ExternalDialRequest?>(null)
+    var externalRequestId = 0L
+    var windowActivationRequest by mutableStateOf(0L)
+    val dialBridge = ExternalDialBridge.start(
+        args,
+        onDial = { number ->
+            EventQueue.invokeLater {
+                externalDialRequest = ExternalDialRequest(++externalRequestId, number)
+                windowActivationRequest++
+            }
+        },
+        onShow = { EventQueue.invokeLater { windowActivationRequest++ } }
+    ) ?: return
+    dialBridge.initialNumber?.let { number ->
+        externalDialRequest = ExternalDialRequest(++externalRequestId, number)
+    }
+
+    try {
     application {
         val voipEngine = remember { LinphoneVoipEngine() }
         val accountStore = remember { PreferencesSipAccountStore() }
@@ -102,6 +121,10 @@ fun main(args: Array<String>) {
         fun openMainWindow() {
             mainWindowVisible = true
             callOverlayCollapsed = false
+        }
+
+        LaunchedEffect(windowActivationRequest) {
+            if (windowActivationRequest > 0L) openMainWindow()
         }
 
         fun closeApplication() {
@@ -269,7 +292,7 @@ fun main(args: Array<String>) {
             LaunchedEffect(window, themeMode, callOverlayVisible) {
                 updateQTalkWindowsCaptionColors(window, themeMode == ThemeMode.LIGHT && !callOverlayVisible)
             }
-            LaunchedEffect(mainWindowVisible) {
+            LaunchedEffect(mainWindowVisible, windowActivationRequest) {
                 if (mainWindowVisible) {
                     window.toFront()
                     window.requestFocus()
@@ -295,12 +318,19 @@ fun main(args: Array<String>) {
                             if (updater.checkAndInstall(onStatus)) closeApplication()
                         },
                         callOverlayCollapsed = callOverlayCollapsed,
-                        onCollapseCall = { callOverlayCollapsed = true }
+                        onCollapseCall = { callOverlayCollapsed = true },
+                        externalDialRequest = externalDialRequest,
+                        onExternalDialRequestConsumed = { id ->
+                            if (externalDialRequest?.id == id) externalDialRequest = null
+                        }
                     )
                 }
             }
         }
 
+    }
+    } finally {
+        dialBridge.close()
     }
 }
 

@@ -138,7 +138,9 @@ fun CallsScreen(
     appVersion: String = "1.0.0",
     onCheckForUpdates: suspend ((String) -> Unit) -> Unit = { it("Проверка обновлений недоступна") },
     callOverlayCollapsed: Boolean = false,
-    onCollapseCall: () -> Unit = {}
+    onCollapseCall: () -> Unit = {},
+    externalDialRequest: ExternalDialRequest? = null,
+    onExternalDialRequestConsumed: (Long) -> Unit = {}
 ) {
     val registration by viewModel.registrationState.collectAsState()
     val registrationMessage by viewModel.registrationMessage.collectAsState()
@@ -189,6 +191,8 @@ fun CallsScreen(
         onSpeakerMutedChange = viewModel::setSpeakerMuted,
         callOverlayCollapsed = callOverlayCollapsed,
         onCollapseCall = onCollapseCall,
+        externalDialRequest = externalDialRequest,
+        onExternalDialRequestConsumed = onExternalDialRequestConsumed,
         onLogout = viewModel::logout,
         onRefreshAudioDevices = viewModel::refreshAudioDevices,
         onSelectInputAudioDevice = viewModel::selectInputAudioDevice,
@@ -382,6 +386,8 @@ private fun CallsContent(
     onSpeakerMutedChange: (Boolean) -> Unit,
     callOverlayCollapsed: Boolean,
     onCollapseCall: () -> Unit,
+    externalDialRequest: ExternalDialRequest?,
+    onExternalDialRequestConsumed: (Long) -> Unit,
     onLogout: () -> Unit,
     onRefreshAudioDevices: () -> Unit,
     onSelectInputAudioDevice: (String) -> Unit,
@@ -403,6 +409,17 @@ private fun CallsContent(
     var selectedContact by remember { mutableStateOf<Contact?>(null) }
     var showAddContact by rememberSaveable { mutableStateOf(false) }
     var editingContact by remember { mutableStateOf<Contact?>(null) }
+    LaunchedEffect(externalDialRequest?.id) {
+        val request = externalDialRequest ?: return@LaunchedEffect
+        section = AppSection.CALLS
+        number = formatPhoneNumber(request.number)
+        selectedContact = contacts.firstOrNull { contact ->
+            contact.number.normalizedContactNumber() == request.number.normalizedContactNumber()
+        }
+        showAddContact = false
+        editingContact = null
+        onExternalDialRequestConsumed(request.id)
+    }
     fun startCall(target: String) {
         val cleanNumber = target.trim()
         if (cleanNumber.isBlank()) return

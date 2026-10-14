@@ -43,7 +43,7 @@ SolidCompression=yes
 CloseApplications=yes
 CloseApplicationsFilter=QTalk.exe
 RestartApplications=no
-ChangesAssociations=no
+ChangesAssociations=yes
 VersionInfoVersion={#AppVersion}.0
 VersionInfoCompany={#AppPublisher}
 VersionInfoDescription={#AppName} desktop installer
@@ -68,6 +68,11 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExecutable}"; WorkingDir: "{app}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExecutable}"; WorkingDir: "{app}"; Tasks: desktopicon
+
+[Registry]
+Root: HKCR; Subkey: "qtalk"; ValueType: string; ValueData: "URL:QTalk Protocol"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "qtalk"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCR; Subkey: "qtalk\shell\open\command"; ValueType: string; ValueData: """{app}\{#AppExecutable}"" ""%1"""
 
 [Run]
 Filename: "{app}\{#AppExecutable}"; Description: "Запустить {#AppName}"; Flags: nowait postinstall skipifsilent
