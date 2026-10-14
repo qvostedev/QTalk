@@ -28,7 +28,12 @@ import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
 class LinphoneVoipEngine : VoipEngine {
-    private val factory = Factory.instance()
+    private val linphoneResources = LinphoneResourceInstaller.install()
+    private val factory = Factory.instance().apply {
+        topResourcesDir = linphoneResources.share.toString()
+        liblinphonePluginsDir = linphoneResources.liblinphonePlugins.toString()
+        mspluginsDir = linphoneResources.mediastreamerPlugins.toString()
+    }
 
     private val core by lazy {
         Files.createDirectories(Path.of(factory.getDataDir(null)))
