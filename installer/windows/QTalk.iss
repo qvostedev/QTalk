@@ -7,7 +7,7 @@
 #endif
 
 #ifndef AppVersion
-  #define AppVersion "1.0.1"
+  #define AppVersion "1.0.2"
 #endif
 
 #define AppName "QTalk"
@@ -40,7 +40,7 @@ WizardSmallImageFile=wizard-small.bmp
 WizardSmallImageBackColor=#0B0D10
 Compression=lzma2/ultra64
 SolidCompression=yes
-CloseApplications=yes
+CloseApplications=force
 CloseApplicationsFilter=QTalk.exe
 RestartApplications=no
 ChangesAssociations=yes
