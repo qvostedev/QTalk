@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -35,7 +36,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -50,14 +50,24 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -69,14 +79,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.time.Clock
 import com.qvoste.qtalk.ui.calls.model.formatPhoneNumber
 import com.qvoste.qtalk.voip.CallState
 import com.qvoste.qtalk.voip.CallStatus
 import com.qvoste.qtalk.voip.AudioDeviceInfo
 import com.qvoste.qtalk.voip.AudioSettings
+import com.qvoste.qtalk.voip.RingtoneInfo
 import com.qvoste.qtalk.voip.RegistrationState
 import com.qvoste.qtalk.voip.SipAccount
 import com.qvoste.qtalk.voip.SipTransport
@@ -106,8 +117,8 @@ import qtalk.shared.generated.resources.icon_settings_about
 import qtalk.shared.generated.resources.icon_settings_headphones
 import qtalk.shared.generated.resources.icon_settings_logout
 import qtalk.shared.generated.resources.icon_settings_microphone
-import qtalk.shared.generated.resources.icon_settings_microphone_level
 import qtalk.shared.generated.resources.icon_settings_ringtone
+import qtalk.shared.generated.resources.icon_settings_volume_low
 import qtalk.shared.generated.resources.icon_settings_theme
 import qtalk.shared.generated.resources.icon_telegram
 import qtalk.shared.generated.resources.icon_add_contact
@@ -135,7 +146,8 @@ fun CallsScreen(
     viewModel: CallsViewModel,
     themeMode: ThemeMode = ThemeMode.DARK,
     onThemeModeChange: (ThemeMode) -> Unit = {},
-    appVersion: String = "1.0.1",
+    appVersion: String = "1.0.2",
+    availableUpdateVersion: String? = null,
     onCheckForUpdates: suspend ((String) -> Unit) -> Unit = { it("Проверка обновлений недоступна") },
     callOverlayCollapsed: Boolean = false,
     onCollapseCall: () -> Unit = {},
@@ -180,6 +192,7 @@ fun CallsScreen(
         themeMode = themeMode,
         onThemeModeChange = onThemeModeChange,
         appVersion = appVersion,
+        availableUpdateVersion = availableUpdateVersion,
         onCheckForUpdates = onCheckForUpdates,
         onCall = viewModel::call,
         onAccept = viewModel::acceptCall,
@@ -198,7 +211,10 @@ fun CallsScreen(
         onSelectInputAudioDevice = viewModel::selectInputAudioDevice,
         onSelectOutputAudioDevice = viewModel::selectOutputAudioDevice,
         onMicrophoneSensitivityChange = viewModel::setMicrophoneSensitivity,
+        onSpeakerVolumeChange = viewModel::setSpeakerVolume,
         onRingtoneVolumeChange = viewModel::setRingtoneVolume,
+        onPreviewRingtone = viewModel::previewRingtone,
+        onSelectRingtone = viewModel::selectRingtone,
         onAddContact = viewModel::addContact,
         onUpdateContact = viewModel::updateContact,
         onDeleteContact = viewModel::deleteContact,
@@ -375,6 +391,7 @@ private fun CallsContent(
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     appVersion: String,
+    availableUpdateVersion: String?,
     onCheckForUpdates: suspend ((String) -> Unit) -> Unit,
     onCall: (String) -> Unit,
     onAccept: () -> Unit,
@@ -393,7 +410,10 @@ private fun CallsContent(
     onSelectInputAudioDevice: (String) -> Unit,
     onSelectOutputAudioDevice: (String) -> Unit,
     onMicrophoneSensitivityChange: (Float) -> Unit,
+    onSpeakerVolumeChange: (Float) -> Unit,
     onRingtoneVolumeChange: (Float) -> Unit,
+    onPreviewRingtone: (String) -> Unit,
+    onSelectRingtone: (String) -> Unit,
     onAddContact: (Contact) -> Unit,
     onUpdateContact: (Contact, Contact) -> Unit,
     onDeleteContact: (Contact) -> Unit,
@@ -409,6 +429,18 @@ private fun CallsContent(
     var selectedContact by remember { mutableStateOf<Contact?>(null) }
     var showAddContact by rememberSaveable { mutableStateOf(false) }
     var editingContact by remember { mutableStateOf<Contact?>(null) }
+    var searchFocused by remember { mutableStateOf(false) }
+    var dialerTextInputFocused by remember { mutableStateOf(false) }
+    var seenUpdateVersion by rememberSaveable { mutableStateOf<String?>(null) }
+    val keyboardDialFocus = remember { FocusRequester() }
+    val hasUnreadUpdate = availableUpdateVersion != null && availableUpdateVersion != seenUpdateVersion
+
+    LaunchedEffect(Unit) { keyboardDialFocus.requestFocus() }
+    LaunchedEffect(section, availableUpdateVersion) {
+        if (section == AppSection.NOTIFICATIONS) {
+            seenUpdateVersion = availableUpdateVersion
+        }
+    }
     LaunchedEffect(externalDialRequest?.id) {
         val request = externalDialRequest ?: return@LaunchedEffect
         section = AppSection.CALLS
@@ -426,7 +458,39 @@ private fun CallsContent(
         onCall(cleanNumber)
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(AppBackground)) {
+    BoxWithConstraints(
+        Modifier.fillMaxSize()
+            .background(AppBackground)
+            .focusRequester(keyboardDialFocus)
+            .onKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown || searchFocused || dialerTextInputFocused ||
+                    call.state.isInProgress ||
+                    showAddContact || editingContact != null
+                ) return@onKeyEvent false
+
+                when {
+                    event.key == Key.Backspace && number.isNotEmpty() -> {
+                        number = number.dropLast(1)
+                        selectedContact = contacts.firstOrNull { contact ->
+                            contact.number.normalizedContactNumber() == number.normalizedContactNumber()
+                        }
+                        true
+                    }
+                    event.utf16CodePoint > 0 -> {
+                        val character = event.utf16CodePoint.toChar()
+                        if (character.isDigit() || character == '*' || character == '#' || character == '+') {
+                            number += character
+                            selectedContact = contacts.firstOrNull { contact ->
+                                contact.number.normalizedContactNumber() == number.normalizedContactNumber()
+                            }
+                            true
+                        } else false
+                    }
+                    else -> false
+                }
+            }
+            .focusable()
+    ) {
         // На половине экрана освобождаем место центральной колонке.
         // Windows пересчитывает половину экрана с учётом системного DPI.
         val compact = maxWidth < 1100.dp
@@ -439,7 +503,11 @@ private fun CallsContent(
                 registration = registration,
                 compact = compact,
                 accountContact = contacts.firstOrNull { it.number == accountNumber },
-                onSelect = { section = it }
+                hasNotifications = hasUnreadUpdate,
+                onSelect = {
+                    searchFocused = false
+                    section = it
+                }
             )
 
             // Центральная часть зависит от выбранного раздела.
@@ -475,7 +543,8 @@ private fun CallsContent(
                         }
                     },
                     canTransfer = call.state == CallState.ACTIVE,
-                    onTransferEmployee = onTransferEmployee
+                    onTransferEmployee = onTransferEmployee,
+                    onSearchFocusChange = { searchFocused = it }
                 )
                 AppSection.CONTACTS -> ContactsSection(
                     modifier = Modifier.weight(1f),
@@ -501,7 +570,8 @@ private fun CallsContent(
                         editingContact = it
                     },
                     canTransfer = call.state == CallState.ACTIVE,
-                    onTransferEmployee = onTransferEmployee
+                    onTransferEmployee = onTransferEmployee,
+                    onSearchFocusChange = { searchFocused = it }
                 )
                 AppSection.SETTINGS -> SipSettings(
                     modifier = Modifier.weight(1f),
@@ -515,7 +585,10 @@ private fun CallsContent(
                     onSelectInputAudioDevice = onSelectInputAudioDevice,
                     onSelectOutputAudioDevice = onSelectOutputAudioDevice,
                     onMicrophoneSensitivityChange = onMicrophoneSensitivityChange,
+                    onSpeakerVolumeChange = onSpeakerVolumeChange,
                     onRingtoneVolumeChange = onRingtoneVolumeChange,
+                    onPreviewRingtone = onPreviewRingtone,
+                    onSelectRingtone = onSelectRingtone,
                     contactDatabaseState = contactDatabaseState,
                     themeMode = themeMode,
                     onThemeModeChange = onThemeModeChange,
@@ -535,7 +608,8 @@ private fun CallsContent(
                         number = formatPhoneNumber(it.number)
                     },
                     canTransfer = call.state == CallState.ACTIVE,
-                    onTransferEmployee = onTransferEmployee
+                    onTransferEmployee = onTransferEmployee,
+                    onSearchFocusChange = { searchFocused = it }
                 )
                 AppSection.NOTIFICATIONS -> NotificationsSection(
                     modifier = Modifier.weight(1f),
@@ -552,7 +626,10 @@ private fun CallsContent(
                         number = formatPhoneNumber(it.number)
                     },
                     canTransfer = call.state == CallState.ACTIVE,
-                    onTransferEmployee = onTransferEmployee
+                    onTransferEmployee = onTransferEmployee,
+                    onSearchFocusChange = { searchFocused = it },
+                    availableUpdateVersion = availableUpdateVersion,
+                    onOpenUpdate = { section = AppSection.SETTINGS }
                 )
             }
 
@@ -620,6 +697,7 @@ private fun CallsContent(
                     onAddNote = { text -> selectedContact?.let { onAddContactNote(it, text) } },
                     onUpdateNote = onUpdateContactNote,
                     onDeleteNote = onDeleteContactNote,
+                    onTextInputFocusChange = { dialerTextInputFocused = it },
                     onCall = { startCall(number) },
                     onHangUp = onHangUp,
                     onTransferEmployee = onTransferEmployee
@@ -670,7 +748,10 @@ private fun NotificationsSection(
     onShowAllContacts: () -> Unit,
     onSelectContact: (Contact) -> Unit,
     canTransfer: Boolean,
-    onTransferEmployee: (Contact) -> Unit
+    onTransferEmployee: (Contact) -> Unit,
+    onSearchFocusChange: (Boolean) -> Unit,
+    availableUpdateVersion: String?,
+    onOpenUpdate: () -> Unit
 ) {
     var search by rememberSaveable { mutableStateOf("") }
 
@@ -682,10 +763,10 @@ private fun NotificationsSection(
             bottom = 20.dp
         )
     ) {
-        SearchAndAddBar(search, { search = it }, onAddContact)
+        SearchAndAddBar(search, { search = it }, onAddContact, onSearchFocusChange)
         Spacer(Modifier.height(35.dp))
         FavoritesSection(
-            contacts = if (search.isBlank()) contacts else contacts.filter { it.matchesSearch(search) },
+            contacts = contacts,
             compact = compact,
             trailingText = "Все  ›",
             onTrailingClick = onShowAllContacts,
@@ -696,7 +777,33 @@ private fun NotificationsSection(
         )
         Spacer(Modifier.height(if (compact) 28.dp else 32.dp))
         Text("Уведомления", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        EmptyMessage("Новых уведомлений нет")
+        Spacer(Modifier.height(14.dp))
+        if (availableUpdateVersion == null) {
+            EmptyMessage("Новых уведомлений нет")
+        } else {
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                    .background(ControlBackground)
+                    .clickable(onClick = onOpenUpdate)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(Modifier.size(38.dp).background(Primary.copy(alpha = 0.16f), CircleShape), contentAlignment = Alignment.Center) {
+                    Image(
+                        painterResource(Res.drawable.icon_notifications),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        colorFilter = ColorFilter.tint(Primary)
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Доступно обновление", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text("QTalk $availableUpdateVersion готов к установке", color = TextSecondary, fontSize = 11.sp)
+                }
+                Text("Открыть  ›", color = Primary, fontSize = 11.sp)
+            }
+        }
     }
 }
 
@@ -712,7 +819,8 @@ private fun CallsHome(
     onSelectHistory: (HistoryItem) -> Unit,
     onQuickCall: (String) -> Unit,
     canTransfer: Boolean,
-    onTransferEmployee: (Contact) -> Unit
+    onTransferEmployee: (Contact) -> Unit,
+    onSearchFocusChange: (Boolean) -> Unit
 ) {
     var search by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(CallFilter.ALL) }
@@ -736,7 +844,7 @@ private fun CallsHome(
             bottom = 20.dp
         )
     ) {
-        SearchAndAddBar(search, { search = it }, onAddContact)
+        SearchAndAddBar(search, { search = it }, onAddContact, onSearchFocusChange)
         Spacer(Modifier.height(35.dp))
         FavoritesSection(
             contacts = contacts,
@@ -779,11 +887,16 @@ private fun CallsHome(
 }
 
 @Composable
-private fun SearchField(value: String, onValueChange: (String) -> Unit) {
+private fun SearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onFocusChange: (Boolean) -> Unit
+) {
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = Modifier.fillMaxWidth().height(41.dp)
+            .onFocusChanged { onFocusChange(it.isFocused) }
             .background(ControlBackground, RoundedCornerShape(35.dp)),
         singleLine = true,
         textStyle = TextStyle(color = TextPrimary, fontSize = 13.sp),
@@ -822,10 +935,11 @@ private fun SearchField(value: String, onValueChange: (String) -> Unit) {
 private fun SearchAndAddBar(
     search: String,
     onSearchChange: (String) -> Unit,
-    onAddContact: () -> Unit
+    onAddContact: () -> Unit,
+    onSearchFocusChange: (Boolean) -> Unit
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.weight(1f)) { SearchField(search, onSearchChange) }
+        Box(Modifier.weight(1f)) { SearchField(search, onSearchChange, onSearchFocusChange) }
         Spacer(Modifier.width(14.dp))
         CircleResourceAction(Res.drawable.icon_add_contact, 40, 20, 16, ControlBackground, onAddContact)
     }
@@ -1001,7 +1115,10 @@ private fun SipSettings(
     onSelectInputAudioDevice: (String) -> Unit,
     onSelectOutputAudioDevice: (String) -> Unit,
     onMicrophoneSensitivityChange: (Float) -> Unit,
+    onSpeakerVolumeChange: (Float) -> Unit,
     onRingtoneVolumeChange: (Float) -> Unit,
+    onPreviewRingtone: (String) -> Unit,
+    onSelectRingtone: (String) -> Unit,
     contactDatabaseState: ContactDatabaseState,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
@@ -1014,11 +1131,13 @@ private fun SipSettings(
     onShowAllContacts: () -> Unit,
     onSelectContact: (Contact) -> Unit,
     canTransfer: Boolean,
-    onTransferEmployee: (Contact) -> Unit
+    onTransferEmployee: (Contact) -> Unit,
+    onSearchFocusChange: (Boolean) -> Unit
 ) {
     var showAccount by remember { mutableStateOf(false) }
     var showInputDevices by remember { mutableStateOf(false) }
     var showOutputDevices by remember { mutableStateOf(false) }
+    var showRingtones by remember { mutableStateOf(false) }
     var showDatabase by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
     var updateMessage by remember { mutableStateOf<String?>(null) }
@@ -1031,6 +1150,9 @@ private fun SipSettings(
     var microphoneSensitivity by remember(audioSettings.microphoneSensitivity) {
         mutableStateOf(audioSettings.microphoneSensitivity)
     }
+    var speakerVolume by remember(audioSettings.speakerVolume) {
+        mutableStateOf(audioSettings.speakerVolume)
+    }
     var ringtoneVolume by remember(audioSettings.ringtoneVolume) {
         mutableStateOf(audioSettings.ringtoneVolume)
     }
@@ -1038,6 +1160,8 @@ private fun SipSettings(
         .firstOrNull { it.id == audioSettings.selectedInputDeviceId }?.name ?: "Системный"
     val outputName = audioSettings.outputDevices
         .firstOrNull { it.id == audioSettings.selectedOutputDeviceId }?.name ?: "Системный"
+    val ringtoneName = audioSettings.ringtones
+        .firstOrNull { it.id == audioSettings.selectedRingtoneId }?.name ?: "Тёплый"
 
     LaunchedEffect(Unit) { onRefreshAudioDevices() }
 
@@ -1049,10 +1173,10 @@ private fun SipSettings(
             bottom = 20.dp
         )
     ) {
-        SearchAndAddBar(search, { search = it }, onAddContact)
+        SearchAndAddBar(search, { search = it }, onAddContact, onSearchFocusChange)
         Spacer(Modifier.height(35.dp))
         FavoritesSection(
-            contacts = if (search.isBlank()) contacts else contacts.filter { it.matchesSearch(search) },
+            contacts = contacts,
             compact = compact,
             trailingText = "Все  ›",
             onTrailingClick = onShowAllContacts,
@@ -1112,26 +1236,38 @@ private fun SipSettings(
                 onClick = { showInputDevices = true }
             )
             SettingsSliderRow(
-                icon = Res.drawable.icon_settings_microphone_level,
-                label = "Чувствительность микрофона",
+                label = "Громкость микрофона",
                 value = microphoneSensitivity,
                 onValueChange = { microphoneSensitivity = it },
                 onValueChangeFinished = { onMicrophoneSensitivityChange(microphoneSensitivity) }
             )
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(20.dp))
             SettingsActionRow(
                 icon = Res.drawable.icon_settings_headphones,
-                title = "Динамики",
+                title = "Наушники",
                 subtitle = "Выбор устройства и настройка",
                 value = outputName,
                 onClick = { showOutputDevices = true }
             )
             SettingsSliderRow(
-                icon = Res.drawable.icon_settings_ringtone,
+                label = "Громкость динамика",
+                value = speakerVolume,
+                onValueChange = { speakerVolume = it },
+                onValueChangeFinished = { onSpeakerVolumeChange(speakerVolume) }
+            )
+            Spacer(Modifier.height(20.dp))
+            SettingsSliderRow(
                 label = "Громкость рингтона",
                 value = ringtoneVolume,
                 onValueChange = { ringtoneVolume = it },
                 onValueChangeFinished = { onRingtoneVolumeChange(ringtoneVolume) }
+            )
+            SettingsActionRow(
+                icon = Res.drawable.icon_settings_ringtone,
+                title = "Рингтон",
+                subtitle = "Мелодия входящего звонка",
+                value = ringtoneName,
+                onClick = { showRingtones = true }
             )
 
             Spacer(Modifier.height(30.dp))
@@ -1210,6 +1346,18 @@ private fun SipSettings(
                 showOutputDevices = false
             },
             onDismiss = { showOutputDevices = false }
+        )
+    }
+    if (showRingtones) {
+        RingtoneDialog(
+            ringtones = audioSettings.ringtones,
+            selectedRingtoneId = audioSettings.selectedRingtoneId,
+            onPreview = onPreviewRingtone,
+            onSave = {
+                onSelectRingtone(it)
+                showRingtones = false
+            },
+            onDismiss = { showRingtones = false }
         )
     }
     if (showDatabase) {
@@ -1338,8 +1486,8 @@ private fun SipSettings(
 
 @Composable
 private fun SettingsSectionTitle(title: String, subtitle: String) {
-    Text(title, color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-    Text(subtitle, color = TextSecondary, fontSize = 11.sp)
+    Text(title, color = TextPrimary, fontSize = 17.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold)
+    Text(subtitle, color = TextSecondary, fontSize = 11.sp, lineHeight = 11.sp)
 }
 
 @Composable
@@ -1363,8 +1511,8 @@ private fun SettingsActionRow(
                     colorFilter = if (IsLightTheme) ColorFilter.tint(TextSecondary) else null)
             }
             Column(Modifier.weight(1f)) {
-                Text(title, color = titleColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                subtitle?.let { Text(it, color = TextSecondary, fontSize = 10.sp) }
+                Text(title, color = titleColor, fontSize = 12.sp, lineHeight = 12.sp, fontWeight = FontWeight.Medium)
+                subtitle?.let { Text(it, color = TextSecondary, fontSize = 10.sp, lineHeight = 10.sp) }
             }
             value?.let {
                 Text(
@@ -1384,32 +1532,70 @@ private fun SettingsActionRow(
 
 @Composable
 private fun SettingsSliderRow(
-    icon: DrawableResource,
     label: String,
     value: Float,
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: () -> Unit
 ) {
-    Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(28.dp), contentAlignment = Alignment.CenterStart) {
-            Image(painterResource(icon), contentDescription = null, modifier = Modifier.size(20.dp),
-                colorFilter = if (IsLightTheme) ColorFilter.tint(TextSecondary) else null)
-        }
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            onValueChangeFinished = onValueChangeFinished,
-            modifier = Modifier.weight(1f).height(28.dp),
-            colors = SliderDefaults.colors(
-                thumbColor = Primary,
-                activeTrackColor = Primary,
-                inactiveTrackColor = ControlBackground
+    val activeTrackColor = Primary
+    val inactiveTrackColor = ControlBackground
+    Column(Modifier.widthIn(max = 410.dp).fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(22.dp), contentAlignment = Alignment.CenterStart) {
+                Image(
+                    painterResource(
+                        if (value < 0.5f) Res.drawable.icon_settings_volume_low
+                        else Res.drawable.icon_settings_ringtone
+                    ),
+                    contentDescription = null,
+                    modifier = Modifier.width(if (value < 0.5f) 18.dp else 22.dp).height(17.dp),
+                    colorFilter = ColorFilter.tint(TextPrimary)
+                )
+            }
+            Spacer(Modifier.width(9.dp))
+            Box(Modifier.width(330.dp).height(24.dp), contentAlignment = Alignment.Center) {
+                Canvas(Modifier.fillMaxWidth().height(8.dp)) {
+                    val centerY = size.height / 2f
+                    val progress = value.coerceIn(0f, 1f)
+                    drawLine(
+                        color = inactiveTrackColor,
+                        start = Offset(0f, centerY),
+                        end = Offset(size.width, centerY),
+                        strokeWidth = 2.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                    drawLine(
+                        color = activeTrackColor,
+                        start = Offset(0f, centerY),
+                        end = Offset(size.width * progress, centerY),
+                        strokeWidth = 2.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                    drawCircle(
+                        color = activeTrackColor,
+                        radius = 4.dp.toPx(),
+                        center = Offset(size.width * progress, centerY)
+                    )
+                }
+                Slider(
+                    value = value,
+                    onValueChange = onValueChange,
+                    onValueChangeFinished = onValueChangeFinished,
+                    modifier = Modifier.fillMaxSize().alpha(0f),
+                    thumb = { Box(Modifier.size(8.dp)) },
+                    track = { Box(Modifier.fillMaxWidth().height(2.dp)) }
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(
+                "${(value * 100).toInt()}%",
+                color = TextSecondary,
+                fontSize = 10.sp,
+                modifier = Modifier.width(28.dp)
             )
-        )
-        Spacer(Modifier.width(14.dp))
-        Text("${(value * 100).toInt()}%", color = TextSecondary, fontSize = 10.sp, modifier = Modifier.width(36.dp))
+        }
+        Text(label, color = TextSecondary, fontSize = 9.sp, modifier = Modifier.padding(start = 31.dp))
     }
-    Text(label, color = TextSecondary, fontSize = 9.sp, modifier = Modifier.padding(start = 28.dp))
 }
 
 @Composable
@@ -1458,6 +1644,50 @@ private fun AudioDeviceDialog(
 }
 
 @Composable
+private fun RingtoneDialog(
+    ringtones: List<RingtoneInfo>,
+    selectedRingtoneId: String,
+    onPreview: (String) -> Unit,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var pendingRingtoneId by remember(selectedRingtoneId) { mutableStateOf(selectedRingtoneId) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = ControlBackground,
+        title = { Text("Выберите рингтон", color = TextPrimary) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                ringtones.forEach { ringtone ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                            .background(
+                                if (ringtone.id == pendingRingtoneId) Primary.copy(alpha = 0.18f)
+                                else Color.Transparent
+                            )
+                            .clickable {
+                                pendingRingtoneId = ringtone.id
+                                onPreview(ringtone.id)
+                            }
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(ringtone.name, color = TextPrimary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        if (ringtone.id == pendingRingtoneId) Text("✓", color = Primary, fontSize = 14.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(pendingRingtoneId) }) { Text("Сохранить", color = Primary) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Отмена", color = TextPrimary) }
+        }
+    )
+}
+
+@Composable
 private fun DarkField(
     value: String,
     onValueChange: (String) -> Unit,
@@ -1487,7 +1717,8 @@ private fun ContactsSection(
     onCallContact: (Contact) -> Unit,
     onEditContact: (Contact) -> Unit,
     canTransfer: Boolean,
-    onTransferEmployee: (Contact) -> Unit
+    onTransferEmployee: (Contact) -> Unit,
+    onSearchFocusChange: (Boolean) -> Unit
 ) {
     var search by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(ContactFilter.ALL) }
@@ -1510,7 +1741,7 @@ private fun ContactsSection(
             bottom = 20.dp
         )
     ) {
-        SearchAndAddBar(search, { search = it }, onAddContact)
+        SearchAndAddBar(search, { search = it }, onAddContact, onSearchFocusChange)
 
         Spacer(Modifier.height(35.dp))
         FavoritesSection(

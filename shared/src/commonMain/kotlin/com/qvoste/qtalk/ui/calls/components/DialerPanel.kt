@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
@@ -58,6 +59,7 @@ internal fun DialerPanel(
     onAddNote: (String) -> Unit,
     onUpdateNote: (ContactNote, String) -> Unit,
     onDeleteNote: (ContactNote) -> Unit,
+    onTextInputFocusChange: (Boolean) -> Unit,
     onCall: () -> Unit,
     onHangUp: () -> Unit,
     onTransferEmployee: (Contact) -> Unit
@@ -335,7 +337,8 @@ internal fun DialerPanel(
                         creatingNote = false
                         noteBeingEditedId = null
                         noteDraft = ""
-                    }
+                    },
+                    onTextInputFocusChange = onTextInputFocusChange
                 )
             }
         }
@@ -363,7 +366,8 @@ internal fun DialerPanel(
                     textAlign = TextAlign.Center
                 ),
                 cursorBrush = SolidColor(Primary),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 34.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 34.dp)
+                    .onFocusChanged { onTextInputFocusChange(it.isFocused) },
                 decorationBox = { innerTextField ->
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         if (shownNumber.isBlank()) Text("—", color = TextPrimary, fontSize = 20.sp)
@@ -466,11 +470,15 @@ private fun ContactNotes(
     onEdit: (ContactNote) -> Unit,
     onDelete: (ContactNote) -> Unit,
     onCancel: () -> Unit,
-    onSave: () -> Unit
+    onSave: () -> Unit,
+    onTextInputFocusChange: (Boolean) -> Unit
 ) {
     val editing = creatingNote || editingNote != null
     Box(Modifier.fillMaxSize()) {
         if (editing) {
+            DisposableEffect(Unit) {
+                onDispose { onTextInputFocusChange(false) }
+            }
             Column(Modifier.fillMaxSize()) {
                 BasicTextField(
                     value = draft,
@@ -478,6 +486,7 @@ private fun ContactNotes(
                     textStyle = TextStyle(color = TextPrimary, fontSize = 11.sp, lineHeight = 15.sp),
                     cursorBrush = SolidColor(Primary),
                     modifier = Modifier.fillMaxWidth().height(184.dp)
+                        .onFocusChanged { onTextInputFocusChange(it.isFocused) }
                         .background(ControlBackground, RoundedCornerShape(10.dp)).padding(12.dp),
                     decorationBox = { innerTextField ->
                         Box(Modifier.fillMaxSize()) {

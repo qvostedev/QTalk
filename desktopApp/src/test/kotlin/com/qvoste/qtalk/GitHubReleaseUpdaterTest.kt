@@ -1,5 +1,6 @@
 package com.qvoste.qtalk
 
+import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -31,5 +32,21 @@ class GitHubReleaseUpdaterTest {
         assertEquals("QTalk-Setup-1.0.1.exe", assertNotNull(selectQTalkAsset(release, true)).name)
         assertEquals("QTalk_1.0.1-1_amd64.deb", assertNotNull(selectQTalkAsset(release, false)).name)
         assertNull(selectQTalkAsset(release.copy(assets = emptyList()), true))
+    }
+
+    @Test
+    fun windowsUpdaterWaitsForApplicationAndInstallerBeforeRestarting() {
+        val script = windowsUpdateScript(
+            installer = Path.of("C:/Temp/QTalk update's installer.exe"),
+            applicationPid = 4242,
+            applicationExecutable = Path.of("C:/Program Files/QTalk/QTalk.exe"),
+            logFile = Path.of("C:/Temp/QTalk-update.log")
+        )
+
+        assertTrue(script.contains("Wait-Process -Id 4242"))
+        assertTrue(script.contains("'/FORCECLOSEAPPLICATIONS'"))
+        assertTrue(script.contains("-Wait -PassThru"))
+        assertTrue(script.contains("Start-Process -FilePath ${'$'}applicationPath"))
+        assertTrue(script.contains("QTalk update''s installer.exe"))
     }
 }

@@ -224,8 +224,17 @@ class CallsViewModel(
     fun setMicrophoneSensitivity(value: Float) = execute {
         voipEngine.setMicrophoneSensitivity(value)
     }
+    fun setSpeakerVolume(value: Float) = execute {
+        voipEngine.setSpeakerVolume(value)
+    }
     fun setRingtoneVolume(value: Float) = execute {
         voipEngine.setRingtoneVolume(value)
+    }
+    fun previewRingtone(ringtoneId: String) = execute {
+        voipEngine.previewRingtone(ringtoneId)
+    }
+    fun selectRingtone(ringtoneId: String) = execute {
+        voipEngine.selectRingtone(ringtoneId)
     }
     fun addContact(contact: Contact) {
         val updated = _contacts.value + contact.copy(source = ContactSource.LOCAL)

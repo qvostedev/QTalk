@@ -61,7 +61,18 @@ class FakeVoipEngine : VoipEngine {
         _audioSettings.value = _audioSettings.value.copy(microphoneSensitivity = value.coerceIn(0f, 1f))
     }
 
+    override suspend fun setSpeakerVolume(value: Float) {
+        _audioSettings.value = _audioSettings.value.copy(speakerVolume = value.coerceIn(0f, 1f))
+    }
+
     override suspend fun setRingtoneVolume(value: Float) {
         _audioSettings.value = _audioSettings.value.copy(ringtoneVolume = value.coerceIn(0f, 1f))
+    }
+
+    override suspend fun previewRingtone(ringtoneId: String) = Unit
+
+    override suspend fun selectRingtone(ringtoneId: String) {
+        if (_audioSettings.value.ringtones.none { it.id == ringtoneId }) return
+        _audioSettings.value = _audioSettings.value.copy(selectedRingtoneId = ringtoneId)
     }
 }

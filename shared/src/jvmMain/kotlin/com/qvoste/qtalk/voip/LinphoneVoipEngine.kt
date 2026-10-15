@@ -2,6 +2,7 @@ package com.qvoste.qtalk.voip
 
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancelAndJoin
@@ -22,8 +23,13 @@ import org.linphone.core.Factory
 import org.linphone.core.RegistrationState as LinphoneRegistrationState
 import java.nio.file.Files
 import java.nio.file.Path
+import java.io.BufferedInputStream
 import java.util.concurrent.Executors
 import java.util.prefs.Preferences
+import javax.sound.sampled.AudioSystem
+import javax.sound.sampled.Clip
+import javax.sound.sampled.FloatControl
+import kotlin.math.log10
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -53,14 +59,17 @@ class LinphoneVoipEngine : VoipEngine {
     private var coreStarted = false
     private var currentAccount: Account? = null
     private var currentCall: Call? = null
-    private var originalRingtone: Path? = null
     private val _callStatus = MutableStateFlow(CallStatus())
     override val callStatus = _callStatus.asStateFlow()
     private val audioPreferences = Preferences.userRoot().node("com/qvoste/qtalk/audio")
+    private val ringtonePreviewLock = Any()
+    private var ringtonePreview: Clip? = null
     private val _audioSettings = MutableStateFlow(
         AudioSettings(
             microphoneSensitivity = audioPreferences.getFloat("microphoneSensitivity", 0.5f),
-            ringtoneVolume = audioPreferences.getFloat("ringtoneVolume", 0.5f)
+            speakerVolume = audioPreferences.getFloat("speakerVolume", 0.5f),
+            ringtoneVolume = audioPreferences.getFloat("ringtoneVolume", 0.5f),
+            selectedRingtoneId = storedRingtoneId()
         )
     )
     override val audioSettings = _audioSettings.asStateFlow()
@@ -198,10 +207,6 @@ class LinphoneVoipEngine : VoipEngine {
                 core.defaultInputAudioDevice = device
                 core.defaultOutputAudioDevice = device
             }
-        }
-        val managedRingtones = Path.of(factory.getDataDir(null), "qtalk-ringtones").toAbsolutePath().normalize()
-        originalRingtone = core.ring?.let(Path::of)?.takeIf { ringtone ->
-            !ringtone.toAbsolutePath().normalize().startsWith(managedRingtones) && isPcm16Wav(ringtone)
         }
         refreshAudioDevicesInternal()
         println("QTALK: audio input = ${core.defaultInputAudioDevice?.id}")
@@ -377,6 +382,7 @@ class LinphoneVoipEngine : VoipEngine {
 
 
     override suspend fun stop() {
+        stopRingtonePreview()
         iterateJob?.cancelAndJoin()
         iterateJob = null
 
@@ -445,12 +451,77 @@ class LinphoneVoipEngine : VoipEngine {
         _audioSettings.value = _audioSettings.value.copy(microphoneSensitivity = normalized)
     }
 
+    override suspend fun setSpeakerVolume(value: Float) = withContext(linphoneDispatcher) {
+        val normalized = value.coerceIn(0f, 1f)
+        core.playbackGainDb = normalized * 60f - 30f
+        audioPreferences.putFloat("speakerVolume", normalized)
+        audioPreferences.flush()
+        _audioSettings.value = _audioSettings.value.copy(speakerVolume = normalized)
+    }
+
     override suspend fun setRingtoneVolume(value: Float) = withContext(linphoneDispatcher) {
         val normalized = value.coerceIn(0f, 1f)
         applyRingtoneVolume(normalized)
         audioPreferences.putFloat("ringtoneVolume", normalized)
         audioPreferences.flush()
         _audioSettings.value = _audioSettings.value.copy(ringtoneVolume = normalized)
+    }
+
+    override suspend fun previewRingtone(ringtoneId: String) = withContext(Dispatchers.IO) {
+        val ringtone = QTalkRingtones.firstOrNull { it.id == ringtoneId } ?: return@withContext
+        val resource = javaClass.classLoader.getResourceAsStream("ringtones/${ringtone.id}.wav")
+            ?: return@withContext
+        val clip = AudioSystem.getClip()
+        resource.use { input ->
+            BufferedInputStream(input).use { buffered ->
+                AudioSystem.getAudioInputStream(buffered).use(clip::open)
+            }
+        }
+
+        val volume = _audioSettings.value.ringtoneVolume.coerceIn(0f, 1f)
+        if (clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
+            val gain = clip.getControl(FloatControl.Type.MASTER_GAIN) as FloatControl
+            val decibels = if (volume <= 0f) gain.minimum else (20f * log10(volume)).coerceIn(gain.minimum, gain.maximum)
+            gain.value = decibels
+        }
+
+        synchronized(ringtonePreviewLock) {
+            ringtonePreview?.stop()
+            ringtonePreview?.close()
+            ringtonePreview = clip
+            clip.start()
+        }
+
+        Thread({
+            Thread.sleep(minOf(2_000L, clip.microsecondLength / 1_000L))
+            synchronized(ringtonePreviewLock) {
+                if (ringtonePreview === clip) {
+                    clip.stop()
+                    clip.close()
+                    ringtonePreview = null
+                }
+            }
+        }, "QTalk-RingtonePreview").apply {
+            isDaemon = true
+            start()
+        }
+    }
+
+    override suspend fun selectRingtone(ringtoneId: String) = withContext(linphoneDispatcher) {
+        val ringtone = QTalkRingtones.firstOrNull { it.id == ringtoneId } ?: return@withContext
+        val volume = _audioSettings.value.ringtoneVolume.coerceIn(0f, 1f)
+        audioPreferences.put("ringtoneId", ringtone.id)
+        audioPreferences.flush()
+        applyRingtoneVolume(volume, ringtone.id)
+        _audioSettings.value = _audioSettings.value.copy(selectedRingtoneId = ringtone.id)
+    }
+
+    private fun stopRingtonePreview() {
+        synchronized(ringtonePreviewLock) {
+            ringtonePreview?.stop()
+            ringtonePreview?.close()
+            ringtonePreview = null
+        }
     }
 
     private fun refreshAudioDevicesInternal() {
@@ -480,49 +551,82 @@ class LinphoneVoipEngine : VoipEngine {
         val microphoneSensitivity = audioPreferences
             .getFloat("microphoneSensitivity", 0.5f)
             .coerceIn(0f, 1f)
+        val speakerVolume = audioPreferences
+            .getFloat("speakerVolume", 0.5f)
+            .coerceIn(0f, 1f)
         val ringtoneVolume = audioPreferences
             .getFloat("ringtoneVolume", 0.5f)
             .coerceIn(0f, 1f)
+        val ringtoneId = storedRingtoneId()
         core.micGainDb = microphoneSensitivity * 60f - 30f
-        applyRingtoneVolume(ringtoneVolume)
+        core.playbackGainDb = speakerVolume * 60f - 30f
+        applyRingtoneVolume(ringtoneVolume, ringtoneId)
 
         _audioSettings.value = AudioSettings(
-            inputDevices = inputDevices.map { AudioDeviceInfo(it.id, it.displayName()) },
-            outputDevices = outputDevices.map { AudioDeviceInfo(it.id, it.displayName()) },
+            inputDevices = inputDevices.map {
+                AudioDeviceInfo(it.id, readableAudioDeviceName(it.deviceName, it.id, "Микрофон"))
+            },
+            outputDevices = outputDevices.map {
+                AudioDeviceInfo(it.id, readableAudioDeviceName(it.deviceName, it.id, "Динамики"))
+            },
             selectedInputDeviceId = selectedInput?.id,
             selectedOutputDeviceId = selectedOutput?.id,
             microphoneSensitivity = microphoneSensitivity,
-            ringtoneVolume = ringtoneVolume
+            speakerVolume = speakerVolume,
+            ringtoneVolume = ringtoneVolume,
+            selectedRingtoneId = ringtoneId
         )
     }
 
-    private fun applyRingtoneVolume(value: Float) {
-        val source = originalRingtone ?: bundledRingtone().also { originalRingtone = it }
+    private fun applyRingtoneVolume(value: Float, ringtoneId: String = storedRingtoneId()) {
+        val source = bundledRingtone(ringtoneId)
         if (value >= 1f) {
             core.ring = source.toString()
             return
         }
         val level = (value * 100f).roundToInt()
-        val destination = Path.of(factory.getDataDir(null), "qtalk-ringtones", "ring-$level.wav")
-        if (!Files.isRegularFile(destination)) writeRingtoneAtVolume(source, destination, value)
+        val destination = Path.of(factory.getDataDir(null), "qtalk-ringtones", "$ringtoneId-$level.wav")
+        writeRingtoneAtVolume(source, destination, value)
         core.ring = destination.toString()
     }
 
-    private fun bundledRingtone(): Path {
-        val destination = Path.of(factory.getDataDir(null), "qtalk-ringtones", "original.wav")
-        if (!Files.isRegularFile(destination)) {
-            Files.createDirectories(destination.parent)
-            val resource = "assets/org.linphone.core/share/sounds/linphone/rings/oldphone-mono.wav"
-            val input = javaClass.classLoader.getResourceAsStream(resource)
-                ?: error("Bundled Linphone ringtone is unavailable")
-            input.use { Files.copy(it, destination) }
+    private fun storedRingtoneId(): String = audioPreferences
+        .get("ringtoneId", QTalkRingtones.first().id)
+        .takeIf { stored -> QTalkRingtones.any { it.id == stored } }
+        ?: QTalkRingtones.first().id
+
+    private fun bundledRingtone(ringtoneId: String): Path {
+        val selected = QTalkRingtones.firstOrNull { it.id == ringtoneId } ?: QTalkRingtones.first()
+        val destination = Path.of(factory.getDataDir(null), "qtalk-ringtones", "${selected.id}-original.wav")
+        Files.createDirectories(destination.parent)
+        val input = javaClass.classLoader.getResourceAsStream("ringtones/${selected.id}.wav")
+            ?: error("Bundled QTalk ringtone is unavailable: ${selected.id}")
+        input.use {
+            Files.copy(it, destination, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
         }
         return destination
     }
 
-    private fun AudioDevice.displayName(): String = deviceName
-        .takeIf(String::isNotBlank)
-        ?: id
+}
+
+internal fun readableAudioDeviceName(rawName: String?, id: String, fallback: String): String {
+    val original = rawName.orEmpty().trim()
+    if (original.isBlank()) return id.ifBlank { fallback }
+
+    val isDefault = original.equals("Default Capture", ignoreCase = true) ||
+        original.equals("Default Playback", ignoreCase = true)
+    if (isDefault) {
+        return if (fallback == "Микрофон") "Системный микрофон" else "Системные динамики"
+    }
+
+    val brokenSequence = Regex("(?:\\uFFFD|\\?){2,}")
+    if (brokenSequence.containsMatchIn(original)) {
+        val readablePart = original.replace(brokenSequence, "")
+            .trim().trimStart('-', '–', '—').trim()
+        return if (readablePart.isBlank()) fallback else "$fallback $readablePart"
+    }
+
+    return original
 }
 
 internal fun normalizeOutgoingNumber(number: String): String {

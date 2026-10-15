@@ -55,31 +55,72 @@ internal fun selectQTalkAsset(release: QTalkRelease, windows: Boolean): ReleaseA
         else it.name.startsWith("QTalk_") && it.name.contains(release.version) && it.name.endsWith(".deb")
     }
 
+internal fun windowsUpdateScript(
+    installer: Path,
+    applicationPid: Long,
+    applicationExecutable: Path,
+    logFile: Path
+): String {
+    fun Path.powerShellLiteral(): String =
+        "'${toAbsolutePath().toString().replace("'", "''")}'"
+
+    return """
+        ${'$'}ErrorActionPreference = 'Stop'
+        ${'$'}installerPath = ${installer.powerShellLiteral()}
+        ${'$'}applicationPath = ${applicationExecutable.powerShellLiteral()}
+        ${'$'}logPath = ${logFile.powerShellLiteral()}
+
+        try {
+            Wait-Process -Id $applicationPid -Timeout 120 -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 500
+            ${'$'}arguments = @(
+                '/VERYSILENT',
+                '/SUPPRESSMSGBOXES',
+                '/NORESTART',
+                '/SP-',
+                '/FORCECLOSEAPPLICATIONS',
+                ('/LOG="' + ${'$'}logPath + '"')
+            )
+            ${'$'}setup = Start-Process -FilePath ${'$'}installerPath -ArgumentList ${'$'}arguments -Wait -PassThru
+            if (${'$'}setup.ExitCode -ne 0) {
+                throw "QTalk installer exited with code ${'$'}(${'$'}setup.ExitCode)"
+            }
+            if (-not (Test-Path -LiteralPath ${'$'}applicationPath -PathType Leaf)) {
+                throw "Updated QTalk executable was not found: ${'$'}applicationPath"
+            }
+            Start-Process -FilePath ${'$'}applicationPath
+            Remove-Item -LiteralPath ${'$'}installerPath -Force -ErrorAction SilentlyContinue
+        } catch {
+            Add-Content -LiteralPath ${'$'}logPath -Value ("`r`nQTalk updater error: " + ${'$'}_.Exception.Message)
+            if (Test-Path -LiteralPath ${'$'}applicationPath -PathType Leaf) {
+                Start-Process -FilePath ${'$'}applicationPath
+            }
+        }
+    """.trimIndent()
+}
+
 internal class GitHubReleaseUpdater(private val installedVersion: String) {
     private val http = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(15))
         .followRedirects(HttpClient.Redirect.NORMAL)
         .build()
 
+    suspend fun availableVersion(): String? {
+        val release = fetchLatestRelease() ?: return null
+        if (!isNewerVersion(release.version, installedVersion)) return null
+        val windows = System.getProperty("os.name").contains("Windows", ignoreCase = true)
+        val linux = System.getProperty("os.name").contains("Linux", ignoreCase = true)
+        if (!windows && !linux) return null
+        return release.version.takeIf { selectQTalkAsset(release, windows) != null }
+    }
+
     suspend fun checkAndInstall(onStatus: (String) -> Unit): Boolean {
         onStatus("Проверка обновлений…")
-        val response = withContext(Dispatchers.IO) {
-            http.send(
-                HttpRequest.newBuilder(URI(latestReleaseUrl))
-                    .timeout(Duration.ofSeconds(30))
-                    .header("Accept", "application/vnd.github+json")
-                    .header("User-Agent", "QTalk-Updater")
-                    .GET().build(),
-                HttpResponse.BodyHandlers.ofString()
-            )
-        }
-        if (response.statusCode() == 404) {
+        val release = fetchLatestRelease()
+        if (release == null) {
             onStatus("У вас установлена последняя версия")
             return false
         }
-        check(response.statusCode() == 200) { "GitHub вернул код ${response.statusCode()}" }
-
-        val release = parseQTalkRelease(response.body())
         if (!isNewerVersion(release.version, installedVersion)) {
             onStatus("У вас установлена последняя версия")
             return false
@@ -104,7 +145,7 @@ internal class GitHubReleaseUpdater(private val installedVersion: String) {
         val installer = withContext(Dispatchers.IO) {
             downloadAndVerify(asset, expectedDigest, if (windows) ".exe" else ".deb")
         }
-        onStatus("Запуск установщика ${release.version}…")
+        onStatus("Установка версии ${release.version}… QTalk перезапустится автоматически")
         if (windows) {
             withContext(Dispatchers.IO) { launchWindowsInstaller(installer) }
             return true
@@ -112,6 +153,22 @@ internal class GitHubReleaseUpdater(private val installedVersion: String) {
         withContext(Dispatchers.IO) { installLinuxPackage(installer) }
         onStatus("Обновление установлено. Перезапустите QTalk.")
         return false
+    }
+
+    private suspend fun fetchLatestRelease(): QTalkRelease? {
+        val response = withContext(Dispatchers.IO) {
+            http.send(
+                HttpRequest.newBuilder(URI(latestReleaseUrl))
+                    .timeout(Duration.ofSeconds(30))
+                    .header("Accept", "application/vnd.github+json")
+                    .header("User-Agent", "QTalk-Updater")
+                    .GET().build(),
+                HttpResponse.BodyHandlers.ofString()
+            )
+        }
+        if (response.statusCode() == 404) return null
+        check(response.statusCode() == 200) { "GitHub вернул код ${response.statusCode()}" }
+        return parseQTalkRelease(response.body())
     }
 
     private fun downloadAndVerify(asset: ReleaseAsset, expectedDigest: String, extension: String): Path {
@@ -146,12 +203,24 @@ internal class GitHubReleaseUpdater(private val installedVersion: String) {
     }
 
     private fun launchWindowsInstaller(file: Path) {
-        val escapedPath = file.toAbsolutePath().toString().replace("'", "''")
-        val command = "Start-Process -FilePath '$escapedPath' -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-') -Verb RunAs -WindowStyle Hidden"
+        val applicationPid = ProcessHandle.current().pid()
+        val applicationExecutable = ProcessHandle.current().info().command()
+            .map(Path::of)
+            .orElseThrow { IllegalStateException("Не удалось определить путь к QTalk") }
+        val helper = Files.createTempFile("qtalk-update-helper-", ".ps1")
+        val logFile = Path.of(System.getProperty("java.io.tmpdir"), "QTalk-update.log")
+        Files.writeString(
+            helper,
+            windowsUpdateScript(file, applicationPid, applicationExecutable, logFile)
+        )
+        val escapedHelper = helper.toAbsolutePath().toString().replace("'", "''")
+        val command = "Start-Process -FilePath 'powershell.exe' " +
+            "-ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','$escapedHelper') " +
+            "-Verb RunAs -WindowStyle Hidden"
         val process = ProcessBuilder("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command)
             .redirectErrorStream(true).start()
         val output = process.inputStream.bufferedReader().use { it.readText() }
-        check(process.waitFor() == 0) { "Установщик не запущен: $output" }
+        check(process.waitFor() == 0) { "Не удалось запустить обновление: $output" }
     }
 
     private fun installLinuxPackage(file: Path) {

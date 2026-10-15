@@ -35,7 +35,8 @@ fun App(
     callHistoryStore: CallHistoryStore = InMemoryCallHistoryStore(),
     themeMode: ThemeMode = ThemeMode.DARK,
     onThemeModeChange: (ThemeMode) -> Unit = {},
-    appVersion: String = "1.0.1",
+    appVersion: String = "1.0.2",
+    availableUpdateVersion: String? = null,
     onCheckForUpdates: suspend ((String) -> Unit) -> Unit = { it("Проверка обновлений недоступна") },
     callOverlayCollapsed: Boolean = false,
     onCollapseCall: () -> Unit = {},
@@ -80,7 +81,7 @@ fun App(
         } else darkColorScheme()) {
             CallsScreen(
                 callsViewModel, themeMode, onThemeModeChange,
-                appVersion, onCheckForUpdates, callOverlayCollapsed, onCollapseCall,
+                appVersion, availableUpdateVersion, onCheckForUpdates, callOverlayCollapsed, onCollapseCall,
                 externalDialRequest, onExternalDialRequestConsumed
             )
         }

@@ -51,6 +51,7 @@ import java.awt.event.MouseEvent
 import javax.swing.JWindow
 import javax.swing.SwingUtilities
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main(args: Array<String>) {
@@ -86,9 +87,10 @@ fun main(args: Array<String>) {
         val contactDatabaseService = remember { GoogleSheetsContactDatabaseService() }
         val themeStore = remember { PreferencesThemeStore() }
         val appVersion = remember {
-            GitHubReleaseUpdater::class.java.`package`?.implementationVersion ?: "1.0.1"
+            GitHubReleaseUpdater::class.java.`package`?.implementationVersion ?: "1.0.2"
         }
         val updater = remember(appVersion) { GitHubReleaseUpdater(appVersion) }
+        var availableUpdateVersion by remember { mutableStateOf<String?>(null) }
         var themeMode by remember { mutableStateOf(themeStore.load()) }
         val scope = rememberCoroutineScope()
         val windowState = rememberWindowState(width = 1440.dp, height = 1024.dp)
@@ -96,6 +98,14 @@ fun main(args: Array<String>) {
         val traySupported = remember { SystemTray.isSupported() }
         var mainWindowVisible by remember { mutableStateOf(!widgetSmokeTest) }
         var callOverlayCollapsed by remember { mutableStateOf(false) }
+
+        LaunchedEffect(updater) {
+            while (true) {
+                runCatching { updater.availableVersion() }
+                    .onSuccess { availableUpdateVersion = it }
+                delay(60L * 60L * 1_000L)
+            }
+        }
 
         val widgetCall = if (widgetSmokeTest) {
             CallStatus(
@@ -314,6 +324,7 @@ fun main(args: Array<String>) {
                             themeMode = selected
                         },
                         appVersion = appVersion,
+                        availableUpdateVersion = availableUpdateVersion,
                         onCheckForUpdates = { onStatus ->
                             if (updater.checkAndInstall(onStatus)) closeApplication()
                         },

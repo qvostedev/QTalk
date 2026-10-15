@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -36,6 +37,7 @@ internal fun Sidebar(
     registration: RegistrationState,
     compact: Boolean,
     accountContact: Contact?,
+    hasNotifications: Boolean = false,
     onSelect: (AppSection) -> Unit
 ) {
     Column(
@@ -83,7 +85,7 @@ internal fun Sidebar(
             Spacer(Modifier.height(if (compact) 8.dp else 22.dp))
             if (!compact) SectionLabel("СИСТЕМА")
             NavItem(AppSection.SETTINGS, selected, compact, onSelect)
-            NavItem(AppSection.NOTIFICATIONS, selected, compact, onSelect)
+            NavItem(AppSection.NOTIFICATIONS, selected, compact, onSelect, hasNotifications)
         }
 
         if (compact) {
@@ -163,7 +165,8 @@ private fun NavItem(
     section: AppSection,
     selected: AppSection,
     compact: Boolean,
-    onSelect: (AppSection) -> Unit
+    onSelect: (AppSection) -> Unit,
+    showBadge: Boolean = false
 ) {
     val active = section == selected
     val itemColor = if (active) TextPrimary else TextSecondary
@@ -199,6 +202,10 @@ private fun NavItem(
                     fontSize = 14.sp,
                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal
                 )
+            }
+            if (showBadge) {
+                Spacer(Modifier.width(if (compact) 2.dp else 8.dp))
+                Box(Modifier.size(7.dp).background(Danger, CircleShape))
             }
             Spacer(Modifier.weight(1f))
             if (active) Box(Modifier.width(3.dp).height(28.dp).background(Primary, RoundedCornerShape(2.dp)))
