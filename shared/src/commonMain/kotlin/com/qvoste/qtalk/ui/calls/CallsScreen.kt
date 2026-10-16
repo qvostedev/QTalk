@@ -146,7 +146,7 @@ fun CallsScreen(
     viewModel: CallsViewModel,
     themeMode: ThemeMode = ThemeMode.DARK,
     onThemeModeChange: (ThemeMode) -> Unit = {},
-    appVersion: String = "1.0.2",
+    appVersion: String = "1.0.3",
     availableUpdateVersion: String? = null,
     onCheckForUpdates: suspend ((String) -> Unit) -> Unit = { it("Проверка обновлений недоступна") },
     callOverlayCollapsed: Boolean = false,

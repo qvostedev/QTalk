@@ -87,7 +87,7 @@ fun main(args: Array<String>) {
         val contactDatabaseService = remember { GoogleSheetsContactDatabaseService() }
         val themeStore = remember { PreferencesThemeStore() }
         val appVersion = remember {
-            GitHubReleaseUpdater::class.java.`package`?.implementationVersion ?: "1.0.2"
+            GitHubReleaseUpdater::class.java.`package`?.implementationVersion ?: "1.0.3"
         }
         val updater = remember(appVersion) { GitHubReleaseUpdater(appVersion) }
         var availableUpdateVersion by remember { mutableStateOf<String?>(null) }
