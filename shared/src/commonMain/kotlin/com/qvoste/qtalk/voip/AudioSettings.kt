@@ -11,8 +11,8 @@ data class RingtoneInfo(
 )
 
 val QTalkRingtones = listOf(
-    RingtoneInfo("warm", "Тёплый"),
-    RingtoneInfo("round", "Звонкий")
+    RingtoneInfo("warm", "Вариант - 1"),
+    RingtoneInfo("round", "Вариант - 2")
 )
 
 data class AudioSettings(

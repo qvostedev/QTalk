@@ -1171,7 +1171,7 @@ private fun SipSettings(
     val outputName = audioSettings.outputDevices
         .firstOrNull { it.id == audioSettings.selectedOutputDeviceId }?.name ?: "Системный"
     val ringtoneName = audioSettings.ringtones
-        .firstOrNull { it.id == audioSettings.selectedRingtoneId }?.name ?: "Тёплый"
+        .firstOrNull { it.id == audioSettings.selectedRingtoneId }?.name ?: "Вариант - 1"
 
     LaunchedEffect(Unit) { onRefreshAudioDevices() }
 
