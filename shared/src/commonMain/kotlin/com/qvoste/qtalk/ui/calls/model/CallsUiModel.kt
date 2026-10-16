@@ -43,6 +43,7 @@ data class HistoryItem(
     val startedAtEpochMillis: Long,
     val telegram: String = "",
     val missed: Boolean = false,
+    val missedAcknowledged: Boolean = false,
     val durationSeconds: Long? = null
 )
 

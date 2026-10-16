@@ -188,13 +188,15 @@ class SharedLogicDesktopTest {
         try {
             val history = listOf(
                 HistoryItem(
-                    id = "outgoing:213:1791417600000",
+                    id = "incoming:213:1791417600000",
                     name = "Кайгородов Антон",
                     number = "213",
-                    direction = "Исходящий",
+                    direction = "Входящий",
                     startedAtEpochMillis = 1_791_417_600_000L,
                     telegram = "@anton",
-                    durationSeconds = 83L
+                    missed = true,
+                    missedAcknowledged = true,
+                    durationSeconds = 0L
                 )
             )
             PreferencesCallHistoryStore(node).save(history)
@@ -202,6 +204,44 @@ class SharedLogicDesktopTest {
             assertEquals(history, PreferencesCallHistoryStore(node).load())
         } finally {
             node.removeNode()
+        }
+    }
+
+    @Test
+    fun viewingMissedCallsAcknowledgesOnlyUnreadMissedEntries() {
+        val unread = HistoryItem(
+            id = "incoming:201:1",
+            name = "Пропущенный",
+            number = "201",
+            direction = "Входящий",
+            startedAtEpochMillis = 1L,
+            missed = true
+        )
+        val acknowledged = unread.copy(id = "incoming:202:2", number = "202", missedAcknowledged = true)
+        val outgoing = unread.copy(
+            id = "outgoing:203:3",
+            number = "203",
+            direction = "Исходящий",
+            missed = false
+        )
+        val historyStore = InMemoryCallHistoryStore(listOf(unread, acknowledged, outgoing))
+        val engine = FakeVoipEngine()
+        val viewModel = CallsViewModel(
+            engine, ConnectSipUseCase(engine), InMemorySipAccountStore(),
+            InMemoryContactStore(emptyList()), DisabledContactDatabaseService,
+            InMemoryContactNoteStore(), historyStore
+        )
+
+        try {
+            viewModel.markMissedCallsSeen()
+
+            val history = viewModel.callHistory.value
+            assertTrue(history[0].missedAcknowledged)
+            assertTrue(history[1].missedAcknowledged)
+            assertFalse(history[2].missedAcknowledged)
+            assertEquals(history, historyStore.load())
+        } finally {
+            viewModel.close()
         }
     }
 

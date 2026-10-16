@@ -271,6 +271,19 @@ class CallsViewModel(
         contactStore.save(updated)
         _contacts.value = updated
     }
+    fun markMissedCallsSeen() {
+        val current = _callHistory.value
+        val updated = current.map { item ->
+            if (item.missed && !item.missedAcknowledged) {
+                item.copy(missedAcknowledged = true)
+            } else {
+                item
+            }
+        }
+        if (updated == current) return
+        callHistoryStore.save(updated)
+        _callHistory.value = updated
+    }
     fun addContactNote(contact: Contact, text: String) {
         val normalizedText = text.trim()
         if (normalizedText.isBlank()) return

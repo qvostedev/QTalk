@@ -218,6 +218,7 @@ fun CallsScreen(
         onAddContact = viewModel::addContact,
         onUpdateContact = viewModel::updateContact,
         onDeleteContact = viewModel::deleteContact,
+        onMissedCallsSeen = viewModel::markMissedCallsSeen,
         onAddContactNote = viewModel::addContactNote,
         onUpdateContactNote = viewModel::updateContactNote,
         onDeleteContactNote = viewModel::deleteContactNote,
@@ -417,6 +418,7 @@ private fun CallsContent(
     onAddContact: (Contact) -> Unit,
     onUpdateContact: (Contact, Contact) -> Unit,
     onDeleteContact: (Contact) -> Unit,
+    onMissedCallsSeen: () -> Unit,
     onAddContactNote: (Contact, String) -> Unit,
     onUpdateContactNote: (ContactNote, String) -> Unit,
     onDeleteContactNote: (ContactNote) -> Unit,
@@ -542,6 +544,7 @@ private fun CallsContent(
                             startCall(it)
                         }
                     },
+                    onMissedCallsSeen = onMissedCallsSeen,
                     canTransfer = call.state == CallState.ACTIVE,
                     onTransferEmployee = onTransferEmployee,
                     onSearchFocusChange = { searchFocused = it }
@@ -818,12 +821,19 @@ private fun CallsHome(
     onSelectContact: (Contact) -> Unit,
     onSelectHistory: (HistoryItem) -> Unit,
     onQuickCall: (String) -> Unit,
+    onMissedCallsSeen: () -> Unit,
     canTransfer: Boolean,
     onTransferEmployee: (Contact) -> Unit,
     onSearchFocusChange: (Boolean) -> Unit
 ) {
     var search by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(CallFilter.ALL) }
+    val unreadMissedCount = history.count { it.missed && !it.missedAcknowledged }
+    LaunchedEffect(filter, unreadMissedCount) {
+        if (filter == CallFilter.MISSED && unreadMissedCount > 0) {
+            onMissedCallsSeen()
+        }
+    }
     val visibleHistory = history.filter {
         val matchesSearch = search.isBlank() || it.name.contains(search, ignoreCase = true) ||
             it.number.contains(search) || telegramMatchesQuery(it.telegram, search)
@@ -858,7 +868,7 @@ private fun CallsHome(
         )
 
         Spacer(Modifier.height(if (compact) 28.dp else 32.dp))
-        FilterBar(filter, false, history.count { it.missed }) { filter = it }
+        FilterBar(filter, false, unreadMissedCount) { filter = it }
         Spacer(Modifier.height(18.dp))
 
         if (visibleHistory.isEmpty()) {

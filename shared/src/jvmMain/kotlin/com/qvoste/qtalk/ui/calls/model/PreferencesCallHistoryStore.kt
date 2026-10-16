@@ -25,6 +25,7 @@ class PreferencesCallHistoryStore(
                         startedAtEpochMillis = startedAt,
                         telegram = preferences.get(prefix + "telegram", ""),
                         missed = preferences.getBoolean(prefix + "missed", false),
+                        missedAcknowledged = preferences.getBoolean(prefix + "missedAcknowledged", false),
                         durationSeconds = preferences.getLong(prefix + "durationSeconds", -1L)
                             .takeIf { it >= 0L }
                     )
@@ -45,6 +46,7 @@ class PreferencesCallHistoryStore(
             preferences.putLong(prefix + "startedAt", item.startedAtEpochMillis)
             preferences.put(prefix + "telegram", item.telegram)
             preferences.putBoolean(prefix + "missed", item.missed)
+            preferences.putBoolean(prefix + "missedAcknowledged", item.missedAcknowledged)
             preferences.putLong(prefix + "durationSeconds", item.durationSeconds ?: -1L)
         }
         for (index in history.size until previousCount) {
@@ -57,6 +59,9 @@ class PreferencesCallHistoryStore(
 
     private companion object {
         const val KEY_COUNT = "count"
-        val FIELDS = listOf("id", "name", "number", "direction", "startedAt", "telegram", "missed", "durationSeconds")
+        val FIELDS = listOf(
+            "id", "name", "number", "direction", "startedAt", "telegram", "missed",
+            "missedAcknowledged", "durationSeconds"
+        )
     }
 }
