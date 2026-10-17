@@ -27,13 +27,26 @@ data class Contact(
     val telegram: String = "",
     val office: String = "",
     val phone: String = "",
-    val source: ContactSource = ContactSource.LEGACY
+    val source: ContactSource = ContactSource.LEGACY,
+    val status: EmployeeStatus = EmployeeStatus.OFFLINE
 ) {
     // Компания ПОРТ автоматически относит контакт к сотрудникам.
     val isEmployee: Boolean get() = company.trim().equals("ПОРТ", ignoreCase = true)
 }
 
 enum class ContactSource { LEGACY, DIRECTORY, LOCAL }
+
+enum class EmployeeStatus(val sheetValue: String) {
+    AVAILABLE("Доступен"),
+    BUSY("Занят"),
+    OFFLINE("Не в сети");
+
+    companion object {
+        fun fromSheet(value: String): EmployeeStatus = entries.firstOrNull {
+            it.sheetValue.equals(value.trim(), ignoreCase = true)
+        } ?: OFFLINE
+    }
+}
 
 data class HistoryItem(
     val id: String,

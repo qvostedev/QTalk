@@ -131,7 +131,12 @@ internal fun DialerPanel(
         ) {
             val avatarContact = if (creatingContact) null else displayedContact
             if (avatarContact != null) {
-                ContactAvatarWithStatus(avatarContact.name, avatarContact.telegram, 62)
+                ContactAvatarWithStatus(
+                    avatarContact.name,
+                    avatarContact.telegram,
+                    62,
+                    avatarContact.status.color
+                )
             } else {
                 val avatarSeed = draftName.takeIf(String::isNotBlank)
                     ?: (if (creatingContact) draftNumber else shownNumber).takeIf(String::isNotBlank)

@@ -9,6 +9,7 @@ import org.jetbrains.compose.resources.painterResource
 import qtalk.shared.generated.resources.Res
 import qtalk.shared.generated.resources.logo_black
 import qtalk.shared.generated.resources.logo_tray
+import com.qvoste.qtalk.ui.calls.model.EmployeeStatus
 
 enum class ThemeMode { DARK, LIGHT }
 
@@ -21,18 +22,19 @@ private data class CallsPalette(
     val text: Color,
     val secondary: Color,
     val danger: Color,
-    val online: Color
+    val online: Color,
+    val busy: Color
 )
 
 private val darkPalette = CallsPalette(
     Color(0xFF090B0D), Color(0xFF101215), Color(0xFF23262D),
     Color(0xFF0088FF), Color.White, Color(0xFFE8E9EC), Color(0x80FFFFFF),
-    Color(0xFFFF383C), Color(0xFF34C759)
+    Color(0xFFFF383C), Color(0xFF34C759), Color(0xFFFFC247)
 )
 private val lightPalette = CallsPalette(
     Color.White, Color(0xFFE9EAEC), Color(0xFFD2D5D9),
     Color(0xFF0088FF), Color.White, Color(0xFF101215), Color(0xFF505760),
-    Color(0xFFFF383C), Color(0xFF34C759)
+    Color(0xFFFF383C), Color(0xFF34C759), Color(0xFFFFB020)
 )
 private val LocalCallsPalette = staticCompositionLocalOf { darkPalette }
 
@@ -53,7 +55,15 @@ internal val TextPrimary: Color @Composable get() = LocalCallsPalette.current.te
 internal val TextSecondary: Color @Composable get() = LocalCallsPalette.current.secondary
 internal val Danger: Color @Composable get() = LocalCallsPalette.current.danger
 internal val Online: Color @Composable get() = LocalCallsPalette.current.online
+internal val Busy: Color @Composable get() = LocalCallsPalette.current.busy
 internal val IsLightTheme: Boolean @Composable get() = LocalCallsPalette.current === lightPalette
+
+internal val EmployeeStatus.color: Color
+    @Composable get() = when (this) {
+        EmployeeStatus.AVAILABLE -> Online
+        EmployeeStatus.BUSY -> Busy
+        EmployeeStatus.OFFLINE -> TextSecondary
+    }
 
 @Composable
 fun qTalkWindowIcon(): Painter = painterResource(Res.drawable.logo_black)

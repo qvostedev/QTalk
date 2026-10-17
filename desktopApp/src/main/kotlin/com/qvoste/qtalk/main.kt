@@ -25,6 +25,8 @@ import com.qvoste.qtalk.app.App
 import com.qvoste.qtalk.ui.calls.ExternalDialRequest
 import com.qvoste.qtalk.ui.calls.components.CompactCallWidget
 import com.qvoste.qtalk.ui.calls.model.GoogleSheetsContactDatabaseService
+import com.qvoste.qtalk.ui.calls.model.GoogleSheetsEmployeePresenceService
+import com.qvoste.qtalk.ui.calls.model.EmployeeStatus
 import com.qvoste.qtalk.ui.calls.model.PreferencesContactStore
 import com.qvoste.qtalk.ui.calls.model.PreferencesContactNoteStore
 import com.qvoste.qtalk.ui.calls.model.PreferencesCallHistoryStore
@@ -85,6 +87,7 @@ fun main(args: Array<String>) {
         val contactNoteStore = remember { PreferencesContactNoteStore() }
         val callHistoryStore = remember { PreferencesCallHistoryStore() }
         val contactDatabaseService = remember { GoogleSheetsContactDatabaseService() }
+        val employeePresenceService = remember { GoogleSheetsEmployeePresenceService() }
         val themeStore = remember { PreferencesThemeStore() }
         val appVersion = remember {
             GitHubReleaseUpdater::class.java.`package`?.implementationVersion ?: "1.0.4"
@@ -144,6 +147,12 @@ fun main(args: Array<String>) {
         fun closeApplication() {
             scope.launch {
                 try {
+                    val extension = accountStore.load()?.username.orEmpty().filter(Char::isDigit)
+                    if (extension.isNotBlank()) {
+                        runCatching {
+                            employeePresenceService.publish(extension, EmployeeStatus.OFFLINE)
+                        }
+                    }
                     voipEngine.stop()
                 } finally {
                     exitApplication()
@@ -322,6 +331,7 @@ fun main(args: Array<String>) {
                         contactDatabaseService = contactDatabaseService,
                         contactNoteStore = contactNoteStore,
                         callHistoryStore = callHistoryStore,
+                        employeePresenceService = employeePresenceService,
                         themeMode = themeMode,
                         onThemeModeChange = { selected ->
                             themeStore.save(selected)

@@ -1039,7 +1039,7 @@ private fun FavoriteItem(
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        ContactAvatarWithStatus(contact.name, contact.telegram, 54)
+        ContactAvatarWithStatus(contact.name, contact.telegram, 54, contact.status.color)
         Spacer(Modifier.height(2.dp))
         Text(
             displayName,
@@ -1248,7 +1248,9 @@ private fun SipSettings(
     val accountName = accountContact?.name ?: accountNumber.takeIf(String::isNotBlank)?.let { "Внутренний $it" }
         ?: "SIP-аккаунт"
     val accountPosition = accountContact?.position.orEmpty().ifBlank { "Должность не указана" }
-    val accountStatusColor = if (registration == RegistrationState.REGISTERED) Online else TextSecondary
+    val accountStatusColor = if (registration == RegistrationState.REGISTERED) {
+        accountContact?.status?.color ?: Online
+    } else TextSecondary
 
     LaunchedEffect(Unit) { onRefreshAudioDevices() }
 
@@ -2011,7 +2013,7 @@ private fun ContactRow(
                 .clickable { onSelect(contact) }.padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ContactAvatar(contact.name, contact.telegram, 46)
+            ContactAvatarWithStatus(contact.name, contact.telegram, 46, contact.status.color)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(

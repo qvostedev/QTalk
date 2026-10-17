@@ -21,6 +21,8 @@ import com.qvoste.qtalk.ui.calls.model.ContactNoteStore
 import com.qvoste.qtalk.ui.calls.model.InMemoryContactNoteStore
 import com.qvoste.qtalk.ui.calls.model.CallHistoryStore
 import com.qvoste.qtalk.ui.calls.model.InMemoryCallHistoryStore
+import com.qvoste.qtalk.ui.calls.model.EmployeePresenceService
+import com.qvoste.qtalk.ui.calls.model.DisabledEmployeePresenceService
 import com.qvoste.qtalk.voip.VoipEngine
 import com.qvoste.qtalk.voip.InMemorySipAccountStore
 import com.qvoste.qtalk.voip.SipAccountStore
@@ -33,6 +35,7 @@ fun App(
     contactDatabaseService: ContactDatabaseService = DisabledContactDatabaseService,
     contactNoteStore: ContactNoteStore = InMemoryContactNoteStore(),
     callHistoryStore: CallHistoryStore = InMemoryCallHistoryStore(),
+    employeePresenceService: EmployeePresenceService = DisabledEmployeePresenceService,
     themeMode: ThemeMode = ThemeMode.DARK,
     onThemeModeChange: (ThemeMode) -> Unit = {},
     appVersion: String = "1.0.4",
@@ -61,7 +64,8 @@ fun App(
         contactStore,
         contactDatabaseService,
         contactNoteStore,
-        callHistoryStore
+        callHistoryStore,
+        employeePresenceService
     ) {
         CallsViewModel(
             voipEngine,
@@ -70,7 +74,8 @@ fun App(
             contactStore,
             contactDatabaseService,
             contactNoteStore,
-            callHistoryStore
+            callHistoryStore,
+            employeePresenceService
         )
     }
 

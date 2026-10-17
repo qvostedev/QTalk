@@ -16,6 +16,9 @@ import com.qvoste.qtalk.ui.calls.model.dialablePhoneNumber
 import com.qvoste.qtalk.ui.calls.model.formatPhoneNumber
 import com.qvoste.qtalk.ui.calls.model.mergeDownloadedContacts
 import com.qvoste.qtalk.ui.calls.model.transferCodeFor
+import com.qvoste.qtalk.ui.calls.model.EmployeePresenceService
+import com.qvoste.qtalk.ui.calls.model.DisabledEmployeePresenceService
+import com.qvoste.qtalk.ui.calls.model.EmployeeStatus
 import com.qvoste.qtalk.voip.SipAccount
 import com.qvoste.qtalk.voip.SipAccountStore
 import com.qvoste.qtalk.voip.VoipEngine
@@ -40,7 +43,8 @@ class CallsViewModel(
     private val contactStore: ContactStore,
     private val contactDatabaseService: ContactDatabaseService,
     private val contactNoteStore: ContactNoteStore,
-    private val callHistoryStore: CallHistoryStore
+    private val callHistoryStore: CallHistoryStore,
+    private val employeePresenceService: EmployeePresenceService = DisabledEmployeePresenceService
 ) {
     val registrationState = voipEngine.registrationState
     val registrationMessage = voipEngine.registrationMessage
@@ -83,18 +87,25 @@ class CallsViewModel(
     private var activeHistoryId: String? = null
     private var activeCallSeen = false
     private var connectedAtMillis = 0L
+    private var lastPublishedStatus: EmployeeStatus? = null
 
     init {
         scope.launch {
             registrationState.collectLatest { state ->
                 when (state) {
-                    RegistrationState.REGISTERED -> pendingAccount?.let { account ->
-                        accountStore.save(account)
-                        _accountDraft.value = account.copy(password = null)
-                        _authenticationRequired.value = false
-                        pendingAccount = null
+                    RegistrationState.REGISTERED -> {
+                        pendingAccount?.let { account ->
+                            accountStore.save(account)
+                            _accountDraft.value = account.copy(password = null)
+                            _authenticationRequired.value = false
+                            pendingAccount = null
+                        }
+                        publishPresence(currentPresenceStatus())
                     }
-                    RegistrationState.FAILED -> _authenticationRequired.value = true
+                    RegistrationState.FAILED -> {
+                        _authenticationRequired.value = true
+                        publishPresence(EmployeeStatus.OFFLINE)
+                    }
                     else -> Unit
                 }
             }
@@ -102,6 +113,9 @@ class CallsViewModel(
 
         scope.launch {
             callStatus.collectLatest { status ->
+                if (registrationState.value == RegistrationState.REGISTERED) {
+                    publishPresence(if (status.state.isInProgress) EmployeeStatus.BUSY else EmployeeStatus.AVAILABLE)
+                }
                 if (status.state == com.qvoste.qtalk.voip.CallState.INCOMING) {
                     val startedAt = status.startedAtEpochMillis.takeIf { it > 0L }
                         ?: Clock.System.now().toEpochMilliseconds()
@@ -130,6 +144,18 @@ class CallsViewModel(
                 val url = _contactDatabaseState.value.sourceUrl
                 if (url.isNotBlank()) performContactSync(url)
                 delay(CONTACT_SYNC_INTERVAL_MS)
+            }
+        }
+
+        scope.launch {
+            while (true) {
+                if (employeePresenceService.enabled) {
+                    if (registrationState.value == RegistrationState.REGISTERED) {
+                        publishPresence(currentPresenceStatus(), force = true)
+                    }
+                    refreshEmployeeStatuses()
+                }
+                delay(PRESENCE_SYNC_INTERVAL_MS)
             }
         }
     }
@@ -164,6 +190,7 @@ class CallsViewModel(
     }
 
     fun logout() = execute {
+        publishPresence(EmployeeStatus.OFFLINE, force = true)
         voipEngine.unregister()
         accountStore.clear()
         pendingAccount = null
@@ -396,10 +423,43 @@ class CallsViewModel(
             contactSyncMutex.unlock()
         }
     }
+
+    private fun currentPresenceStatus(): EmployeeStatus =
+        if (callStatus.value.state.isInProgress) EmployeeStatus.BUSY else EmployeeStatus.AVAILABLE
+
+    private suspend fun publishPresence(status: EmployeeStatus, force: Boolean = false) {
+        val extension = _accountNumber.value.filter(Char::isDigit)
+            .ifBlank { _accountDraft.value?.username.orEmpty().filter(Char::isDigit) }
+        if (!employeePresenceService.enabled || extension.isBlank()) return
+        if (!force && lastPublishedStatus == status) return
+        runCatching { employeePresenceService.publish(extension, status) }
+            .onSuccess {
+                lastPublishedStatus = status
+                applyPresence(mapOf(extension to status))
+            }
+    }
+
+    private suspend fun refreshEmployeeStatuses() {
+        runCatching { employeePresenceService.load() }
+            .onSuccess(::applyPresence)
+    }
+
+    private fun applyPresence(statuses: Map<String, EmployeeStatus>) {
+        if (statuses.isEmpty()) return
+        val updated = _contacts.value.map { contact ->
+            val extension = contact.number.filter(Char::isDigit)
+            statuses[extension]?.let { contact.copy(status = it) } ?: contact
+        }
+        if (updated == _contacts.value) return
+        contactStore.save(updated)
+        _contacts.value = updated
+    }
+
     fun close() = scope.cancel()
 
     private companion object {
         const val CONTACT_SYNC_INTERVAL_MS = 15 * 60 * 1000L
+        const val PRESENCE_SYNC_INTERVAL_MS = 60 * 1000L
         const val MAX_HISTORY_ITEMS = 1000
     }
 }

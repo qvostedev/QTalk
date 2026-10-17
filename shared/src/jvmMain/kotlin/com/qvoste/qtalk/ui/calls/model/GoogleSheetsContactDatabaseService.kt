@@ -74,6 +74,7 @@ class GoogleSheetsContactDatabaseService(
         val cityPhoneColumn = column("городск", "телефон", "phone")
         val companyColumn = column("компан", "company")
         val telegramColumn = column("telegram", "телеграм")
+        val statusColumn = column("статус", "status")
 
         fun List<String>.valueAt(index: Int): String =
             if (index in indices) this[index].trim().replace(Regex("\\s+"), " ") else ""
@@ -96,7 +97,8 @@ class GoogleSheetsContactDatabaseService(
                     cityPhone.isBlank() -> number
                     number.isBlank() -> cityPhone
                     else -> "$cityPhone доб.$number"
-                }
+                },
+                status = EmployeeStatus.fromSheet(row.valueAt(statusColumn))
             )
         }
         check(contacts.isNotEmpty()) { "В таблице не найдено ни одного контакта" }
@@ -148,6 +150,7 @@ class GoogleSheetsContactDatabaseService(
 
     private companion object {
         const val KEY_SOURCE_URL = "googleSheetsUrl"
-        const val DEFAULT_SOURCE_URL = ""
+        const val DEFAULT_SOURCE_URL =
+            "https://docs.google.com/spreadsheets/d/1gfI_Bh5lth1xfziycIAw9rYySSVwv_PHcb_HsdYZkA4/edit?usp=sharing"
     }
 }

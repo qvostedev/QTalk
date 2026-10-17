@@ -281,7 +281,7 @@ class SharedLogicDesktopTest {
             val migrated = PreferencesContactStore(node).load().single()
 
             assertEquals("Отдел автоматизации", migrated.department)
-            assertEquals(2, node.getInt("schemaVersion", 0))
+            assertEquals(3, node.getInt("schemaVersion", 0))
         } finally {
             node.removeNode()
         }

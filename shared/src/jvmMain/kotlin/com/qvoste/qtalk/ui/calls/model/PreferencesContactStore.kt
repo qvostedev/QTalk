@@ -31,7 +31,10 @@ class PreferencesContactStore(
                         phone = preferences.get(prefix + "phone", ""),
                         source = runCatching {
                             ContactSource.valueOf(preferences.get(prefix + "source", ContactSource.LEGACY.name))
-                        }.getOrDefault(ContactSource.LEGACY)
+                        }.getOrDefault(ContactSource.LEGACY),
+                        status = runCatching {
+                            EmployeeStatus.valueOf(preferences.get(prefix + "status", EmployeeStatus.OFFLINE.name))
+                        }.getOrDefault(EmployeeStatus.OFFLINE)
                     )
                 )
             }
@@ -65,6 +68,7 @@ class PreferencesContactStore(
             preferences.put(prefix + "office", contact.office)
             preferences.put(prefix + "phone", contact.phone)
             preferences.put(prefix + "source", contact.source.name)
+            preferences.put(prefix + "status", contact.status.name)
         }
         for (index in contacts.size until previousCount) {
             val prefix = "$index."
@@ -80,10 +84,10 @@ class PreferencesContactStore(
         const val KEY_INITIALIZED = "initialized"
         const val KEY_COUNT = "count"
         const val KEY_SCHEMA_VERSION = "schemaVersion"
-        const val CURRENT_SCHEMA_VERSION = 2
+        const val CURRENT_SCHEMA_VERSION = 3
         val FIELDS = listOf(
             "name", "number", "favorite", "position", "department",
-            "company", "telegram", "office", "phone", "source"
+            "company", "telegram", "office", "phone", "source", "status"
         )
     }
 }
