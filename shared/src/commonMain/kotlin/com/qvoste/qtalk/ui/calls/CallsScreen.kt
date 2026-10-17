@@ -116,6 +116,7 @@ import qtalk.shared.generated.resources.icon_position
 import qtalk.shared.generated.resources.icon_search
 import qtalk.shared.generated.resources.icon_settings
 import qtalk.shared.generated.resources.icon_settings_about
+import qtalk.shared.generated.resources.icon_settings_database
 import qtalk.shared.generated.resources.icon_settings_headphones
 import qtalk.shared.generated.resources.icon_settings_logout
 import qtalk.shared.generated.resources.icon_settings_microphone
@@ -1335,7 +1336,7 @@ private fun SipSettings(
                 onClick = { onThemeModeChange(if (themeMode == ThemeMode.LIGHT) ThemeMode.DARK else ThemeMode.LIGHT) }
             )
             SettingsActionRow(
-                icon = Res.drawable.icon_contacts,
+                icon = Res.drawable.icon_settings_database,
                 title = "База данных",
                 subtitle = contactDatabaseState.message,
                 onClick = { showDatabase = true }
@@ -1570,15 +1571,23 @@ private fun SettingsActionRow(
 ) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         Row(
-            Modifier.offset(x = (-10).dp).requiredWidth(maxWidth + 20.dp)
-                .clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick)
-                .padding(horizontal = 10.dp, vertical = 10.dp),
+            Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick)
+                .padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(Modifier.width(28.dp), contentAlignment = Alignment.CenterStart) {
-                Image(painterResource(icon), contentDescription = null, modifier = Modifier.size(20.dp),
-                    colorFilter = if (IsLightTheme) ColorFilter.tint(TextSecondary) else null)
+            Box(
+                Modifier.size(44.dp).background(ControlBackground, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painterResource(icon),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    colorFilter = ColorFilter.tint(if (titleColor == Danger) Danger else TextPrimary)
+                )
             }
+            Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, color = titleColor, fontSize = 12.sp, lineHeight = 12.sp, fontWeight = FontWeight.Medium)
                 subtitle?.let { Text(it, color = TextSecondary, fontSize = 10.sp, lineHeight = 10.sp) }
