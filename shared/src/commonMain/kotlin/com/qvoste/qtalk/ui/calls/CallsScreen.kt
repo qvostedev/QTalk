@@ -134,6 +134,7 @@ import com.qvoste.qtalk.ui.calls.components.transferOnRightClick
 import com.qvoste.qtalk.ui.calls.theme.*
 import com.qvoste.qtalk.ui.calls.components.Sidebar
 import com.qvoste.qtalk.ui.calls.components.Avatar
+import com.qvoste.qtalk.ui.calls.components.AvatarWithStatus
 import com.qvoste.qtalk.ui.calls.components.ContactAvatar
 import com.qvoste.qtalk.ui.calls.components.ContactAvatarWithStatus
 import com.qvoste.qtalk.ui.calls.components.CircleIconAction
@@ -1217,6 +1218,14 @@ private fun SipSettings(
         .firstOrNull { it.id == audioSettings.selectedOutputDeviceId }?.name ?: "Системный"
     val ringtoneName = audioSettings.ringtones
         .firstOrNull { it.id == audioSettings.selectedRingtoneId }?.name ?: "Вариант - 1"
+    val accountNumber = account?.username.orEmpty().trim()
+    val accountContact = contacts.firstOrNull { contact ->
+        contact.number.normalizedContactNumber() == accountNumber.normalizedContactNumber()
+    }
+    val accountName = accountContact?.name ?: accountNumber.takeIf(String::isNotBlank)?.let { "Внутренний $it" }
+        ?: "SIP-аккаунт"
+    val accountPosition = accountContact?.position.orEmpty().ifBlank { "Должность не указана" }
+    val accountStatusColor = if (registration == RegistrationState.REGISTERED) Online else TextSecondary
 
     LaunchedEffect(Unit) { onRefreshAudioDevices() }
 
@@ -1253,25 +1262,28 @@ private fun SipSettings(
                     .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    Modifier.size(44.dp).background(Primary, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        account?.username?.take(2).orEmpty().ifBlank { "QT" },
-                        color = OnPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
+                if (accountContact == null) {
+                    AvatarWithStatus(
+                        initials = accountNumber.takeLast(2).ifBlank { "QT" },
+                        seed = accountNumber.ifBlank { "QTalk" },
+                        size = 44,
+                        statusColor = accountStatusColor
+                    )
+                } else {
+                    ContactAvatarWithStatus(
+                        name = accountContact.name,
+                        telegram = accountContact.telegram,
+                        size = 44,
+                        statusColor = accountStatusColor
                     )
                 }
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Аккаунт ${account?.username.orEmpty()}", color = TextPrimary, fontSize = 13.sp)
+                    Text(accountName, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     Text(
                         buildString {
-                            append(account?.domain ?: "SIP-аккаунт")
-                            append("  •  ")
-                            append(registrationText(registration))
+                            append(accountPosition)
+                            if (accountNumber.isNotBlank()) append("  •  Внутренний ").append(accountNumber)
                         },
                         color = TextSecondary,
                         fontSize = 10.sp
