@@ -37,7 +37,9 @@ fun App(
     onThemeModeChange: (ThemeMode) -> Unit = {},
     appVersion: String = "1.0.3",
     availableUpdateVersion: String? = null,
-    onCheckForUpdates: suspend ((String) -> Unit) -> Unit = { it("Проверка обновлений недоступна") },
+    onCheckForUpdates: suspend ((String, Float?) -> Unit) -> Unit = {
+        it("Проверка обновлений недоступна", null)
+    },
     callOverlayCollapsed: Boolean = false,
     onCollapseCall: () -> Unit = {},
     externalDialRequest: ExternalDialRequest? = null,

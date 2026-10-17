@@ -36,6 +36,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -148,7 +149,7 @@ fun CallsScreen(
     onThemeModeChange: (ThemeMode) -> Unit = {},
     appVersion: String = "1.0.3",
     availableUpdateVersion: String? = null,
-    onCheckForUpdates: suspend ((String) -> Unit) -> Unit = { it("Проверка обновлений недоступна") },
+    onCheckForUpdates: suspend ((String, Float?) -> Unit) -> Unit = { it("Проверка обновлений недоступна", null) },
     callOverlayCollapsed: Boolean = false,
     onCollapseCall: () -> Unit = {},
     externalDialRequest: ExternalDialRequest? = null,
@@ -393,7 +394,7 @@ private fun CallsContent(
     onThemeModeChange: (ThemeMode) -> Unit,
     appVersion: String,
     availableUpdateVersion: String?,
-    onCheckForUpdates: suspend ((String) -> Unit) -> Unit,
+    onCheckForUpdates: suspend ((String, Float?) -> Unit) -> Unit,
     onCall: (String) -> Unit,
     onAccept: () -> Unit,
     onDecline: () -> Unit,
@@ -1133,7 +1134,7 @@ private fun SipSettings(
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     appVersion: String,
-    onCheckForUpdates: suspend ((String) -> Unit) -> Unit,
+    onCheckForUpdates: suspend ((String, Float?) -> Unit) -> Unit,
     onSaveContactDatabaseUrl: (String) -> Unit,
     onSyncContactDatabase: () -> Unit,
     onDisconnectContactDatabase: () -> Unit,
@@ -1151,6 +1152,7 @@ private fun SipSettings(
     var showDatabase by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
     var updateMessage by remember { mutableStateOf<String?>(null) }
+    var updateProgress by remember { mutableStateOf<Float?>(null) }
     var updating by remember { mutableStateOf(false) }
     val updateScope = rememberCoroutineScope()
     var search by rememberSaveable { mutableStateOf("") }
@@ -1466,6 +1468,17 @@ private fun SipSettings(
                         Spacer(Modifier.height(12.dp))
                         Text(message, color = TextSecondary, fontSize = 11.sp, textAlign = TextAlign.Center)
                     }
+                    updateProgress?.let { progress ->
+                        Spacer(Modifier.height(10.dp))
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
+                            color = Primary,
+                            trackColor = TextSecondary.copy(alpha = 0.18f)
+                        )
+                        Spacer(Modifier.height(5.dp))
+                        Text("${(progress * 100).toInt()}%", color = TextSecondary, fontSize = 10.sp)
+                    }
                 }
             },
             confirmButton = {
@@ -1478,11 +1491,15 @@ private fun SipSettings(
                         updateScope.launch {
                             updating = true
                             try {
-                                onCheckForUpdates { updateMessage = it }
+                                onCheckForUpdates { message, progress ->
+                                    updateMessage = message
+                                    updateProgress = progress
+                                }
                             } catch (error: CancellationException) {
                                 throw error
                             } catch (error: Exception) {
                                 updateMessage = "Ошибка обновления: ${error.message ?: "проверьте подключение"}"
+                                updateProgress = null
                             } finally {
                                 updating = false
                             }

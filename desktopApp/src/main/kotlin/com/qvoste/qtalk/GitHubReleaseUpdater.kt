@@ -114,15 +114,15 @@ internal class GitHubReleaseUpdater(private val installedVersion: String) {
         return release.version.takeIf { selectQTalkAsset(release, windows) != null }
     }
 
-    suspend fun checkAndInstall(onStatus: (String) -> Unit): Boolean {
-        onStatus("Проверка обновлений…")
+    suspend fun checkAndInstall(onStatus: (String, Float?) -> Unit): Boolean {
+        onStatus("Проверка обновлений…", null)
         val release = fetchLatestRelease()
         if (release == null) {
-            onStatus("У вас установлена последняя версия")
+            onStatus("У вас установлена последняя версия", null)
             return false
         }
         if (!isNewerVersion(release.version, installedVersion)) {
-            onStatus("У вас установлена последняя версия")
+            onStatus("У вас установлена последняя версия", null)
             return false
         }
         val windows = System.getProperty("os.name").contains("Windows", ignoreCase = true)
@@ -141,17 +141,28 @@ internal class GitHubReleaseUpdater(private val installedVersion: String) {
             "Некорректный адрес установщика"
         }
 
-        onStatus("Загрузка версии ${release.version}…")
+        onStatus("Загрузка версии ${release.version}…", 0f)
         val installer = withContext(Dispatchers.IO) {
-            downloadAndVerify(asset, expectedDigest, if (windows) ".exe" else ".deb")
+            downloadAndVerify(asset, expectedDigest, if (windows) ".exe" else ".deb") { downloaded, total ->
+                val progress = if (total > 0) (downloaded.toFloat() / total).coerceIn(0f, 1f) else null
+                val downloadedMb = downloaded / (1024.0 * 1024.0)
+                val totalMb = total / (1024.0 * 1024.0)
+                val detail = if (total > 0) {
+                    "Загрузка версии ${release.version}: %.1f из %.1f МБ".format(downloadedMb, totalMb)
+                } else {
+                    "Загрузка версии ${release.version}: %.1f МБ".format(downloadedMb)
+                }
+                onStatus(detail, progress)
+            }
         }
-        onStatus("Установка версии ${release.version}… QTalk перезапустится автоматически")
+        onStatus("Проверка загруженного установщика…", 1f)
+        onStatus("Установка версии ${release.version}… QTalk перезапустится автоматически", null)
         if (windows) {
             withContext(Dispatchers.IO) { launchWindowsInstaller(installer) }
             return true
         }
         withContext(Dispatchers.IO) { installLinuxPackage(installer) }
-        onStatus("Обновление установлено. Перезапустите QTalk.")
+        onStatus("Обновление установлено. Перезапустите QTalk.", null)
         return false
     }
 
@@ -171,26 +182,37 @@ internal class GitHubReleaseUpdater(private val installedVersion: String) {
         return parseQTalkRelease(response.body())
     }
 
-    private fun downloadAndVerify(asset: ReleaseAsset, expectedDigest: String, extension: String): Path {
+    private fun downloadAndVerify(
+        asset: ReleaseAsset,
+        expectedDigest: String,
+        extension: String,
+        onProgress: (downloaded: Long, total: Long) -> Unit
+    ): Path {
         val file = Files.createTempFile("qtalk-update-", extension)
         try {
             val response = http.send(
                 HttpRequest.newBuilder(asset.url).timeout(Duration.ofMinutes(5))
                     .header("User-Agent", "QTalk-Updater")
                     .GET().build(),
-                HttpResponse.BodyHandlers.ofFile(file)
+                HttpResponse.BodyHandlers.ofInputStream()
             )
             check(response.statusCode() == 200) { "Не удалось скачать установщик: ${response.statusCode()}" }
-            check(Files.size(file) == asset.size) { "Размер загруженного установщика не совпадает" }
             val digest = MessageDigest.getInstance("SHA-256")
-            Files.newInputStream(file).use { input ->
-                val buffer = ByteArray(64 * 1024)
-                while (true) {
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    digest.update(buffer, 0, count)
+            var downloaded = 0L
+            response.body().use { input ->
+                Files.newOutputStream(file).use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        output.write(buffer, 0, count)
+                        digest.update(buffer, 0, count)
+                        downloaded += count
+                        onProgress(downloaded, asset.size)
+                    }
                 }
             }
+            check(downloaded == asset.size) { "Размер загруженного установщика не совпадает" }
             val actualDigest = digest.digest().joinToString("") { "%02x".format(it) }
             check(actualDigest.equals(expectedDigest, ignoreCase = true)) {
                 "Контрольная сумма установщика не совпадает"
