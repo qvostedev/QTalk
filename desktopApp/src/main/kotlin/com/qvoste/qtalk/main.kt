@@ -107,7 +107,7 @@ fun main(args: Array<String>) {
                         availableUpdateVersion = release?.version
                         availableUpdateDescription = release?.description
                     }
-                delay(60L * 60L * 1_000L)
+                delay(10L * 60L * 1_000L)
             }
         }
 
