@@ -67,6 +67,7 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
@@ -442,7 +443,10 @@ private fun CallsContent(
     var dialerTextInputFocused by remember { mutableStateOf(false) }
     var seenUpdateVersion by rememberSaveable { mutableStateOf<String?>(null) }
     val keyboardDialFocus = remember { FocusRequester() }
+    val searchFocusRequester = remember { FocusRequester() }
     val hasUnreadUpdate = availableUpdateVersion != null && availableUpdateVersion != seenUpdateVersion
+    val showCallOverlay = (call.state == CallState.INCOMING && !callOverlayCollapsed) ||
+        (call.state == CallState.ACTIVE && !callOverlayCollapsed)
 
     LaunchedEffect(Unit) { keyboardDialFocus.requestFocus() }
     LaunchedEffect(section, availableUpdateVersion) {
@@ -472,8 +476,17 @@ private fun CallsContent(
             .background(AppBackground)
             .focusRequester(keyboardDialFocus)
             .onKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown || searchFocused || dialerTextInputFocused ||
-                    call.state.isInProgress ||
+                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+
+                if (event.isCtrlPressed && event.key == Key.F) {
+                    searchFocusRequester.requestFocus()
+                    return@onKeyEvent true
+                }
+                if (event.key == Key.Escape && showCallOverlay) {
+                    onCollapseCall()
+                    return@onKeyEvent true
+                }
+                if (searchFocused || dialerTextInputFocused || call.state.isInProgress ||
                     showAddContact || editingContact != null
                 ) return@onKeyEvent false
 
@@ -504,8 +517,6 @@ private fun CallsContent(
         // Windows пересчитывает половину экрана с учётом системного DPI.
         val compact = maxWidth < 1100.dp
         // При любом звонке основной интерфейс остаётся виден через размытие.
-        val showCallOverlay = (call.state == CallState.INCOMING && !callOverlayCollapsed) ||
-            (call.state == CallState.ACTIVE && !callOverlayCollapsed)
         Row(Modifier.fillMaxSize().then(if (showCallOverlay) Modifier.blur(8.dp) else Modifier)) {
             Sidebar(
                 selected = section,
@@ -554,7 +565,8 @@ private fun CallsContent(
                     onMissedCallsSeen = onMissedCallsSeen,
                     canTransfer = call.state == CallState.ACTIVE,
                     onTransferEmployee = onTransferEmployee,
-                    onSearchFocusChange = { searchFocused = it }
+                    onSearchFocusChange = { searchFocused = it },
+                    searchFocusRequester = searchFocusRequester
                 )
                 AppSection.CONTACTS -> ContactsSection(
                     modifier = Modifier.weight(1f),
@@ -581,7 +593,8 @@ private fun CallsContent(
                     },
                     canTransfer = call.state == CallState.ACTIVE,
                     onTransferEmployee = onTransferEmployee,
-                    onSearchFocusChange = { searchFocused = it }
+                    onSearchFocusChange = { searchFocused = it },
+                    searchFocusRequester = searchFocusRequester
                 )
                 AppSection.SETTINGS -> SipSettings(
                     modifier = Modifier.weight(1f),
@@ -619,7 +632,8 @@ private fun CallsContent(
                     },
                     canTransfer = call.state == CallState.ACTIVE,
                     onTransferEmployee = onTransferEmployee,
-                    onSearchFocusChange = { searchFocused = it }
+                    onSearchFocusChange = { searchFocused = it },
+                    searchFocusRequester = searchFocusRequester
                 )
                 AppSection.NOTIFICATIONS -> NotificationsSection(
                     modifier = Modifier.weight(1f),
@@ -638,6 +652,7 @@ private fun CallsContent(
                     canTransfer = call.state == CallState.ACTIVE,
                     onTransferEmployee = onTransferEmployee,
                     onSearchFocusChange = { searchFocused = it },
+                    searchFocusRequester = searchFocusRequester,
                     availableUpdateVersion = availableUpdateVersion,
                     availableUpdateDescription = availableUpdateDescription,
                     onOpenUpdate = { section = AppSection.SETTINGS }
@@ -761,6 +776,7 @@ private fun NotificationsSection(
     canTransfer: Boolean,
     onTransferEmployee: (Contact) -> Unit,
     onSearchFocusChange: (Boolean) -> Unit,
+    searchFocusRequester: FocusRequester,
     availableUpdateVersion: String?,
     availableUpdateDescription: String?,
     onOpenUpdate: () -> Unit
@@ -776,7 +792,7 @@ private fun NotificationsSection(
             bottom = 20.dp
         )
     ) {
-        SearchAndAddBar(search, { search = it }, onAddContact, onSearchFocusChange)
+        SearchAndAddBar(search, { search = it }, onAddContact, onSearchFocusChange, searchFocusRequester)
         Spacer(Modifier.height(35.dp))
         FavoritesSection(
             contacts = contacts,
@@ -869,7 +885,8 @@ private fun CallsHome(
     onMissedCallsSeen: () -> Unit,
     canTransfer: Boolean,
     onTransferEmployee: (Contact) -> Unit,
-    onSearchFocusChange: (Boolean) -> Unit
+    onSearchFocusChange: (Boolean) -> Unit,
+    searchFocusRequester: FocusRequester
 ) {
     var search by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(CallFilter.ALL) }
@@ -899,7 +916,7 @@ private fun CallsHome(
             bottom = 20.dp
         )
     ) {
-        SearchAndAddBar(search, { search = it }, onAddContact, onSearchFocusChange)
+        SearchAndAddBar(search, { search = it }, onAddContact, onSearchFocusChange, searchFocusRequester)
         Spacer(Modifier.height(35.dp))
         FavoritesSection(
             contacts = contacts,
@@ -945,12 +962,14 @@ private fun CallsHome(
 private fun SearchField(
     value: String,
     onValueChange: (String) -> Unit,
-    onFocusChange: (Boolean) -> Unit
+    onFocusChange: (Boolean) -> Unit,
+    focusRequester: FocusRequester
 ) {
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = Modifier.fillMaxWidth().height(41.dp)
+            .focusRequester(focusRequester)
             .onFocusChanged { onFocusChange(it.isFocused) }
             .background(ControlBackground, RoundedCornerShape(35.dp)),
         singleLine = true,
@@ -991,10 +1010,13 @@ private fun SearchAndAddBar(
     search: String,
     onSearchChange: (String) -> Unit,
     onAddContact: () -> Unit,
-    onSearchFocusChange: (Boolean) -> Unit
+    onSearchFocusChange: (Boolean) -> Unit,
+    searchFocusRequester: FocusRequester
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.weight(1f)) { SearchField(search, onSearchChange, onSearchFocusChange) }
+        Box(Modifier.weight(1f)) {
+            SearchField(search, onSearchChange, onSearchFocusChange, searchFocusRequester)
+        }
         Spacer(Modifier.width(14.dp))
         CircleResourceAction(Res.drawable.icon_add_contact, 40, 20, 16, ControlBackground, onAddContact)
     }
@@ -1187,7 +1209,8 @@ private fun SipSettings(
     onSelectContact: (Contact) -> Unit,
     canTransfer: Boolean,
     onTransferEmployee: (Contact) -> Unit,
-    onSearchFocusChange: (Boolean) -> Unit
+    onSearchFocusChange: (Boolean) -> Unit,
+    searchFocusRequester: FocusRequester
 ) {
     var showAccount by remember { mutableStateOf(false) }
     var showInputDevices by remember { mutableStateOf(false) }
@@ -1237,7 +1260,7 @@ private fun SipSettings(
             bottom = 20.dp
         )
     ) {
-        SearchAndAddBar(search, { search = it }, onAddContact, onSearchFocusChange)
+        SearchAndAddBar(search, { search = it }, onAddContact, onSearchFocusChange, searchFocusRequester)
         Spacer(Modifier.height(35.dp))
         FavoritesSection(
             contacts = contacts,
@@ -1808,7 +1831,8 @@ private fun ContactsSection(
     onEditContact: (Contact) -> Unit,
     canTransfer: Boolean,
     onTransferEmployee: (Contact) -> Unit,
-    onSearchFocusChange: (Boolean) -> Unit
+    onSearchFocusChange: (Boolean) -> Unit,
+    searchFocusRequester: FocusRequester
 ) {
     var search by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(ContactFilter.ALL) }
@@ -1831,7 +1855,7 @@ private fun ContactsSection(
             bottom = 20.dp
         )
     ) {
-        SearchAndAddBar(search, { search = it }, onAddContact, onSearchFocusChange)
+        SearchAndAddBar(search, { search = it }, onAddContact, onSearchFocusChange, searchFocusRequester)
 
         Spacer(Modifier.height(35.dp))
         FavoritesSection(
