@@ -35,7 +35,7 @@ private const val SW_HIDE = 0
 private const val SW_SHOW = 5
 
 // DWM uses COLORREF (0x00BBGGRR), not the usual RGB byte order.
-private const val QTALK_CAPTION_COLOR = 0x00100D0B
+private const val QTALK_CAPTION_COLOR = 0x000D0B09
 private const val LIGHT_TEXT_COLOR = 0x00FFFFFF
 private const val WHITE_CAPTION_COLOR = 0x00FFFFFF
 private const val DARK_TEXT_COLOR = 0x00101215
