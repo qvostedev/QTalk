@@ -87,10 +87,11 @@ fun main(args: Array<String>) {
         val contactDatabaseService = remember { GoogleSheetsContactDatabaseService() }
         val themeStore = remember { PreferencesThemeStore() }
         val appVersion = remember {
-            GitHubReleaseUpdater::class.java.`package`?.implementationVersion ?: "1.0.3"
+            GitHubReleaseUpdater::class.java.`package`?.implementationVersion ?: "1.0.4"
         }
         val updater = remember(appVersion) { GitHubReleaseUpdater(appVersion) }
         var availableUpdateVersion by remember { mutableStateOf<String?>(null) }
+        var availableUpdateDescription by remember { mutableStateOf<String?>(null) }
         var themeMode by remember { mutableStateOf(themeStore.load()) }
         val scope = rememberCoroutineScope()
         val windowState = rememberWindowState(width = 1440.dp, height = 1024.dp)
@@ -101,8 +102,11 @@ fun main(args: Array<String>) {
 
         LaunchedEffect(updater) {
             while (true) {
-                runCatching { updater.availableVersion() }
-                    .onSuccess { availableUpdateVersion = it }
+                runCatching { updater.availableRelease() }
+                    .onSuccess { release ->
+                        availableUpdateVersion = release?.version
+                        availableUpdateDescription = release?.description
+                    }
                 delay(60L * 60L * 1_000L)
             }
         }
@@ -325,6 +329,7 @@ fun main(args: Array<String>) {
                         },
                         appVersion = appVersion,
                         availableUpdateVersion = availableUpdateVersion,
+                        availableUpdateDescription = availableUpdateDescription,
                         onCheckForUpdates = { onStatus ->
                             if (updater.checkAndInstall(onStatus)) closeApplication()
                         },

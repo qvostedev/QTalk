@@ -14,17 +14,23 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 private const val latestReleaseUrl = "https://api.github.com/repos/qvostedev/QTalk/releases/latest"
 private const val maximumInstallerSize = 500L * 1024 * 1024
 
 internal data class ReleaseAsset(val name: String, val url: URI, val size: Long, val digest: String?)
-internal data class QTalkRelease(val version: String, val assets: List<ReleaseAsset>)
+internal data class QTalkRelease(
+    val version: String,
+    val assets: List<ReleaseAsset>,
+    val description: String = ""
+)
 
 internal fun parseQTalkRelease(json: String): QTalkRelease {
     val root = Json.parseToJsonElement(json).jsonObject
     val version = root.getValue("tag_name").jsonPrimitive.content.removePrefix("v")
     require(parseVersion(version) != null) { "Некорректная версия релиза" }
+    val description = root["body"]?.jsonPrimitive?.contentOrNull.orEmpty().trim()
     val assets = root.getValue("assets").jsonArray.map { element ->
         val asset = element.jsonObject
         ReleaseAsset(
@@ -34,7 +40,7 @@ internal fun parseQTalkRelease(json: String): QTalkRelease {
             digest = asset["digest"]?.jsonPrimitive?.content?.takeUnless { it == "null" }
         )
     }
-    return QTalkRelease(version, assets)
+    return QTalkRelease(version, assets, description)
 }
 
 internal fun isNewerVersion(candidate: String, installed: String): Boolean {
@@ -106,12 +112,16 @@ internal class GitHubReleaseUpdater(private val installedVersion: String) {
         .build()
 
     suspend fun availableVersion(): String? {
+        return availableRelease()?.version
+    }
+
+    suspend fun availableRelease(): QTalkRelease? {
         val release = fetchLatestRelease() ?: return null
         if (!isNewerVersion(release.version, installedVersion)) return null
         val windows = System.getProperty("os.name").contains("Windows", ignoreCase = true)
         val linux = System.getProperty("os.name").contains("Linux", ignoreCase = true)
         if (!windows && !linux) return null
-        return release.version.takeIf { selectQTalkAsset(release, windows) != null }
+        return release.takeIf { selectQTalkAsset(it, windows) != null }
     }
 
     suspend fun checkAndInstall(onStatus: (String, Float?) -> Unit): Boolean {

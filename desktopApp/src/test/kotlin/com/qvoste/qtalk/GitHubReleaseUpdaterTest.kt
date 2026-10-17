@@ -22,6 +22,7 @@ class GitHubReleaseUpdaterTest {
         val release = parseQTalkRelease(
             """{
                 "tag_name":"v1.0.1",
+                "body":"Changes:\n\n- Added update notifications",
                 "assets":[
                     {"name":"QTalk-Setup-1.0.1.exe","browser_download_url":"https://github.com/qvostedev/QTalk/releases/download/v1.0.1/QTalk-Setup-1.0.1.exe","size":90000000,"digest":"sha256:abcd"},
                     {"name":"QTalk_1.0.1-1_amd64.deb","browser_download_url":"https://github.com/qvostedev/QTalk/releases/download/v1.0.1/QTalk_1.0.1-1_amd64.deb","size":80000000,"digest":"sha256:abcd"}
@@ -29,6 +30,7 @@ class GitHubReleaseUpdaterTest {
             }""".trimIndent()
         )
         assertEquals("1.0.1", release.version)
+        assertEquals("Changes:\n\n- Added update notifications", release.description)
         assertEquals("QTalk-Setup-1.0.1.exe", assertNotNull(selectQTalkAsset(release, true)).name)
         assertEquals("QTalk_1.0.1-1_amd64.deb", assertNotNull(selectQTalkAsset(release, false)).name)
         assertNull(selectQTalkAsset(release.copy(assets = emptyList()), true))

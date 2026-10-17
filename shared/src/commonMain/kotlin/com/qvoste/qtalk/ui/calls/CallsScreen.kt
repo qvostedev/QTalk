@@ -1,6 +1,7 @@
 package com.qvoste.qtalk.ui.calls
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -147,8 +148,9 @@ fun CallsScreen(
     viewModel: CallsViewModel,
     themeMode: ThemeMode = ThemeMode.DARK,
     onThemeModeChange: (ThemeMode) -> Unit = {},
-    appVersion: String = "1.0.3",
+    appVersion: String = "1.0.4",
     availableUpdateVersion: String? = null,
+    availableUpdateDescription: String? = null,
     onCheckForUpdates: suspend ((String, Float?) -> Unit) -> Unit = { it("Проверка обновлений недоступна", null) },
     callOverlayCollapsed: Boolean = false,
     onCollapseCall: () -> Unit = {},
@@ -194,6 +196,7 @@ fun CallsScreen(
         onThemeModeChange = onThemeModeChange,
         appVersion = appVersion,
         availableUpdateVersion = availableUpdateVersion,
+        availableUpdateDescription = availableUpdateDescription,
         onCheckForUpdates = onCheckForUpdates,
         onCall = viewModel::call,
         onAccept = viewModel::acceptCall,
@@ -394,6 +397,7 @@ private fun CallsContent(
     onThemeModeChange: (ThemeMode) -> Unit,
     appVersion: String,
     availableUpdateVersion: String?,
+    availableUpdateDescription: String?,
     onCheckForUpdates: suspend ((String, Float?) -> Unit) -> Unit,
     onCall: (String) -> Unit,
     onAccept: () -> Unit,
@@ -633,6 +637,7 @@ private fun CallsContent(
                     onTransferEmployee = onTransferEmployee,
                     onSearchFocusChange = { searchFocused = it },
                     availableUpdateVersion = availableUpdateVersion,
+                    availableUpdateDescription = availableUpdateDescription,
                     onOpenUpdate = { section = AppSection.SETTINGS }
                 )
             }
@@ -755,9 +760,11 @@ private fun NotificationsSection(
     onTransferEmployee: (Contact) -> Unit,
     onSearchFocusChange: (Boolean) -> Unit,
     availableUpdateVersion: String?,
+    availableUpdateDescription: String?,
     onOpenUpdate: () -> Unit
 ) {
     var search by rememberSaveable { mutableStateOf("") }
+    var updateExpanded by rememberSaveable(availableUpdateVersion) { mutableStateOf(false) }
 
     Column(
         modifier.fillMaxHeight().padding(
@@ -785,27 +792,62 @@ private fun NotificationsSection(
         if (availableUpdateVersion == null) {
             EmptyMessage("Новых уведомлений нет")
         } else {
-            Row(
+            Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
                     .background(ControlBackground)
-                    .clickable(onClick = onOpenUpdate)
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .animateContentSize()
             ) {
-                Box(Modifier.size(38.dp).background(Primary.copy(alpha = 0.16f), CircleShape), contentAlignment = Alignment.Center) {
-                    Image(
-                        painterResource(Res.drawable.icon_notifications),
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        colorFilter = ColorFilter.tint(Primary)
+                Row(
+                    Modifier.fillMaxWidth()
+                        .clickable { updateExpanded = !updateExpanded }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier.size(38.dp).background(Primary.copy(alpha = 0.16f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            painterResource(Res.drawable.icon_notifications),
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            colorFilter = ColorFilter.tint(Primary)
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Доступно обновление", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("QTalk $availableUpdateVersion готов к установке", color = TextSecondary, fontSize = 11.sp)
+                    }
+                    Text(
+                        if (updateExpanded) "Свернуть  ⌃" else "Подробнее  ⌄",
+                        color = Primary,
+                        fontSize = 11.sp
                     )
                 }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Доступно обновление", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    Text("QTalk $availableUpdateVersion готов к установке", color = TextSecondary, fontSize = 11.sp)
+                if (updateExpanded) {
+                    Box(
+                        Modifier.fillMaxWidth().height(1.dp)
+                            .background(TextSecondary.copy(alpha = 0.14f))
+                    )
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 66.dp, vertical = 14.dp)) {
+                        Text("Что нового", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(7.dp))
+                        Text(
+                            availableUpdateDescription?.takeIf(String::isNotBlank)
+                                ?: "Описание этого релиза пока не добавлено.",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp,
+                            maxLines = 12,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        TextButton(onClick = onOpenUpdate) {
+                            Text("Перейти к обновлению  ›", color = Primary, fontSize = 11.sp)
+                        }
+                    }
                 }
-                Text("Открыть  ›", color = Primary, fontSize = 11.sp)
             }
         }
     }

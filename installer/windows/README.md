@@ -15,7 +15,7 @@ QTalk → desktopApp → Tasks → distribution → packageQTalkInstaller
 The resulting installer is written to:
 
 ```text
-desktopApp/build/compose/binaries/main/exe/QTalk-Setup-1.0.3.exe
+desktopApp/build/compose/binaries/main/exe/QTalk-Setup-1.0.4.exe
 ```
 
 The task requires Inno Setup 6. It detects a standard system or per-user
