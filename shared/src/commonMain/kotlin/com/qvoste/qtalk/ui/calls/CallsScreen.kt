@@ -122,6 +122,7 @@ import qtalk.shared.generated.resources.icon_settings_headphones
 import qtalk.shared.generated.resources.icon_settings_logout
 import qtalk.shared.generated.resources.icon_settings_microphone
 import qtalk.shared.generated.resources.icon_settings_ringtone
+import qtalk.shared.generated.resources.icon_settings_volume_high
 import qtalk.shared.generated.resources.icon_settings_volume_low
 import qtalk.shared.generated.resources.icon_settings_theme
 import qtalk.shared.generated.resources.icon_telegram
@@ -1654,13 +1655,17 @@ private fun SettingsSliderRow(
 ) {
     val activeTrackColor = Primary
     val inactiveTrackColor = ControlBackground
-    Column(Modifier.widthIn(max = 410.dp).fillMaxWidth()) {
+    Column(
+        Modifier.padding(start = 60.dp)
+            .widthIn(max = 410.dp)
+            .fillMaxWidth()
+    ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(22.dp), contentAlignment = Alignment.CenterStart) {
                 Image(
                     painterResource(
                         if (value < 0.5f) Res.drawable.icon_settings_volume_low
-                        else Res.drawable.icon_settings_ringtone
+                        else Res.drawable.icon_settings_volume_high
                     ),
                     contentDescription = null,
                     modifier = Modifier.width(if (value < 0.5f) 18.dp else 22.dp).height(17.dp),
