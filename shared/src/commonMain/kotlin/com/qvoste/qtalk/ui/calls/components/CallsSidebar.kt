@@ -1,5 +1,7 @@
 package com.qvoste.qtalk.ui.calls.components
 
+import com.qvoste.qtalk.ui.calls.i18n.uiText
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -109,7 +111,7 @@ internal fun Sidebar(
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        registrationText(registration),
+                        uiText(registrationText(registration)),
                         color = TextSecondary,
                         fontSize = 10.sp,
                         lineHeight = 11.sp,
@@ -158,7 +160,7 @@ private fun AccountAvatar(contact: Contact?, registration: RegistrationState) {
 
 @Composable
 private fun SectionLabel(text: String) {
-    Text(text, color = TextSecondary, fontSize = 11.sp, modifier = Modifier.padding(bottom = 9.dp))
+    Text(uiText(text), color = TextSecondary, fontSize = 11.sp, modifier = Modifier.padding(bottom = 9.dp))
 }
 
 @Composable
@@ -198,7 +200,7 @@ private fun NavItem(
             if (!compact) {
                 Spacer(Modifier.width(16.dp))
                 Text(
-                    section.title,
+                    uiText(section.title),
                     color = itemColor,
                     fontSize = 14.sp,
                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal

@@ -4,6 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.runtime.CompositionLocalProvider
+import com.qvoste.qtalk.ui.calls.i18n.LanguageSettings
+import com.qvoste.qtalk.ui.calls.i18n.LocalAppLanguage
+import com.qvoste.qtalk.ui.calls.i18n.translateUiText
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import com.qvoste.qtalk.ui.calls.theme.InterfaceScale
@@ -104,6 +107,7 @@ fun main(args: Array<String>) {
         var availableUpdateDescription by remember { mutableStateOf<String?>(null) }
         var themeMode by remember { mutableStateOf(themeStore.load()) }
         var interfaceScale by remember { mutableStateOf(themeStore.loadScale()) }
+        var appLanguage by remember { mutableStateOf(themeStore.loadLanguage()) }
         val scope = rememberCoroutineScope()
         val screenBounds = remember {
             val config = GraphicsEnvironment.getLocalGraphicsEnvironment().defaultScreenDevice.defaultConfiguration
@@ -179,10 +183,12 @@ fun main(args: Array<String>) {
         val widgetCallState = remember { mutableStateOf(widgetCall) }
         val widgetCallerState = remember { mutableStateOf(caller) }
         val widgetThemeState = remember { mutableStateOf(themeMode) }
+        val widgetLanguageState = remember { mutableStateOf(appLanguage) }
         SideEffect {
             widgetCallState.value = widgetCall
             widgetCallerState.value = if (widgetSmokeTest) null else caller
             widgetThemeState.value = themeMode
+            widgetLanguageState.value = appLanguage
         }
         val compactWindow = remember {
             lateinit var floatingWindow: JWindow
@@ -195,25 +201,28 @@ fun main(args: Array<String>) {
                     val widgetCall by widgetCallState
                     val widgetCaller by widgetCallerState
                     val widgetTheme by widgetThemeState
-                    CallsTheme(widgetTheme) {
-                        CompactCallWidget(
-                        state = widgetCall.state,
-                        number = widgetCall.number,
-                        callerName = widgetCaller?.name,
-                        callerTelegram = widgetCaller?.telegram.orEmpty(),
-                        callerAvatarUrl = widgetCaller?.avatarUrl.orEmpty(),
-                        connectedAtEpochMillis = widgetCall.connectedAtEpochMillis,
-                        onOpen = ::openMainWindow,
-                        onAccept = { scope.launch { voipEngine.acceptCall() } },
-                        onDecline = { scope.launch { voipEngine.declineCall() } },
-                        onHangUp = { scope.launch { voipEngine.hangUp() } },
-                        onMicrophoneMutedChange = { muted ->
-                            scope.launch { voipEngine.setMicrophoneMuted(muted) }
-                        },
-                        onSpeakerMutedChange = { muted ->
-                            scope.launch { voipEngine.setSpeakerMuted(muted) }
+                    val widgetLanguage by widgetLanguageState
+                    CompositionLocalProvider(LocalAppLanguage provides LanguageSettings(widgetLanguage)) {
+                        CallsTheme(widgetTheme) {
+                            CompactCallWidget(
+                                state = widgetCall.state,
+                                number = widgetCall.number,
+                                callerName = widgetCaller?.name,
+                                callerTelegram = widgetCaller?.telegram.orEmpty(),
+                                callerAvatarUrl = widgetCaller?.avatarUrl.orEmpty(),
+                                connectedAtEpochMillis = widgetCall.connectedAtEpochMillis,
+                                onOpen = ::openMainWindow,
+                                onAccept = { scope.launch { voipEngine.acceptCall() } },
+                                onDecline = { scope.launch { voipEngine.declineCall() } },
+                                onHangUp = { scope.launch { voipEngine.hangUp() } },
+                                onMicrophoneMutedChange = { muted ->
+                                    scope.launch { voipEngine.setMicrophoneMuted(muted) }
+                                },
+                                onSpeakerMutedChange = { muted ->
+                                    scope.launch { voipEngine.setSpeakerMuted(muted) }
+                                }
+                            )
                         }
-                        )
                     }
                 }
             }
@@ -304,9 +313,9 @@ fun main(args: Array<String>) {
                 tooltip = "QTalk",
                 onAction = ::openMainWindow,
                 menu = {
-                    Item("Открыть QTalk", onClick = ::openMainWindow)
+                    Item(translateUiText("Открыть QTalk", appLanguage), onClick = ::openMainWindow)
                     Separator()
-                    Item("Выход", onClick = ::closeApplication)
+                    Item(translateUiText("Выход", appLanguage), onClick = ::closeApplication)
                 }
             )
         }
@@ -349,6 +358,10 @@ fun main(args: Array<String>) {
                     minOf(1f, maxWidth.value / 1100f, maxHeight.value / 960f).coerceAtLeast(0.65f)
                 } else interfaceScale
                 CompositionLocalProvider(
+                    LocalAppLanguage provides LanguageSettings(appLanguage) {
+                        themeStore.saveLanguage(it)
+                        appLanguage = it
+                    },
                     LocalUnscaledDensity provides baseDensity,
                     LocalDensity provides Density(baseDensity.density * scale, baseDensity.fontScale),
                     LocalInterfaceScale provides InterfaceScale(interfaceScale) {

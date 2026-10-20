@@ -1,5 +1,7 @@
 package com.qvoste.qtalk.ui.calls.components
 
+import com.qvoste.qtalk.ui.calls.i18n.uiText
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -114,7 +116,7 @@ fun CompactCallWidget(
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    callerName ?: formatPhoneNumber(number).ifBlank { "Неизвестный номер" },
+                    callerName ?: formatPhoneNumber(number).ifBlank { uiText("Неизвестный номер") },
                     color = TextPrimary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -122,13 +124,13 @@ fun CompactCallWidget(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    when (state) {
+                    uiText(when (state) {
                         CallState.INCOMING -> "Входящий звонок"
                         CallState.DIALING -> "Вызов  •  ${formatPhoneNumber(number)}"
                         CallState.RINGING -> "Ожидание ответа"
                         CallState.ENDING -> "Завершение звонка"
                         else -> formatDuration(seconds)
-                    },
+                    }),
                     color = TextSecondary,
                     fontSize = 10.sp,
                     maxLines = 1,

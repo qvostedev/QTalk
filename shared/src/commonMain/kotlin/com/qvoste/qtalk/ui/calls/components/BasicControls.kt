@@ -1,5 +1,7 @@
 package com.qvoste.qtalk.ui.calls.components
 
+import com.qvoste.qtalk.ui.calls.i18n.uiText
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -38,16 +40,16 @@ import org.jetbrains.compose.resources.painterResource
 @Composable
 internal fun EmptyMessage(text: String) {
     Box(Modifier.fillMaxWidth().padding(vertical = 22.dp), contentAlignment = Alignment.Center) {
-        Text(text, color = TextSecondary, fontSize = 12.sp, textAlign = TextAlign.Center)
+        Text(uiText(text), color = TextSecondary, fontSize = 12.sp, textAlign = TextAlign.Center)
     }
 }
 
 @Composable
 internal fun EmptySection(modifier: Modifier, title: String, text: String) {
     Column(modifier.padding(start = 48.dp, top = 16.dp, end = 48.dp, bottom = 48.dp)) {
-        Text(title, color = TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+        Text(uiText(title), color = TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(12.dp))
-        Text(text, color = TextSecondary, fontSize = 13.sp)
+        Text(uiText(text), color = TextSecondary, fontSize = 13.sp)
     }
 }
 

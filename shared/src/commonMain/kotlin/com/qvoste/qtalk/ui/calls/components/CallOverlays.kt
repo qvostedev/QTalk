@@ -1,5 +1,7 @@
 package com.qvoste.qtalk.ui.calls.components
 
+import com.qvoste.qtalk.ui.calls.i18n.uiText
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -53,9 +55,9 @@ internal fun IncomingCallOverlay(
                 ContactAvatar(callerName, callerTelegram, 88, callerAvatarUrl)
             }
             Spacer(Modifier.height(20.dp))
-            Text(callerName ?: "Входящий вызов", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+            Text(callerName ?: uiText("Входящий вызов"), color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(9.dp))
-            Text("${formatPhoneNumber(number)}  •  Личная линия", color = TextSecondary, fontSize = 13.sp)
+            Text(uiText("${formatPhoneNumber(number)}  •  Личная линия"), color = TextSecondary, fontSize = 13.sp)
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(96.dp)) {
                 CircleIconAction(Res.drawable.icon_phone, 44, Danger) { onDecline() }
@@ -115,7 +117,7 @@ internal fun ActiveCallOverlay(
             Spacer(Modifier.height(25.dp))
             Text(callerName ?: formatPhoneNumber(number), color = TextPrimary, fontSize = 32.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(9.dp))
-            Text("${formatPhoneNumber(number)}  •  Личная линия", color = TextSecondary, fontSize = 16.sp)
+            Text(uiText("${formatPhoneNumber(number)}  •  Личная линия"), color = TextSecondary, fontSize = 16.sp)
             Spacer(Modifier.height(20.dp))
             Text(formatDuration(seconds), color = TextSecondary, fontSize = 18.sp)
             Spacer(Modifier.height(20.dp))
@@ -253,7 +255,7 @@ private fun CallControl(
             }
         }
         Spacer(Modifier.height(6.dp))
-        Text(label, color = TextSecondary, fontSize = 8.sp, maxLines = 1)
+        Text(uiText(label), color = TextSecondary, fontSize = 8.sp, maxLines = 1)
     }
 }
 
@@ -267,7 +269,7 @@ private fun TextCallControl(symbol: String, label: String, buttonSize: Int = 42,
             Text(symbol, color = TextPrimary, fontSize = 25.sp)
         }
         Spacer(Modifier.height(6.dp))
-        Text(label, color = TextSecondary, fontSize = 8.sp, maxLines = 1)
+        Text(uiText(label), color = TextSecondary, fontSize = 8.sp, maxLines = 1)
     }
 }
 

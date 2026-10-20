@@ -1,5 +1,11 @@
 package com.qvoste.qtalk.ui.calls
 
+import com.qvoste.qtalk.ui.calls.i18n.AppLanguage
+import com.qvoste.qtalk.ui.calls.i18n.LocalAppLanguage
+import com.qvoste.qtalk.ui.calls.i18n.uiText
+import com.qvoste.qtalk.ui.calls.i18n.releaseNotesForLanguage
+import qtalk.shared.generated.resources.icon_settings_language
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
@@ -275,10 +281,10 @@ private fun SipLoginScreen(
                 modifier = Modifier.size(54.dp)
             )
             Spacer(Modifier.height(16.dp))
-            Text("Вход в QTalk", color = TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+            Text(uiText("Вход в QTalk"), color = TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(7.dp))
             Text(
-                "Введите данные вашей внутренней SIP-линии",
+                uiText("Введите данные вашей внутренней SIP-линии"),
                 color = TextSecondary,
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center
@@ -330,7 +336,7 @@ private fun SipLoginScreen(
                     if (useHa1) Text("✓", color = TextPrimary, fontSize = 12.sp)
                 }
                 Spacer(Modifier.width(9.dp))
-                Text("Использовать готовый HA1 вместо пароля", color = TextSecondary, fontSize = 11.sp)
+                Text(uiText("Использовать готовый HA1 вместо пароля"), color = TextSecondary, fontSize = 11.sp)
             }
             Spacer(Modifier.height(8.dp))
             LoginField(expires, { expires = it.filter(Char::isDigit) }, "Срок регистрации, секунд", connecting)
@@ -355,13 +361,13 @@ private fun SipLoginScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = Primary),
                 modifier = Modifier.fillMaxWidth().height(46.dp)
             ) {
-                Text(if (connecting) "Подключение..." else "Войти")
+                Text(uiText(if (connecting) "Подключение..." else "Войти"))
             }
 
             if (registrationMessage.isNotBlank() || error != null) {
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    error ?: registrationMessage,
+                    uiText(error ?: registrationMessage),
                     color = if (registration == RegistrationState.FAILED || error != null) Danger else TextSecondary,
                     fontSize = 11.sp,
                     textAlign = TextAlign.Center
@@ -384,7 +390,7 @@ private fun LoginField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier,
-        label = { Text(label) },
+        label = { Text(uiText(label)) },
         singleLine = true,
         enabled = !locked,
         visualTransformation = if (password) PasswordVisualTransformation()
@@ -824,7 +830,7 @@ private fun NotificationsSection(
             onTransferEmployee = onTransferEmployee
         )
         Spacer(Modifier.height(if (compact) 28.dp else 32.dp))
-        Text("Уведомления", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(uiText("Уведомления"), color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(14.dp))
         if (availableUpdateVersion == null) {
             EmptyMessage("Новых уведомлений нет")
@@ -853,11 +859,11 @@ private fun NotificationsSection(
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Доступно обновление", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("QTalk $availableUpdateVersion готов к установке", color = TextSecondary, fontSize = 11.sp)
+                        Text(uiText("Доступно обновление"), color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(uiText("QTalk $availableUpdateVersion готов к установке"), color = TextSecondary, fontSize = 11.sp)
                     }
                     Text(
-                        if (updateExpanded) "Свернуть  ⌃" else "Подробнее  ⌄",
+                        uiText(if (updateExpanded) "Свернуть  ⌃" else "Подробнее  ⌄"),
                         color = Primary,
                         fontSize = 11.sp
                     )
@@ -868,11 +874,13 @@ private fun NotificationsSection(
                             .background(TextSecondary.copy(alpha = 0.14f))
                     )
                     Column(Modifier.fillMaxWidth().padding(horizontal = 66.dp, vertical = 14.dp)) {
-                        Text("Что нового", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text(uiText("Что нового"), color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(7.dp))
                         Text(
-                            availableUpdateDescription?.takeIf(String::isNotBlank)
-                                ?: "Описание этого релиза пока не добавлено.",
+                            availableUpdateDescription?.let {
+                                releaseNotesForLanguage(it, LocalAppLanguage.current.language)
+                            }?.takeIf(String::isNotBlank)
+                                ?: uiText("Описание этого релиза пока не добавлено."),
                             color = TextSecondary,
                             fontSize = 11.sp,
                             lineHeight = 16.sp,
@@ -881,7 +889,7 @@ private fun NotificationsSection(
                         )
                         Spacer(Modifier.height(10.dp))
                         TextButton(onClick = onOpenUpdate) {
-                            Text("Перейти к обновлению  ›", color = Primary, fontSize = 11.sp)
+                            Text(uiText("Перейти к обновлению  ›"), color = Primary, fontSize = 11.sp)
                         }
                     }
                 }
@@ -961,7 +969,7 @@ private fun CallsHome(
                 groups.forEach { (heading, calls) ->
                     item {
                         Text(
-                            heading,
+                            uiText(heading),
                             color = TextPrimary,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -1012,7 +1020,7 @@ private fun SearchField(
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (value.isEmpty()) {
                         Text(
-                            "Поиск контакта, номера или компании...",
+                            uiText("Поиск контакта, номера или компании..."),
                             color = TextSecondary,
                             fontSize = 11.sp,
                             maxLines = 1,
@@ -1093,10 +1101,10 @@ private fun FavoritesSection(
     onTransferEmployee: (Contact) -> Unit
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("Избранное", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Text(uiText("Избранное"), color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.weight(1f))
         Text(
-            trailingText,
+            uiText(trailingText),
             color = TextSecondary,
             fontSize = 12.sp,
             modifier = Modifier.clickable(onClick = onTrailingClick)
@@ -1121,7 +1129,7 @@ private fun FavoritesSection(
             ) {
                 CircleResourceAction(Res.drawable.icon_plus, 54, 14, 14, ControlBackground, onAddContact)
                 Spacer(Modifier.height(2.dp))
-                Text("Добавить", color = TextSecondary, fontSize = 12.sp, lineHeight = 12.sp)
+                Text(uiText("Добавить"), color = TextSecondary, fontSize = 12.sp, lineHeight = 12.sp)
             }
         }
     }
@@ -1170,7 +1178,7 @@ private fun HistoryRow(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Image(painterResource(directionIcon), contentDescription = null, modifier = Modifier.size(9.dp))
                     Spacer(Modifier.width(5.dp))
-                    Text(if (item.missed) "Пропущенный" else item.direction,
+                    Text(uiText(if (item.missed) "Пропущенный" else item.direction),
                         color = if (item.missed) Danger else TextSecondary,
                         fontSize = 11.sp, lineHeight = 13.sp)
                 }
@@ -1178,7 +1186,7 @@ private fun HistoryRow(
             Column(horizontalAlignment = Alignment.End) {
                 Text(formatHistoryTimestamp(item.startedAtEpochMillis, Clock.System.now().toEpochMilliseconds()).takeLast(5),
                     color = TextSecondary, fontSize = 11.sp, lineHeight = 13.sp, textAlign = TextAlign.End)
-                Text(formatCallDuration(item.durationSeconds).ifBlank { "—" },
+                Text(uiText(formatCallDuration(item.durationSeconds).ifBlank { "—" }),
                     color = TextSecondary, fontSize = 10.sp, lineHeight = 12.sp,
                     textAlign = TextAlign.End)
             }
@@ -1189,11 +1197,11 @@ private fun HistoryRow(
                 Text("⋮", color = TextSecondary, fontSize = 20.sp,
                     modifier = Modifier.clickable { menuExpanded = true }.padding(8.dp))
                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                    DropdownMenuItem(text = { Text("Позвонить") }, onClick = {
+                    DropdownMenuItem(text = { Text(uiText("Позвонить")) }, onClick = {
                         menuExpanded = false
                         onCall(item.number)
                     })
-                    DropdownMenuItem(text = { Text("Копировать номер") }, onClick = {
+                    DropdownMenuItem(text = { Text(uiText("Копировать номер")) }, onClick = {
                         menuExpanded = false
                         clipboard.setText(AnnotatedString(item.number))
                     })
@@ -1243,6 +1251,8 @@ private fun SipSettings(
     var showDatabase by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
     var showScale by remember { mutableStateOf(false) }
+    var showLanguage by remember { mutableStateOf(false) }
+    val languageSettings = LocalAppLanguage.current
     val interfaceScale = LocalInterfaceScale.current
     var updateMessage by remember { mutableStateOf<String?>(null) }
     var updateProgress by remember { mutableStateOf<Float?>(null) }
@@ -1271,9 +1281,9 @@ private fun SipSettings(
     val accountContact = contacts.firstOrNull { contact ->
         contact.number.normalizedContactNumber() == accountNumber.normalizedContactNumber()
     }
-    val accountName = accountContact?.name ?: accountNumber.takeIf(String::isNotBlank)?.let { "Внутренний $it" }
-        ?: "SIP-аккаунт"
-    val accountPosition = accountContact?.position.orEmpty().ifBlank { "Должность не указана" }
+    val accountName = accountContact?.name ?: accountNumber.takeIf(String::isNotBlank)?.let { uiText("Внутренний $it") }
+        ?: uiText("SIP-аккаунт")
+    val accountPosition = accountContact?.position.orEmpty().ifBlank { uiText("Должность не указана") }
     val accountStatusColor = if (registration == RegistrationState.REGISTERED) {
         accountContact?.status?.color ?: Online
     } else TextSecondary
@@ -1332,10 +1342,11 @@ private fun SipSettings(
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(accountName, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    val extensionLabel = uiText("Внутренний")
                     Text(
                         buildString {
                             append(accountPosition)
-                            if (accountNumber.isNotBlank()) append("  •  Внутренний ").append(accountNumber)
+                            if (accountNumber.isNotBlank()) append("  •  ").append(extensionLabel).append(" ").append(accountNumber)
                         },
                         color = TextSecondary,
                         fontSize = 10.sp
@@ -1407,6 +1418,13 @@ private fun SipSettings(
                 onClick = { showScale = true }
             )
             SettingsActionRow(
+                icon = Res.drawable.icon_settings_language,
+                title = "Язык интерфейса",
+                subtitle = "Русский или английский",
+                value = languageSettings.language.displayName,
+                onClick = { showLanguage = true }
+            )
+            SettingsActionRow(
                 icon = Res.drawable.icon_settings_database,
                 title = "База данных",
                 subtitle = contactDatabaseState.message,
@@ -1428,32 +1446,52 @@ private fun SipSettings(
     }
     }
 
+    if (showLanguage) {
+        AlertDialog(
+            onDismissRequest = { showLanguage = false },
+            containerColor = ControlBackground,
+            title = { Text(uiText("Выберите язык"), color = TextPrimary) },
+            text = {
+                Column {
+                    AppLanguage.entries.forEach { language ->
+                        TextButton(onClick = {
+                            languageSettings.onChange(language)
+                            showLanguage = false
+                        }) {
+                            Text(language.displayName + if (language == languageSettings.language) "  ✓" else "", color = TextPrimary)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showLanguage = false }) { Text(uiText("Закрыть"), color = Primary) } }
+        )
+    }
     if (showScale) {
         AlertDialog(
             onDismissRequest = { showScale = false },
             containerColor = ControlBackground,
-            title = { Text("Масштаб интерфейса", color = TextPrimary) },
+            title = { Text(uiText("Масштаб интерфейса"), color = TextPrimary) },
             text = {
                 Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
-                    Text("Автоматический масштаб подстраивается под размер окна.", color = TextSecondary, fontSize = 12.sp)
+                    Text(uiText("Автоматический масштаб подстраивается под размер окна."), color = TextSecondary, fontSize = 12.sp)
                     listOf(0f, 0.65f, 0.75f, 0.8f, 0.9f, 1f, 1.1f, 1.25f).forEach { scale ->
                         TextButton(onClick = { interfaceScale.onChange(scale) }) {
                             Text(
-                                (if (interfaceScale.value == scale) "✓  " else "") + InterfaceScale(scale).label,
+                                (if (interfaceScale.value == scale) "✓  " else "") + uiText(InterfaceScale(scale).label),
                                 color = if (interfaceScale.value == scale) Primary else TextPrimary
                             )
                         }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showScale = false }) { Text("Готово", color = Primary) } }
+            confirmButton = { TextButton(onClick = { showScale = false }) { Text(uiText("Готово"), color = Primary) } }
         )
     }
     if (showAccount) {
         AlertDialog(
             onDismissRequest = { showAccount = false },
             containerColor = ControlBackground,
-            title = { Text("Настройка аккаунта", color = TextPrimary) },
+            title = { Text(uiText("Настройка аккаунта"), color = TextPrimary) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SettingsDetail("SIP-логин", account?.username.orEmpty())
@@ -1464,10 +1502,10 @@ private fun SipSettings(
                 }
             },
             confirmButton = {
-                TextButton(onClick = onLogout) { Text("Сменить аккаунт", color = Danger) }
+                TextButton(onClick = onLogout) { Text(uiText("Сменить аккаунт"), color = Danger) }
             },
             dismissButton = {
-                TextButton(onClick = { showAccount = false }) { Text("Закрыть", color = TextPrimary) }
+                TextButton(onClick = { showAccount = false }) { Text(uiText("Закрыть"), color = TextPrimary) }
             }
         )
     }
@@ -1511,11 +1549,11 @@ private fun SipSettings(
         AlertDialog(
             onDismissRequest = { showDatabase = false },
             containerColor = ControlBackground,
-            title = { Text("База данных", color = TextPrimary) },
+            title = { Text(uiText("База данных"), color = TextPrimary) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        "Подключите Google Таблицу с контактами. Таблица должна быть доступна всем, у кого есть ссылка.",
+                        uiText("Подключите Google Таблицу с контактами. Таблица должна быть доступна всем, у кого есть ссылка."),
                         color = TextSecondary,
                         fontSize = 12.sp
                     )
@@ -1523,19 +1561,19 @@ private fun SipSettings(
                         value = databaseUrl,
                         onValueChange = { databaseUrl = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Ссылка на Google Таблицу") },
+                        label = { Text(uiText("Ссылка на Google Таблицу")) },
                         placeholder = { Text("https://docs.google.com/spreadsheets/d/…") },
                         singleLine = true,
                         enabled = !contactDatabaseState.syncing,
                         colors = darkTextFieldColors()
                     )
                     Text(
-                        "Контакты обновляются при запуске и каждые 15 минут. E-mail из таблицы не импортируется.",
+                        uiText("Контакты обновляются при запуске и каждые 15 минут. E-mail из таблицы не импортируется."),
                         color = TextSecondary,
                         fontSize = 10.sp
                     )
                     Text(
-                        contactDatabaseState.message,
+                        uiText(contactDatabaseState.message),
                         color = when (contactDatabaseState.lastSyncSuccessful) {
                             true -> Online
                             false -> Danger
@@ -1549,7 +1587,7 @@ private fun SipSettings(
                                 onClick = onSyncContactDatabase,
                                 enabled = !contactDatabaseState.syncing
                             ) {
-                                Text("Обновить сейчас", color = Primary)
+                                Text(uiText("Обновить сейчас"), color = Primary)
                             }
                             TextButton(
                                 onClick = {
@@ -1558,7 +1596,7 @@ private fun SipSettings(
                                 },
                                 enabled = !contactDatabaseState.syncing
                             ) {
-                                Text("Отключить", color = Danger)
+                                Text(uiText("Отключить"), color = Danger)
                             }
                         }
                     }
@@ -1569,12 +1607,12 @@ private fun SipSettings(
                     onClick = { onSaveContactDatabaseUrl(databaseUrl) },
                     enabled = !contactDatabaseState.syncing
                 ) {
-                    Text("Сохранить", color = Primary)
+                    Text(uiText("Сохранить"), color = Primary)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDatabase = false }) {
-                    Text("Закрыть", color = TextPrimary)
+                    Text(uiText("Закрыть"), color = TextPrimary)
                 }
             }
         )
@@ -1594,14 +1632,14 @@ private fun SipSettings(
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        "Версия $appVersion\nКорпоративный SIP-клиент для звонков и работы с контактами.",
+                        uiText("Версия $appVersion\nКорпоративный SIP-клиент для звонков и работы с контактами."),
                         color = TextSecondary,
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center
                     )
                     updateMessage?.let { message ->
                         Spacer(Modifier.height(12.dp))
-                        Text(message, color = TextSecondary, fontSize = 11.sp, textAlign = TextAlign.Center)
+                        Text(uiText(message), color = TextSecondary, fontSize = 11.sp, textAlign = TextAlign.Center)
                     }
                     updateProgress?.let { progress ->
                         Spacer(Modifier.height(10.dp))
@@ -1612,12 +1650,12 @@ private fun SipSettings(
                             trackColor = TextSecondary.copy(alpha = 0.18f)
                         )
                         Spacer(Modifier.height(5.dp))
-                        Text("${(progress * 100).toInt()}%", color = TextSecondary, fontSize = 10.sp)
+                        Text(uiText("${(progress * 100).toInt()}%"), color = TextSecondary, fontSize = 10.sp)
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showAbout = false }) { Text("Готово", color = TextPrimary) }
+                TextButton(onClick = { showAbout = false }) { Text(uiText("Готово"), color = TextPrimary) }
             },
             dismissButton = {
                 TextButton(
@@ -1640,7 +1678,7 @@ private fun SipSettings(
                             }
                         }
                     }
-                ) { Text("Обновить", color = Primary) }
+                ) { Text(uiText("Обновить"), color = Primary) }
             }
         )
     }
@@ -1648,8 +1686,8 @@ private fun SipSettings(
 
 @Composable
 private fun SettingsSectionTitle(title: String, subtitle: String) {
-    Text(title, color = TextPrimary, fontSize = 17.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold)
-    Text(subtitle, color = TextSecondary, fontSize = 11.sp, lineHeight = 11.sp)
+    Text(uiText(title), color = TextPrimary, fontSize = 17.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold)
+    Text(uiText(subtitle), color = TextSecondary, fontSize = 11.sp, lineHeight = 11.sp)
 }
 
 @Composable
@@ -1682,12 +1720,12 @@ private fun SettingsActionRow(
             }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Text(title, color = titleColor, fontSize = 12.sp, lineHeight = 12.sp, fontWeight = FontWeight.Medium)
-                subtitle?.let { Text(it, color = TextSecondary, fontSize = 10.sp, lineHeight = 10.sp) }
+                Text(uiText(title), color = titleColor, fontSize = 12.sp, lineHeight = 12.sp, fontWeight = FontWeight.Medium)
+                subtitle?.let { Text(uiText(it), color = TextSecondary, fontSize = 10.sp, lineHeight = 10.sp) }
             }
             value?.let {
                 Text(
-                    it,
+                    uiText(it),
                     color = TextSecondary,
                     fontSize = 11.sp,
                     maxLines = 1,
@@ -1763,20 +1801,20 @@ private fun SettingsSliderRow(
             }
             Spacer(Modifier.width(12.dp))
             Text(
-                "${(value * 100).toInt()}%",
+                uiText("${(value * 100).toInt()}%"),
                 color = TextSecondary,
                 fontSize = 10.sp,
                 modifier = Modifier.width(28.dp)
             )
         }
-        Text(label, color = TextSecondary, fontSize = 9.sp, modifier = Modifier.padding(start = 31.dp))
+        Text(uiText(label), color = TextSecondary, fontSize = 9.sp, modifier = Modifier.padding(start = 31.dp))
     }
 }
 
 @Composable
 private fun SettingsDetail(label: String, value: String) {
     Row(Modifier.fillMaxWidth()) {
-        Text(label, color = TextSecondary, fontSize = 11.sp, modifier = Modifier.weight(1f))
+        Text(uiText(label), color = TextSecondary, fontSize = 11.sp, modifier = Modifier.weight(1f))
         Text(value.ifBlank { "—" }, color = TextPrimary, fontSize = 11.sp)
     }
 }
@@ -1792,11 +1830,11 @@ private fun AudioDeviceDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = ControlBackground,
-        title = { Text(title, color = TextPrimary) },
+        title = { Text(uiText(title), color = TextPrimary) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (devices.isEmpty()) {
-                    Text("Доступные устройства не найдены", color = TextSecondary, fontSize = 12.sp)
+                    Text(uiText("Доступные устройства не найдены"), color = TextSecondary, fontSize = 12.sp)
                 } else {
                     devices.forEach { device ->
                         Row(
@@ -1805,7 +1843,7 @@ private fun AudioDeviceDialog(
                                 .clickable { onSelect(device.id) }.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(device.name, color = TextPrimary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                            Text(uiText(device.name), color = TextPrimary, fontSize = 12.sp, modifier = Modifier.weight(1f))
                             if (device.id == selectedDeviceId) Text("✓", color = Primary, fontSize = 14.sp)
                         }
                     }
@@ -1813,7 +1851,7 @@ private fun AudioDeviceDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Отмена", color = TextPrimary) }
+            TextButton(onClick = onDismiss) { Text(uiText("Отмена"), color = TextPrimary) }
         }
     )
 }
@@ -1830,7 +1868,7 @@ private fun RingtoneDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = ControlBackground,
-        title = { Text("Выберите рингтон", color = TextPrimary) },
+        title = { Text(uiText("Выберите рингтон"), color = TextPrimary) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 ringtones.forEach { ringtone ->
@@ -1847,17 +1885,17 @@ private fun RingtoneDialog(
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(ringtone.name, color = TextPrimary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        Text(uiText(ringtone.name), color = TextPrimary, fontSize = 12.sp, modifier = Modifier.weight(1f))
                         if (ringtone.id == pendingRingtoneId) Text("✓", color = Primary, fontSize = 14.sp)
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(pendingRingtoneId) }) { Text("Сохранить", color = Primary) }
+            TextButton(onClick = { onSave(pendingRingtoneId) }) { Text(uiText("Сохранить"), color = Primary) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Отмена", color = TextPrimary) }
+            TextButton(onClick = onDismiss) { Text(uiText("Отмена"), color = TextPrimary) }
         }
     )
 }
@@ -1874,7 +1912,7 @@ private fun DarkField(
         value = value,
         onValueChange = onValueChange,
         modifier = Modifier.width(430.dp),
-        label = { Text(label) },
+        label = { Text(uiText(label)) },
         singleLine = true,
         enabled = enabled,
         visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
@@ -1979,7 +2017,7 @@ private fun ContactFilterBar(
             ContactFilter.CLIENTS -> clientsCount
             ContactFilter.EMPLOYEES -> employeesCount
         }
-        "${filter.title}  $count"
+        "${uiText(filter.title)}  $count"
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
         val filterLineColor = TextSecondary
@@ -2043,8 +2081,8 @@ private fun SegmentedBar(
                         Spacer(Modifier.width(5.dp))
                     }
                     Text(
-                        title,
-                    color = if (selected) OnPrimary else TextSecondary,
+                        uiText(title),
+                        color = if (selected) OnPrimary else TextSecondary,
                         fontSize = 11.sp,
                         maxLines = 1,
                         softWrap = false,
@@ -2084,7 +2122,7 @@ private fun ContactRow(
                     fontWeight = FontWeight.Medium
                 )
                 Text(
-                    "${if (contact.isEmployee) "Сотрудник" else "Клиент"}  •  " +
+                    "${uiText(if (contact.isEmployee) "Сотрудник" else "Клиент")}  •  " +
                         contact.position.ifBlank { contact.company.ifBlank { formatPhoneNumber(contact.number) } },
                     color = TextSecondary,
                     fontSize = 11.sp,

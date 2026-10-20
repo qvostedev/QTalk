@@ -1,5 +1,7 @@
 package com.qvoste.qtalk.ui.calls.components
 
+import com.qvoste.qtalk.ui.calls.i18n.uiText
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -170,7 +172,7 @@ internal fun DialerPanel(
                     )
                 } else {
                     Text(
-                        displayedContact?.name ?: "Контакт не выбран",
+                        displayedContact?.name ?: uiText("Контакт не выбран"),
                         color = TextPrimary,
                         fontSize = 14.sp,
                         lineHeight = 14.sp,
@@ -180,7 +182,7 @@ internal fun DialerPanel(
                 }
                 if (editing) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Номер  •  ", color = TextSecondary, fontSize = 10.sp, lineHeight = 10.sp)
+                        Text(uiText("Номер  •  "), color = TextSecondary, fontSize = 10.sp, lineHeight = 10.sp)
                         InlineTextField(
                             value = draftNumber,
                             onValueChange = { draftNumber = it.filter(Char::isDigit) },
@@ -194,9 +196,9 @@ internal fun DialerPanel(
                 } else {
                     Text(
                         displayedContact?.let {
-                            "Номер  •  ${formatPhoneNumber(it.number.ifBlank { it.phone }).ifBlank { "—" }}"
+                            uiText("Номер  •  ") + formatPhoneNumber(it.number.ifBlank { it.phone }).ifBlank { "—" }
                         }
-                            ?: "Здесь появится информация",
+                            ?: uiText("Здесь появится информация"),
                         color = TextSecondary,
                         fontSize = 10.sp,
                         lineHeight = 10.sp,
@@ -279,21 +281,21 @@ internal fun DialerPanel(
                 displayedContact == null -> EmptyMessage("Выберите контакт или наберите номер")
                 infoTab == "Информация" -> Box(Modifier.fillMaxSize()) {
                     Column(Modifier.padding(top = 8.dp)) {
-                        ContactInfo(Res.drawable.icon_position, "Должность", displayedContact.position.ifBlank { "Не указана" })
+                        ContactInfo(Res.drawable.icon_position, "Должность", displayedContact.position.ifBlank { uiText("Не указана") })
                         Spacer(Modifier.height(14.dp))
-                        ContactInfo(Res.drawable.icon_department, "Отдел", displayedContact.department.ifBlank { "Не указан" })
+                        ContactInfo(Res.drawable.icon_department, "Отдел", displayedContact.department.ifBlank { uiText("Не указан") })
                         Spacer(Modifier.height(14.dp))
                         ContactInfo(
                             Res.drawable.icon_company,
                             "Компания",
                             listOf(displayedContact.company, displayedContact.office).filter(String::isNotBlank)
-                                .joinToString(" • ").ifBlank { "Не указана" }
+                                .joinToString(" • ").ifBlank { uiText("Не указана") }
                         )
                         Spacer(Modifier.height(14.dp))
                         ContactInfo(
                             Res.drawable.icon_telegram,
                             "Telegram",
-                            displayedContact.telegram.ifBlank { "Не указан" },
+                            displayedContact.telegram.ifBlank { uiText("Не указан") },
                             displayedContact.telegram.isNotBlank()
                         ) {
                             val username = displayedContact.telegram.removePrefix("@").trim()
@@ -362,7 +364,7 @@ internal fun DialerPanel(
         Spacer(Modifier.height(12.dp))
         }
         Text(
-            "Личная линия сотрудника:  ${accountNumber.ifBlank { "—" }}",
+            uiText("Личная линия сотрудника:  ${accountNumber.ifBlank { "—" }}"),
             color = TextSecondary,
             fontSize = 11.sp,
             lineHeight = 14.sp,
@@ -455,7 +457,7 @@ private fun ContactHistoryList(history: List<HistoryItem>) {
                     Text(item.name, color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            (if (item.missed) "×  " else if (item.direction == "Исходящий") "↗  " else "↙  ") + item.direction,
+                            (if (item.missed) "×  " else if (item.direction == "Исходящий") "↗  " else "↙  ") + uiText(item.direction),
                             color = if (item.missed) Danger else TextSecondary,
                             fontSize = 10.sp,
                             lineHeight = 12.sp
@@ -508,7 +510,7 @@ private fun ContactNotes(
                         .background(ControlBackground, RoundedCornerShape(10.dp)).padding(12.dp),
                     decorationBox = { innerTextField ->
                         Box(Modifier.fillMaxSize()) {
-                            if (draft.isBlank()) Text("Введите текст заметки", color = TextSecondary, fontSize = 11.sp)
+                            if (draft.isBlank()) Text(uiText("Введите текст заметки"), color = TextSecondary, fontSize = 11.sp)
                             innerTextField()
                         }
                     }
@@ -524,7 +526,7 @@ private fun ContactNotes(
         } else {
             if (notes.isEmpty()) {
                 Box(Modifier.fillMaxWidth().height(190.dp), contentAlignment = Alignment.Center) {
-                    Text("Заметок пока нет", color = TextSecondary, fontSize = 11.sp)
+                    Text(uiText("Заметок пока нет"), color = TextSecondary, fontSize = 11.sp)
                 }
             } else {
                 LazyColumn(
@@ -576,7 +578,7 @@ private fun ContactTextAction(
     onClick: () -> Unit
 ) {
     Text(
-        text = text,
+        text = uiText(text),
         color = if (enabled) color else color.copy(alpha = 0.35f),
         fontSize = 11.sp,
         fontWeight = FontWeight.Medium,
@@ -587,7 +589,7 @@ private fun ContactTextAction(
 @Composable
 private fun InfoTab(text: String, selected: Boolean, onClick: () -> Unit) {
     Column(Modifier.clickable(onClick = onClick).padding(horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text, color = if (selected) Primary else TextSecondary, fontSize = 11.sp)
+        Text(uiText(text), color = if (selected) Primary else TextSecondary, fontSize = 11.sp)
         Spacer(Modifier.height(7.dp))
         Box(Modifier.width(58.dp).height(1.dp).background(if (selected) Primary else Color.Transparent))
     }
@@ -600,7 +602,7 @@ private fun ContactInfo(icon: DrawableResource, label: String, value: String, is
             colorFilter = if (IsLightTheme) ColorFilter.tint(TextPrimary) else null)
         Spacer(Modifier.width(12.dp))
         Column {
-            Text(label, color = TextPrimary, fontSize = 11.sp, lineHeight = 14.sp)
+            Text(uiText(label), color = TextPrimary, fontSize = 11.sp, lineHeight = 14.sp)
             Text(value, color = if (isLink) Primary else TextSecondary, fontSize = 11.sp, lineHeight = 14.sp)
         }
     }
@@ -618,7 +620,7 @@ private fun EditableContactInfo(
             colorFilter = if (IsLightTheme) ColorFilter.tint(TextPrimary) else null)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(label, color = TextPrimary, fontSize = 11.sp, lineHeight = 14.sp)
+            Text(uiText(label), color = TextPrimary, fontSize = 11.sp, lineHeight = 14.sp)
             InlineTextField(
                 value = value,
                 onValueChange = onValueChange,
@@ -657,7 +659,7 @@ private fun InlineTextField(
         decorationBox = { innerTextField ->
             Box {
                 if (value.isBlank()) {
-                    Text(placeholder, color = TextSecondary, fontSize = fontSize, lineHeight = lineHeight)
+                    Text(uiText(placeholder), color = TextSecondary, fontSize = fontSize, lineHeight = lineHeight)
                 }
                 innerTextField()
             }
