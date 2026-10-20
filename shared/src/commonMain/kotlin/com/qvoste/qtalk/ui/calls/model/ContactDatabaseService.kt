@@ -2,6 +2,7 @@ package com.qvoste.qtalk.ui.calls.model
 
 data class ContactDatabaseState(
     val sourceUrl: String = "",
+    val presenceServiceUrl: String = "",
     val syncing: Boolean = false,
     val message: String = "Google Таблица не подключена",
     val lastSyncSuccessful: Boolean? = null

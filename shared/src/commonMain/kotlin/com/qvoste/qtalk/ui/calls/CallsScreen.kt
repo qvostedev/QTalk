@@ -439,7 +439,7 @@ private fun CallsContent(
     onAddContactNote: (Contact, String) -> Unit,
     onUpdateContactNote: (ContactNote, String) -> Unit,
     onDeleteContactNote: (ContactNote) -> Unit,
-    onSaveContactDatabaseUrl: (String) -> Unit,
+    onSaveContactDatabaseUrl: (String, String) -> Unit,
     onSyncContactDatabase: () -> Unit,
     onDisconnectContactDatabase: () -> Unit
 ) {
@@ -1225,7 +1225,7 @@ private fun SipSettings(
     onThemeModeChange: (ThemeMode) -> Unit,
     appVersion: String,
     onCheckForUpdates: suspend ((String, Float?) -> Unit) -> Unit,
-    onSaveContactDatabaseUrl: (String) -> Unit,
+    onSaveContactDatabaseUrl: (String, String) -> Unit,
     onSyncContactDatabase: () -> Unit,
     onDisconnectContactDatabase: () -> Unit,
     onAddContact: () -> Unit,
@@ -1251,6 +1251,9 @@ private fun SipSettings(
     var search by rememberSaveable { mutableStateOf("") }
     var databaseUrl by remember(contactDatabaseState.sourceUrl) {
         mutableStateOf(contactDatabaseState.sourceUrl)
+    }
+    var presenceUrl by remember(contactDatabaseState.presenceServiceUrl) {
+        mutableStateOf(contactDatabaseState.presenceServiceUrl)
     }
     var microphoneSensitivity by remember(audioSettings.microphoneSensitivity) {
         mutableStateOf(audioSettings.microphoneSensitivity)
@@ -1535,6 +1538,21 @@ private fun SipSettings(
                         fontSize = 10.sp
                     )
                     Text(
+                        "Для автоматических статусов укажите адрес сервиса вашей организации. При сохранении ему передаются внутренний номер и статус. Пустое поле отключает обмен статусами.",
+                        color = TextSecondary,
+                        fontSize = 10.sp
+                    )
+                    OutlinedTextField(
+                        value = presenceUrl,
+                        onValueChange = { presenceUrl = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Сервис статусов (необязательно)") },
+                        placeholder = { Text("https://script.google.com/macros/s/…/exec") },
+                        singleLine = true,
+                        enabled = !contactDatabaseState.syncing,
+                        colors = darkTextFieldColors()
+                    )
+                    Text(
                         contactDatabaseState.message,
                         color = when (contactDatabaseState.lastSyncSuccessful) {
                             true -> Online
@@ -1555,6 +1573,7 @@ private fun SipSettings(
                                 onClick = {
                                     onDisconnectContactDatabase()
                                     databaseUrl = ""
+                                    presenceUrl = ""
                                 },
                                 enabled = !contactDatabaseState.syncing
                             ) {
@@ -1566,10 +1585,10 @@ private fun SipSettings(
             },
             confirmButton = {
                 TextButton(
-                    onClick = { onSaveContactDatabaseUrl(databaseUrl) },
-                    enabled = databaseUrl.isNotBlank() && !contactDatabaseState.syncing
+                    onClick = { onSaveContactDatabaseUrl(databaseUrl, presenceUrl) },
+                    enabled = !contactDatabaseState.syncing
                 ) {
-                    Text("Сохранить и загрузить", color = Primary)
+                    Text("Сохранить", color = Primary)
                 }
             },
             dismissButton = {
