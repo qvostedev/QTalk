@@ -48,6 +48,7 @@ class CallsViewModel(
 ) {
     val registrationState = voipEngine.registrationState
     val registrationMessage = voipEngine.registrationMessage
+    val connectionStatus = voipEngine.connectionStatus
     val callStatus = voipEngine.callStatus
     val audioSettings = voipEngine.audioSettings
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -103,7 +104,6 @@ class CallsViewModel(
                         publishPresence(currentPresenceStatus())
                     }
                     RegistrationState.FAILED -> {
-                        _authenticationRequired.value = true
                         publishPresence(EmployeeStatus.OFFLINE)
                     }
                     else -> Unit
@@ -206,6 +206,8 @@ class CallsViewModel(
         voipEngine.call(dialableNumber)
     }
     fun acceptCall() = execute { voipEngine.acceptCall() }
+    fun retryRegistration() = execute { voipEngine.retryRegistration() }
+    fun editSipAccount() { _authenticationRequired.value = true }
     fun declineCall() = execute { voipEngine.declineCall() }
     fun hangUp() = execute { voipEngine.hangUp() }
     fun sendDtmf(digit: Char) {

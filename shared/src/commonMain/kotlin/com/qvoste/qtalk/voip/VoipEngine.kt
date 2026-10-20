@@ -1,10 +1,15 @@
 package com.qvoste.qtalk.voip
 
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+
+private val disconnectedTelephony = MutableStateFlow(TelephonyConnection.DISCONNECTED)
 
 interface VoipEngine {
     val registrationState: StateFlow<RegistrationState>
     val registrationMessage: StateFlow<String>
+    val connectionStatus: StateFlow<TelephonyConnection> get() = disconnectedTelephony
+    suspend fun retryRegistration() = Unit
 
     val callStatus: StateFlow<CallStatus>
     val audioSettings: StateFlow<AudioSettings>

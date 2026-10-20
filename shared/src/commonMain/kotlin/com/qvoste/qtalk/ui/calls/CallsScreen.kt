@@ -100,6 +100,7 @@ import kotlinx.coroutines.launch
 import kotlin.time.Clock
 import com.qvoste.qtalk.ui.calls.model.formatPhoneNumber
 import com.qvoste.qtalk.voip.CallState
+import com.qvoste.qtalk.voip.TelephonyConnection
 import com.qvoste.qtalk.voip.CallStatus
 import com.qvoste.qtalk.voip.AudioDeviceInfo
 import com.qvoste.qtalk.voip.AudioSettings
@@ -177,6 +178,7 @@ fun CallsScreen(
 ) {
     val registration by viewModel.registrationState.collectAsState()
     val registrationMessage by viewModel.registrationMessage.collectAsState()
+    val connection by viewModel.connectionStatus.collectAsState()
     val call by viewModel.callStatus.collectAsState()
     val error by viewModel.error.collectAsState()
     val accountNumber by viewModel.accountNumber.collectAsState()
@@ -200,6 +202,9 @@ fun CallsScreen(
     }
 
     CallsContent(
+        connection = connection,
+        onRetryConnection = viewModel::retryRegistration,
+        onEditSipAccount = viewModel::editSipAccount,
         registration = registration,
         call = call,
         error = error,
@@ -401,6 +406,9 @@ private fun LoginField(
 
 @Composable
 private fun CallsContent(
+    connection: TelephonyConnection,
+    onRetryConnection: () -> Unit,
+    onEditSipAccount: () -> Unit,
     registration: RegistrationState,
     call: CallStatus,
     error: String?,
@@ -535,7 +543,8 @@ private fun CallsContent(
         val scaledDensity = LocalDensity.current
         val appliedScale = scaledDensity.density / unscaledDensity.density
         // При любом звонке основной интерфейс остаётся виден через размытие.
-        Row(Modifier.fillMaxSize().then(if (showCallOverlay) Modifier.blur(8.dp) else Modifier)) {
+        Row(Modifier.fillMaxSize().padding(top = if (connection.showWarning) 60.dp else 0.dp)
+            .then(if (showCallOverlay) Modifier.blur(8.dp) else Modifier)) {
             CompositionLocalProvider(LocalDensity provides unscaledDensity) {
               Sidebar(
                 selected = section,
@@ -787,6 +796,37 @@ private fun CallsContent(
             }
         }
 
+        if (connection.showWarning) {
+            TelephonyConnectionBanner(connection, onRetryConnection, onEditSipAccount,
+                Modifier.align(Alignment.TopCenter))
+        }
+    }
+}
+
+@Composable
+private fun TelephonyConnectionBanner(
+    connection: TelephonyConnection,
+    onRetry: () -> Unit,
+    onEditAccount: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val message = when (connection) {
+        TelephonyConnection.NETWORK_UNAVAILABLE -> "Нет сетевого подключения. Проверьте подключение к сети."
+        TelephonyConnection.AUTHENTICATION_FAILED -> "Сервер отклонил авторизацию. Проверьте логин и пароль."
+        TelephonyConnection.REGISTRATION_REJECTED -> "Сервер отклонил регистрацию. Проверьте настройки SIP."
+        TelephonyConnection.CONNECTING -> "Подключение к серверу телефонии…"
+        else -> "Нет связи с сервером телефонии. Переподключаемся…"
+    }
+    Row(modifier.fillMaxWidth().heightIn(min = 52.dp).background(ControlBackground)
+        .padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(uiText(message), color = if (connection == TelephonyConnection.CONNECTING) TextSecondary else Danger,
+            modifier = Modifier.weight(1f), fontSize = 12.sp)
+        TextButton(onClick = if (connection in setOf(TelephonyConnection.AUTHENTICATION_FAILED,
+                TelephonyConnection.REGISTRATION_REJECTED)) onEditAccount else onRetry,
+            enabled = connection != TelephonyConnection.CONNECTING) {
+            Text(uiText(if (connection in setOf(TelephonyConnection.AUTHENTICATION_FAILED,
+                    TelephonyConnection.REGISTRATION_REJECTED)) "Настроить аккаунт" else "Повторить"), color = Primary)
+        }
     }
 }
 

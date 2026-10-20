@@ -24,6 +24,7 @@ import org.linphone.core.RegistrationState as LinphoneRegistrationState
 import java.nio.file.Files
 import java.nio.file.Path
 import java.io.BufferedInputStream
+import java.net.NetworkInterface
 import java.util.concurrent.Executors
 import java.util.prefs.Preferences
 import javax.sound.sampled.AudioSystem
@@ -59,6 +60,14 @@ class LinphoneVoipEngine : VoipEngine {
     private var coreStarted = false
     private var currentAccount: Account? = null
     private var currentCall: Call? = null
+    private val _connectionStatus = MutableStateFlow(TelephonyConnection.DISCONNECTED)
+    override val connectionStatus = _connectionStatus.asStateFlow()
+    private var registrationStartedAt = 0L
+    private var retryAt = 0L
+    private var retryAttempt = 0
+    private var lastNetworkCheckAt = 0L
+    private var networkAvailable = true
+    private var lastRegistrationOkAt = 0L
     private val _callStatus = MutableStateFlow(CallStatus())
     override val callStatus = _callStatus.asStateFlow()
     private val audioPreferences = Preferences.userRoot().node("com/qvoste/qtalk/audio")
@@ -134,6 +143,7 @@ class LinphoneVoipEngine : VoipEngine {
             state: LinphoneRegistrationState,
             message: String
         ) {
+            if (account != currentAccount) return
             println("QTALK: registration = $state")
             println("QTALK: registration message = $message")
 
@@ -150,7 +160,7 @@ class LinphoneVoipEngine : VoipEngine {
                         RegistrationState.CONNECTING
 
                     LinphoneRegistrationState.Refreshing ->
-                        RegistrationState.CONNECTING
+                        registrationDuringRefresh(_registrationState.value)
 
                     LinphoneRegistrationState.Ok ->
                         RegistrationState.REGISTERED
@@ -164,6 +174,34 @@ class LinphoneVoipEngine : VoipEngine {
                     LinphoneRegistrationState.None ->
                         RegistrationState.DISCONNECTED
                 }
+            when (state) {
+                LinphoneRegistrationState.Ok -> {
+                    _connectionStatus.value = TelephonyConnection.CONNECTED
+                    lastRegistrationOkAt = System.nanoTime() / 1_000_000
+                    registrationStartedAt = 0L
+                    retryAttempt = 0
+                    retryAt = 0L
+                }
+                LinphoneRegistrationState.Progress -> {
+                    registrationStartedAt = System.nanoTime() / 1_000_000
+                    if (!_connectionStatus.value.retryable) _connectionStatus.value = TelephonyConnection.CONNECTING
+                }
+                LinphoneRegistrationState.Refreshing -> {
+                    if (registrationStartedAt == 0L) registrationStartedAt = System.nanoTime() / 1_000_000
+                }
+                LinphoneRegistrationState.Failed -> {
+                    registrationStartedAt = 0L
+                    _connectionStatus.value = if (!networkAvailable) TelephonyConnection.NETWORK_UNAVAILABLE
+                    else classifyRegistrationFailure(account.errorInfo?.protocolCode ?: 0,
+                        account.error in setOf(Reason.Forbidden, Reason.Unauthorized))
+                    retryAt = System.nanoTime() / 1_000_000 + reconnectDelayMillis(retryAttempt++)
+                }
+                LinphoneRegistrationState.Cleared, LinphoneRegistrationState.None -> {
+                    _connectionStatus.value = TelephonyConnection.DISCONNECTED
+                    registrationStartedAt = 0L
+                }
+                else -> Unit
+            }
         }
     }
 
@@ -218,6 +256,7 @@ class LinphoneVoipEngine : VoipEngine {
 
             while (isActive) {
                 core.iterate()
+                checkTelephonyConnection()
                 delay(20.milliseconds)
             }
         }
@@ -245,6 +284,9 @@ class LinphoneVoipEngine : VoipEngine {
 
             _registrationState.value =
                 RegistrationState.CONNECTING
+            _connectionStatus.value = TelephonyConnection.CONNECTING
+            registrationStartedAt = System.nanoTime() / 1_000_000
+            retryAttempt = 0
             _registrationMessage.value = "Подключение к ${account.domain}"
 
             val transports = core.transports
@@ -300,6 +342,61 @@ class LinphoneVoipEngine : VoipEngine {
             println("QTALK: Linphone account added")
         }
 
+
+    override suspend fun retryRegistration() = withContext(linphoneDispatcher) {
+        checkNotNull(currentAccount) { "Сначала настройте SIP-аккаунт" }
+        if (!hasActiveNetwork()) {
+            _connectionStatus.value = TelephonyConnection.NETWORK_UNAVAILABLE
+            return@withContext
+        }
+        refreshRegistrationNow()
+    }
+
+    private fun refreshRegistrationNow() {
+        registrationStartedAt = System.nanoTime() / 1_000_000
+        if (_registrationState.value != RegistrationState.REGISTERED) {
+            _registrationState.value = RegistrationState.CONNECTING
+        }
+        currentAccount?.refreshRegister()
+    }
+
+    private fun hasActiveNetwork(): Boolean = runCatching {
+        NetworkInterface.getNetworkInterfaces().toList().any {
+            it.isUp && !it.isLoopback && it.inetAddresses.toList().any { address -> !address.isLoopbackAddress }
+        }
+    }.getOrDefault(true)
+
+    private fun checkTelephonyConnection() {
+        if (currentAccount == null) return
+        val now = System.nanoTime() / 1_000_000
+        if (now - lastNetworkCheckAt >= 5_000L) {
+            lastNetworkCheckAt = now
+            val available = hasActiveNetwork()
+            val restored = available && !networkAvailable
+            networkAvailable = available
+            if (!available && _connectionStatus.value !in setOf(
+                    TelephonyConnection.AUTHENTICATION_FAILED, TelephonyConnection.REGISTRATION_REJECTED)) {
+                _connectionStatus.value = TelephonyConnection.NETWORK_UNAVAILABLE
+                _registrationState.value = RegistrationState.FAILED
+                registrationStartedAt = 0L
+            } else if (restored && _connectionStatus.value.retryable) {
+                refreshRegistrationNow()
+            }
+        }
+        if (!networkAvailable) return
+        if (registrationStartedAt != 0L && now - registrationStartedAt >= 30_000L) {
+            registrationStartedAt = 0L
+            _registrationState.value = RegistrationState.FAILED
+            _connectionStatus.value = TelephonyConnection.SERVER_UNREACHABLE
+            retryAt = now + reconnectDelayMillis(retryAttempt++)
+        }
+        if (registrationStartedAt == 0L && _connectionStatus.value.retryable && now >= retryAt) {
+            refreshRegistrationNow()
+        } else if (registrationStartedAt == 0L && _connectionStatus.value == TelephonyConnection.CONNECTED &&
+            now - lastRegistrationOkAt >= 60_000L) {
+            refreshRegistrationNow()
+        }
+    }
 
     override suspend fun call(number: String) = withContext(linphoneDispatcher) {
         check(_registrationState.value == RegistrationState.REGISTERED) { "Сначала подключитесь к SIP-серверу" }
@@ -378,6 +475,9 @@ class LinphoneVoipEngine : VoipEngine {
             params.isRegisterEnabled = false
             account.params = params
             currentAccount = null
+            _registrationState.value = RegistrationState.DISCONNECTED
+            _connectionStatus.value = TelephonyConnection.DISCONNECTED
+            registrationStartedAt = 0L
         }
 
 
@@ -408,6 +508,8 @@ class LinphoneVoipEngine : VoipEngine {
             currentAccount = null
             _callStatus.value = CallStatus()
             _registrationState.value = RegistrationState.DISCONNECTED
+            _connectionStatus.value = TelephonyConnection.DISCONNECTED
+            registrationStartedAt = 0L
             _registrationMessage.value = ""
 
             println("QTALK: Linphone Core stopped")

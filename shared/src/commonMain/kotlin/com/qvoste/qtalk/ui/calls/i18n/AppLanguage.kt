@@ -35,6 +35,12 @@ fun translateUiText(source: String, language: AppLanguage): String {
 }
 
 private val english = mapOf(
+    "Нет сетевого подключения. Проверьте подключение к сети." to "No network connection. Check your network connection.",
+    "Сервер отклонил авторизацию. Проверьте логин и пароль." to "Authentication rejected. Check your username and password.",
+    "Сервер отклонил регистрацию. Проверьте настройки SIP." to "Registration rejected. Check your SIP settings.",
+    "Подключение к серверу телефонии…" to "Connecting to the telephony server…",
+    "Нет связи с сервером телефонии. Переподключаемся…" to "Telephony server unavailable. Reconnecting…",
+    "Настроить аккаунт" to "Account settings", "Повторить" to "Retry",
     "Язык интерфейса" to "Interface language",
     "Русский или английский" to "Russian or English",
     "Выберите язык" to "Choose language",
