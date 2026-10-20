@@ -201,6 +201,7 @@ fun main(args: Array<String>) {
                         number = widgetCall.number,
                         callerName = widgetCaller?.name,
                         callerTelegram = widgetCaller?.telegram.orEmpty(),
+                        callerAvatarUrl = widgetCaller?.avatarUrl.orEmpty(),
                         connectedAtEpochMillis = widgetCall.connectedAtEpochMillis,
                         onOpen = ::openMainWindow,
                         onAccept = { scope.launch { voipEngine.acceptCall() } },

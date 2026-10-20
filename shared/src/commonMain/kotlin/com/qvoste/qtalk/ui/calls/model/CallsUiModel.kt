@@ -28,7 +28,8 @@ data class Contact(
     val office: String = "",
     val phone: String = "",
     val source: ContactSource = ContactSource.LEGACY,
-    val status: EmployeeStatus = EmployeeStatus.OFFLINE
+    val status: EmployeeStatus = EmployeeStatus.OFFLINE,
+    val avatarUrl: String = ""
 ) {
     // Компания ПОРТ автоматически относит контакт к сотрудникам.
     val isEmployee: Boolean get() = company.trim().equals("ПОРТ", ignoreCase = true)
@@ -57,7 +58,8 @@ data class HistoryItem(
     val telegram: String = "",
     val missed: Boolean = false,
     val missedAcknowledged: Boolean = false,
-    val durationSeconds: Long? = null
+    val durationSeconds: Long? = null,
+    val avatarUrl: String = ""
 )
 
 internal fun telegramMatchesQuery(telegram: String, query: String): Boolean {

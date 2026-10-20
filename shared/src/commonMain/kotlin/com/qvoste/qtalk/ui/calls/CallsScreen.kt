@@ -755,6 +755,7 @@ private fun CallsContent(
                     number = call.number.ifBlank { "Неизвестный номер" },
                     callerName = caller?.name,
                     callerTelegram = caller?.telegram.orEmpty(),
+                    callerAvatarUrl = caller?.avatarUrl.orEmpty(),
                     onAccept = onAccept,
                     onDecline = onDecline
                 )
@@ -769,6 +770,7 @@ private fun CallsContent(
                     number = call.number,
                     callerName = activeContact?.name,
                     callerTelegram = activeContact?.telegram.orEmpty(),
+                    callerAvatarUrl = activeContact?.avatarUrl.orEmpty(),
                     connectedAtEpochMillis = call.connectedAtEpochMillis,
                     onHangUp = onHangUp,
                     onCollapse = onCollapseCall,
@@ -967,7 +969,10 @@ private fun CallsHome(
                         )
                     }
                     items(calls, key = { it.id }) { item ->
-                        HistoryRow(item, onQuickCall, onSelectHistory)
+                        val currentAvatarUrl = contacts.firstOrNull {
+                            it.telegram.isNotBlank() && it.telegram.equals(item.telegram, ignoreCase = true)
+                        }?.avatarUrl?.takeIf(String::isNotBlank) ?: item.avatarUrl
+                        HistoryRow(item, onQuickCall, onSelectHistory, currentAvatarUrl)
                     }
                 }
             }
@@ -1056,7 +1061,7 @@ private fun FavoriteItem(
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        ContactAvatarWithStatus(contact.name, contact.telegram, 54, contact.status.color)
+        ContactAvatarWithStatus(contact.name, contact.telegram, 54, contact.status.color, contact.avatarUrl)
         Spacer(Modifier.height(2.dp))
         Text(
             displayName,
@@ -1139,7 +1144,8 @@ private fun FilterBar(selected: CallFilter, compact: Boolean, missedCount: Int, 
 private fun HistoryRow(
     item: HistoryItem,
     onCall: (String) -> Unit,
-    onSelect: (HistoryItem) -> Unit
+    onSelect: (HistoryItem) -> Unit,
+    avatarUrl: String = item.avatarUrl
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
@@ -1155,7 +1161,7 @@ private fun HistoryRow(
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ContactAvatar(item.name, item.telegram, 46)
+            ContactAvatar(item.name, item.telegram, 46, avatarUrl)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(item.name, color = TextPrimary, fontSize = 13.sp, lineHeight = 13.sp,
@@ -1318,6 +1324,7 @@ private fun SipSettings(
                     ContactAvatarWithStatus(
                         name = accountContact.name,
                         telegram = accountContact.telegram,
+                        avatarUrl = accountContact.avatarUrl,
                         size = 44,
                         statusColor = accountStatusColor
                     )
@@ -2066,7 +2073,7 @@ private fun ContactRow(
                 .clickable { onSelect(contact) }.padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ContactAvatarWithStatus(contact.name, contact.telegram, 46, contact.status.color)
+            ContactAvatarWithStatus(contact.name, contact.telegram, 46, contact.status.color, contact.avatarUrl)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(

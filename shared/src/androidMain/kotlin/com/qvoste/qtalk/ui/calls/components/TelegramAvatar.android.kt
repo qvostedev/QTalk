@@ -4,4 +4,4 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.ImageBitmap
 
 @Composable
-internal actual fun rememberTelegramAvatar(telegram: String): ImageBitmap? = null
+internal actual fun rememberTelegramAvatar(telegram: String, avatarUrl: String): ImageBitmap? = null

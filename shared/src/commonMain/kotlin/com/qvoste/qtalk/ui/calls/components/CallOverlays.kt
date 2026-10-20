@@ -36,6 +36,7 @@ internal fun IncomingCallOverlay(
     number: String,
     callerName: String?,
     callerTelegram: String,
+    callerAvatarUrl: String,
     onAccept: () -> Unit,
     onDecline: () -> Unit
 ) {
@@ -49,7 +50,7 @@ internal fun IncomingCallOverlay(
             if (callerName == null) {
                 Avatar("?", number, 88)
             } else {
-                ContactAvatar(callerName, callerTelegram, 88)
+                ContactAvatar(callerName, callerTelegram, 88, callerAvatarUrl)
             }
             Spacer(Modifier.height(20.dp))
             Text(callerName ?: "Входящий вызов", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
@@ -69,6 +70,7 @@ internal fun ActiveCallOverlay(
     number: String,
     callerName: String?,
     callerTelegram: String,
+    callerAvatarUrl: String,
     connectedAtEpochMillis: Long,
     onHangUp: () -> Unit,
     onCollapse: () -> Unit,
@@ -108,7 +110,7 @@ internal fun ActiveCallOverlay(
             if (callerName == null) {
                 Avatar("?", number, 124)
             } else {
-                ContactAvatar(callerName, callerTelegram, 124)
+                ContactAvatar(callerName, callerTelegram, 124, callerAvatarUrl)
             }
             Spacer(Modifier.height(25.dp))
             Text(callerName ?: formatPhoneNumber(number), color = TextPrimary, fontSize = 32.sp, fontWeight = FontWeight.SemiBold)

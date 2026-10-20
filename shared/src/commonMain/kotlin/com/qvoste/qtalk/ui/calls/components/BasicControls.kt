@@ -63,8 +63,8 @@ internal fun Avatar(initials: String, seed: String?, size: Int) {
 }
 
 @Composable
-internal fun ContactAvatar(name: String, telegram: String, size: Int) {
-    val telegramAvatar = rememberTelegramAvatar(telegram)
+internal fun ContactAvatar(name: String, telegram: String, size: Int, avatarUrl: String = "") {
+    val telegramAvatar = rememberTelegramAvatar(telegram, avatarUrl)
     if (telegramAvatar == null) {
         Avatar(initialsForName(name), name, size)
     } else {
@@ -83,10 +83,11 @@ internal fun ContactAvatarWithStatus(
     name: String,
     telegram: String,
     size: Int,
-    statusColor: Color? = null
+    statusColor: Color? = null,
+    avatarUrl: String = ""
 ) {
     Box(Modifier.size(size.dp)) {
-        ContactAvatar(name, telegram, size)
+        ContactAvatar(name, telegram, size, avatarUrl)
         AvatarStatusBadge(size, statusColor)
     }
 }

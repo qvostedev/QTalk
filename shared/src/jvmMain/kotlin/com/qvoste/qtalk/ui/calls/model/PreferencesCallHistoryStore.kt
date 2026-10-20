@@ -24,6 +24,7 @@ class PreferencesCallHistoryStore(
                         direction = preferences.get(prefix + "direction", "Исходящий"),
                         startedAtEpochMillis = startedAt,
                         telegram = preferences.get(prefix + "telegram", ""),
+                        avatarUrl = preferences.get(prefix + "avatarUrl", ""),
                         missed = preferences.getBoolean(prefix + "missed", false),
                         missedAcknowledged = preferences.getBoolean(prefix + "missedAcknowledged", false),
                         durationSeconds = preferences.getLong(prefix + "durationSeconds", -1L)
@@ -45,6 +46,7 @@ class PreferencesCallHistoryStore(
             preferences.put(prefix + "direction", item.direction)
             preferences.putLong(prefix + "startedAt", item.startedAtEpochMillis)
             preferences.put(prefix + "telegram", item.telegram)
+            preferences.put(prefix + "avatarUrl", item.avatarUrl)
             preferences.putBoolean(prefix + "missed", item.missed)
             preferences.putBoolean(prefix + "missedAcknowledged", item.missedAcknowledged)
             preferences.putLong(prefix + "durationSeconds", item.durationSeconds ?: -1L)
@@ -61,7 +63,7 @@ class PreferencesCallHistoryStore(
         const val KEY_COUNT = "count"
         val FIELDS = listOf(
             "id", "name", "number", "direction", "startedAt", "telegram", "missed",
-            "missedAcknowledged", "durationSeconds"
+            "missedAcknowledged", "durationSeconds", "avatarUrl"
         )
     }
 }

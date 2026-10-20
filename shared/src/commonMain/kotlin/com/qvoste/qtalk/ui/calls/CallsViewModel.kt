@@ -352,7 +352,8 @@ class CallsViewModel(
             number = number,
             direction = direction,
             startedAtEpochMillis = startedAt,
-            telegram = contact?.telegram.orEmpty()
+            telegram = contact?.telegram.orEmpty(),
+            avatarUrl = contact?.avatarUrl.orEmpty()
         )
         val updated = (listOf(item) + _callHistory.value.filterNot { it.id == id }).take(MAX_HISTORY_ITEMS)
         callHistoryStore.save(updated)

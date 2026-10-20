@@ -15,81 +15,95 @@ import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
 @Composable
-internal actual fun rememberTelegramAvatar(telegram: String): ImageBitmap? {
+internal actual fun rememberTelegramAvatar(telegram: String, avatarUrl: String): ImageBitmap? {
     val username = normalizeTelegramInput(telegram).removePrefix("@").lowercase()
-    val avatar = remember(username) { mutableStateOf(avatarMemoryCache[username]) }
-    LaunchedEffect(username) {
-        if (username.isBlank() || avatar.value != null) return@LaunchedEffect
-        avatar.value = withContext(Dispatchers.IO) {
-            runCatching {
-                Image.makeFromEncoded(loadTelegramAvatar(username)).toComposeImageBitmap().also {
-                    avatarMemoryCache[username] = it
-                }
+    val source = avatarUrl.trim().ifBlank { username }
+    val avatar = remember(source) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(source) {
+        if (source.isBlank()) return@LaunchedEffect
+        withContext(Dispatchers.IO) {
+            // Show the last good image immediately, including when it needs refreshing.
+            val cached = avatarMemoryCache[source] ?: runCatching {
+                avatarLoader(username, avatarUrl).readCached()?.let(::decodeAvatar)
             }.getOrNull()
+            avatar.value = cached
+            runCatching { decodeAvatar(avatarLoader(username, avatarUrl).load()) }
+                .onSuccess {
+                    avatarMemoryCache[source] = it
+                    avatar.value = it
+                }
         }
     }
     return avatar.value
 }
 
-private fun loadTelegramAvatar(username: String): ByteArray {
-    val lock = avatarLocks.computeIfAbsent(username) { Any() }
-    return synchronized(lock) { loadTelegramAvatarLocked(username) }
+private fun decodeAvatar(bytes: ByteArray): ImageBitmap =
+    Image.makeFromEncoded(bytes).toComposeImageBitmap()
+
+private fun avatarLoader(username: String, avatarUrl: String): AvatarDiskCache {
+    val directUrl = avatarUrl.trim()
+    val source = directUrl.ifBlank { username }
+    val cacheName = if (directUrl.isBlank()) "$username.img" else
+        MessageDigest.getInstance("SHA-256").digest(directUrl.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) } + ".img"
+    return AvatarDiskCache(telegramAvatarCacheDirectory().resolve(cacheName), source, validate = ::validateAvatar) {
+        val image = if (directUrl.isNotBlank()) {
+            download(directUrl, MAX_IMAGE_BYTES)
+        } else {
+            downloadTelegramAvatar(username)
+        }
+        image
+    }
 }
 
-private fun loadTelegramAvatarLocked(username: String): ByteArray {
-    val cacheDirectory = telegramAvatarCacheDirectory()
-    Files.createDirectories(cacheDirectory)
-    val cacheFile = cacheDirectory.resolve("$username.img")
-    if (Files.isRegularFile(cacheFile)) {
-        val age = Duration.between(Files.getLastModifiedTime(cacheFile).toInstant(), Instant.now())
-        if (age < CACHE_LIFETIME) return Files.readAllBytes(cacheFile)
+private fun validateAvatar(bytes: ByteArray) {
+    Image.makeFromEncoded(bytes).use {
+        check(it.width in 1..4096 && it.height in 1..4096) { "Размер аватара слишком большой" }
     }
+}
 
+private fun downloadTelegramAvatar(username: String): ByteArray {
+    check(username.matches(Regex("[a-z0-9_]{1,32}"))) { "Некорректный Telegram username" }
     val profileHtml = download("https://t.me/$username", MAX_HTML_BYTES).toString(Charsets.UTF_8)
     val avatarUrl = findOpenGraphImage(profileHtml)
         ?: error("У профиля @$username нет публичного аватара")
     check(!avatarUrl.contains("/img/t_logo", ignoreCase = true)) {
         "У профиля @$username нет публичного аватара"
     }
-    val imageUrl = URI(avatarUrl)
-    check(imageUrl.scheme.equals("https", ignoreCase = true)) { "Некорректная ссылка на аватар" }
-
-    val image = download(imageUrl.toString(), MAX_IMAGE_BYTES)
-    val temporaryFile = cacheDirectory.resolve("$username.tmp")
-    Files.write(temporaryFile, image)
-    runCatching {
-        Files.move(
-            temporaryFile,
-            cacheFile,
-            StandardCopyOption.REPLACE_EXISTING,
-            StandardCopyOption.ATOMIC_MOVE
-        )
-    }.getOrElse {
-        Files.move(temporaryFile, cacheFile, StandardCopyOption.REPLACE_EXISTING)
-    }
-    return image
+    return download(avatarUrl, MAX_IMAGE_BYTES)
 }
 
 private fun download(url: String, maximumBytes: Int): ByteArray {
-    val connection = URI(url).toURL().openConnection() as HttpURLConnection
-    try {
-        connection.instanceFollowRedirects = true
-        connection.connectTimeout = 10_000
-        connection.readTimeout = 15_000
-        connection.setRequestProperty("User-Agent", "Mozilla/5.0 QTalk/1.0")
-        val status = connection.responseCode
-        check(status in 200..299) { "Telegram вернул ошибку HTTP $status" }
-        val bytes = connection.inputStream.use { it.readNBytes(maximumBytes + 1) }
-        check(bytes.size <= maximumBytes) { "Файл аватара слишком большой" }
-        return bytes
-    } finally {
-        connection.disconnect()
+    var uri = URI(url)
+    repeat(6) {
+        check(uri.scheme.equals("https", ignoreCase = true) &&
+            !uri.host.isNullOrBlank() && uri.userInfo == null) { "Некорректная HTTPS-ссылка на аватар" }
+        val connection = uri.toURL().openConnection() as HttpURLConnection
+        try {
+            connection.instanceFollowRedirects = false
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 15_000
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 QTalk/1.0")
+            val status = connection.responseCode
+            if (status in listOf(301, 302, 303, 307, 308)) {
+                uri = uri.resolve(checkNotNull(connection.getHeaderField("Location")))
+                return@repeat
+            }
+            check(status in 200..299) { "Сервер аватара вернул HTTP $status" }
+            val bytes = connection.inputStream.use { it.readNBytes(maximumBytes + 1) }
+            check(bytes.size <= maximumBytes) { "Файл аватара слишком большой" }
+            return bytes
+        } finally {
+            connection.disconnect()
+        }
     }
+    error("Слишком много перенаправлений аватара")
 }
 
 private fun findOpenGraphImage(html: String): String? {
@@ -116,8 +130,57 @@ private fun telegramAvatarCacheDirectory(): Path {
     return Path.of(System.getProperty("user.home"), ".cache", "QTalk", "avatar-cache")
 }
 
-private val CACHE_LIFETIME: Duration = Duration.ofHours(24)
-private val avatarLocks = ConcurrentHashMap<String, Any>()
 private val avatarMemoryCache = ConcurrentHashMap<String, ImageBitmap>()
 private const val MAX_HTML_BYTES = 1_000_000
 private const val MAX_IMAGE_BYTES = 5_000_000
+
+/** The source URL is part of the key, so changing a contact photo never reuses another URL's image. */
+internal class AvatarDiskCache(
+    private val file: Path,
+    private val source: String,
+    private val now: () -> Instant = Instant::now,
+    private val validate: (ByteArray) -> Unit = {},
+    private val download: () -> ByteArray
+) {
+    fun readCached(): ByteArray? = runCatching {
+        if (Files.isRegularFile(file) && Files.size(file) in 1..MAX_IMAGE_BYTES.toLong()) {
+            Files.readAllBytes(file).also(validate)
+        } else null
+    }.getOrNull()
+
+    fun load(): ByteArray = synchronized(locks.computeIfAbsent(source) { Any() }) {
+        val cached = readCached()
+        val fresh = cached != null && runCatching {
+            Duration.between(Files.getLastModifiedTime(file).toInstant(), now()) < Duration.ofDays(7)
+        }.getOrDefault(false)
+        if (fresh) return@synchronized checkNotNull(cached)
+        val bytes = try {
+            download().also {
+                check(it.isNotEmpty() && it.size <= MAX_IMAGE_BYTES)
+                validate(it)
+            }
+        } catch (error: Exception) {
+            return@synchronized cached ?: throw error
+        }
+        // A read-only/full cache must not prevent displaying a successfully downloaded image.
+        runCatching {
+            Files.createDirectories(file.parent)
+            val temporary = Files.createTempFile(file.parent, "avatar-", ".tmp")
+            try {
+                Files.write(temporary, bytes)
+                try {
+                    Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+                } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+                    Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING)
+                }
+            } finally {
+                Files.deleteIfExists(temporary)
+            }
+        }
+        bytes
+    }
+
+    private companion object {
+        val locks = ConcurrentHashMap<String, Any>()
+    }
+}

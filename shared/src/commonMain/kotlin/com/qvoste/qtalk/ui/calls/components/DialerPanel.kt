@@ -145,7 +145,8 @@ internal fun DialerPanel(
                     avatarContact.name,
                     avatarContact.telegram,
                     62,
-                    avatarContact.status.color
+                    avatarContact.status.color,
+                    avatarContact.avatarUrl
                 )
             } else {
                 val avatarSeed = draftName.takeIf(String::isNotBlank)
@@ -445,7 +446,7 @@ private fun ContactHistoryList(history: List<HistoryItem>) {
                 Modifier.fillMaxWidth().height(52.dp),
                 verticalAlignment = Alignment.Top
             ) {
-                ContactAvatar(item.name, item.telegram, 36)
+                ContactAvatar(item.name, item.telegram, 36, item.avatarUrl)
                 Spacer(Modifier.width(10.dp))
                 Column(
                     Modifier.weight(1f).offset(y = (-3).dp),

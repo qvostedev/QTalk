@@ -27,6 +27,7 @@ class PreferencesContactStore(
                         department = preferences.get(prefix + "department", ""),
                         company = preferences.get(prefix + "company", ""),
                         telegram = preferences.get(prefix + "telegram", ""),
+                        avatarUrl = preferences.get(prefix + "avatarUrl", ""),
                         office = preferences.get(prefix + "office", ""),
                         phone = preferences.get(prefix + "phone", ""),
                         source = runCatching {
@@ -65,6 +66,7 @@ class PreferencesContactStore(
             preferences.put(prefix + "department", contact.department)
             preferences.put(prefix + "company", contact.company)
             preferences.put(prefix + "telegram", contact.telegram)
+            preferences.put(prefix + "avatarUrl", contact.avatarUrl)
             preferences.put(prefix + "office", contact.office)
             preferences.put(prefix + "phone", contact.phone)
             preferences.put(prefix + "source", contact.source.name)
@@ -87,7 +89,7 @@ class PreferencesContactStore(
         const val CURRENT_SCHEMA_VERSION = 3
         val FIELDS = listOf(
             "name", "number", "favorite", "position", "department",
-            "company", "telegram", "office", "phone", "source", "status"
+            "company", "telegram", "office", "phone", "source", "status", "avatarUrl"
         )
     }
 }

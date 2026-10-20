@@ -70,7 +70,8 @@ fun CompactCallWidget(
     onHangUp: () -> Unit,
     onMicrophoneMutedChange: (Boolean) -> Unit = {},
     onSpeakerMutedChange: (Boolean) -> Unit = {},
-    modifier: Modifier = Modifier.fillMaxSize()
+    modifier: Modifier = Modifier.fillMaxSize(),
+    callerAvatarUrl: String = ""
 ) {
     var nowEpochMillis by remember(connectedAtEpochMillis) {
         mutableStateOf(Clock.System.now().toEpochMilliseconds())
@@ -104,7 +105,7 @@ fun CompactCallWidget(
             if (callerName == null) {
                 Avatar("?", number, 38)
             } else {
-                ContactAvatar(callerName, callerTelegram, 38)
+                ContactAvatar(callerName, callerTelegram, 38, callerAvatarUrl)
             }
             Spacer(Modifier.width(7.dp))
             Column(

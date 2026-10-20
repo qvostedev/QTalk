@@ -149,7 +149,8 @@ private fun AccountAvatar(contact: Contact?, registration: RegistrationState) {
         } else {
             ContactAvatarWithStatus(
                 contact.name, contact.telegram, 46,
-                if (registration == RegistrationState.REGISTERED) contact.status.color else TextSecondary
+                if (registration == RegistrationState.REGISTERED) contact.status.color else TextSecondary,
+                contact.avatarUrl
             )
         }
     }
