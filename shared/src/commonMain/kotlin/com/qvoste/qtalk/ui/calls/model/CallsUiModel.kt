@@ -29,11 +29,23 @@ data class Contact(
     val phone: String = "",
     val source: ContactSource = ContactSource.LEGACY,
     val status: EmployeeStatus = EmployeeStatus.OFFLINE,
-    val avatarUrl: String = ""
-) {
-    // Компания ПОРТ автоматически относит контакт к сотрудникам.
-    val isEmployee: Boolean get() = company.trim().equals("ПОРТ", ignoreCase = true)
+    val avatarUrl: String = "",
+    // Derived from the signed-in user's organization, not persisted in the directory.
+    val isEmployee: Boolean = false
+)
+
+internal fun List<Contact>.classifyForAccount(accountNumber: String): List<Contact> {
+    val ownNumber = accountNumber.normalizedContactNumber()
+    val ownContact = if (ownNumber.isBlank()) null else
+        firstOrNull { it.source == ContactSource.DIRECTORY && it.number.normalizedContactNumber() == ownNumber }
+            ?: firstOrNull { it.number.normalizedContactNumber() == ownNumber }
+    val organization = ownContact?.company?.normalizedOrganization().orEmpty()
+    return map { contact -> contact.copy(isEmployee = organization.isNotBlank() &&
+        contact.company.normalizedOrganization() == organization) }
 }
+
+private fun String.normalizedOrganization(): String = trim().split(Regex("[\\s\\u00a0]+"))
+    .joinToString(" ").lowercase()
 
 enum class ContactSource { LEGACY, DIRECTORY, LOCAL }
 

@@ -121,7 +121,7 @@ class GoogleSheetsContactDatabaseService(
                 favorite = false,
                 position = row.valueAt(positionColumn),
                 department = row.valueAt(departmentColumn),
-                company = row.valueAt(companyColumn).ifBlank { "ПОРТ" },
+                company = row.valueAt(companyColumn),
                 telegram = normalizeTelegramInput(row.valueAt(telegramColumn)),
                 office = row.valueAt(officeColumn),
                 phone = when {

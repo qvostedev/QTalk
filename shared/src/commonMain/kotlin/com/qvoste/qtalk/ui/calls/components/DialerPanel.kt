@@ -91,7 +91,7 @@ internal fun DialerPanel(
         mutableStateOf(contactBeingEdited?.department.orEmpty())
     }
     var draftCompany by remember(creatingContact, contactBeingEdited) {
-        mutableStateOf(contactBeingEdited?.company ?: "ПОРТ")
+        mutableStateOf(contactBeingEdited?.company.orEmpty())
     }
     var draftTelegram by remember(creatingContact, contactBeingEdited) {
         mutableStateOf(contactBeingEdited?.telegram.orEmpty())

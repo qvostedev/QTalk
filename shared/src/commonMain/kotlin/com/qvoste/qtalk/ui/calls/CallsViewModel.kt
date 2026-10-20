@@ -20,6 +20,7 @@ import com.qvoste.qtalk.ui.calls.model.EmployeePresenceService
 import com.qvoste.qtalk.ui.calls.model.DisabledEmployeePresenceService
 import com.qvoste.qtalk.ui.calls.model.EmployeeStatus
 import com.qvoste.qtalk.ui.calls.model.latestFrom
+import com.qvoste.qtalk.ui.calls.model.classifyForAccount
 import com.qvoste.qtalk.voip.SipAccount
 import com.qvoste.qtalk.voip.SipAccountStore
 import com.qvoste.qtalk.voip.VoipEngine
@@ -69,7 +70,7 @@ class CallsViewModel(
     val authenticationRequired = _authenticationRequired.asStateFlow()
     private val _accountDraft = MutableStateFlow(savedAccount)
     val accountDraft = _accountDraft.asStateFlow()
-    private val _contacts = MutableStateFlow(contactStore.load())
+    private val _contacts = MutableStateFlow(contactStore.load().classifyForAccount(_accountNumber.value))
     val contacts = _contacts.asStateFlow()
     private val _contactNotes = MutableStateFlow(contactNoteStore.load())
     val contactNotes = _contactNotes.asStateFlow()
@@ -195,6 +196,7 @@ class CallsViewModel(
 
     fun connect(account: SipAccount) = execute {
         _accountNumber.value = account.username.trim()
+        _contacts.value = _contacts.value.classifyForAccount(_accountNumber.value)
         _accountDraft.value = account
         pendingAccount = account
         connectSip(account)
@@ -207,6 +209,7 @@ class CallsViewModel(
         pendingAccount = null
         _accountDraft.value = null
         _accountNumber.value = ""
+        _contacts.value = _contacts.value.classifyForAccount("")
         _authenticationRequired.value = true
     }
 
@@ -242,7 +245,9 @@ class CallsViewModel(
         check(conferenceStatus.value.phase == com.qvoste.qtalk.voip.ConferencePhase.NONE) {
             "Перевод недоступен во время конференции"
         }
-        val code = transferCodeFor(contact)
+        val classifiedContact = contact.latestFrom(_contacts.value.classifyForAccount(_accountNumber.value))
+            ?: error("Контакт больше не найден в справочнике")
+        val code = transferCodeFor(classifiedContact)
             ?: error("Перевод доступен только на внутренний номер сотрудника")
         val activeCall = voipEngine.callStatus.value
         check(activeCall.state == com.qvoste.qtalk.voip.CallState.ACTIVE) {
@@ -288,7 +293,7 @@ class CallsViewModel(
     fun addContact(contact: Contact) {
         val updated = _contacts.value + contact.copy(source = ContactSource.LOCAL)
         contactStore.save(updated)
-        _contacts.value = updated
+        _contacts.value = updated.classifyForAccount(_accountNumber.value)
     }
     fun updateContact(previous: Contact, updated: Contact) {
         val contacts = _contacts.value.toMutableList()
@@ -296,7 +301,7 @@ class CallsViewModel(
         if (index < 0) return
         contacts[index] = updated.copy(status = contacts[index].status)
         contactStore.save(contacts)
-        _contacts.value = contacts
+        _contacts.value = contacts.classifyForAccount(_accountNumber.value)
         if (previous.name != updated.name || previous.number != updated.number) {
             val notes = _contactNotes.value.map { note ->
                 if (note.belongsTo(previous)) note.copy(
@@ -318,7 +323,7 @@ class CallsViewModel(
     fun deleteContact(contact: Contact) {
         val updated = _contacts.value.toMutableList().apply { remove(contact.latestFrom(this)) }
         contactStore.save(updated)
-        _contacts.value = updated
+        _contacts.value = updated.classifyForAccount(_accountNumber.value)
     }
     fun markMissedCallsSeen() {
         val current = _callHistory.value
@@ -443,7 +448,7 @@ class CallsViewModel(
                     ?.let { contact.copy(status = it) } ?: contact
             }
             contactStore.save(merged)
-            _contacts.value = merged
+            _contacts.value = merged.classifyForAccount(_accountNumber.value)
             _contactDatabaseState.value = _contactDatabaseState.value.copy(
                 syncing = false,
                 message = "Загружено контактов: ${merged.size}",

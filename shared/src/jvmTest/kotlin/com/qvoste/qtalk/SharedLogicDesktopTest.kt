@@ -78,12 +78,18 @@ class SharedLogicDesktopTest {
             override suspend fun call(number: String) { newCalls++ }
         }
         val viewModel = CallsViewModel(
-            engine, ConnectSipUseCase(engine), InMemorySipAccountStore(),
-            InMemoryContactStore(emptyList()), DisabledContactDatabaseService,
+            engine, ConnectSipUseCase(engine), InMemorySipAccountStore().apply {
+                save(com.qvoste.qtalk.voip.SipAccount("216", domain = "example.invalid"))
+            },
+            InMemoryContactStore(listOf(
+                Contact("User", "216", false, company = "Test organization"),
+                Contact("Кайгородов Антон", "213", false, company = "Test organization")
+            )), DisabledContactDatabaseService,
             InMemoryContactNoteStore(), InMemoryCallHistoryStore()
         )
         try {
-            viewModel.transferToEmployee(Contact("Кайгородов Антон", "213", false, company = "ПОРТ"))
+            withTimeout(3_000) { while (engine.registrationState.value != com.qvoste.qtalk.voip.RegistrationState.REGISTERED) delay(10) }
+            viewModel.transferToEmployee(Contact("Кайгородов Антон", "213", false, company = "Test organization"))
             withTimeout(3_000) { while (engine.sent.size < 5) delay(10) }
             assertEquals("**213", synchronized(engine.sent) { engine.sent.joinToString("") })
             assertEquals(0, engine.newCalls)
@@ -92,10 +98,10 @@ class SharedLogicDesktopTest {
 
     @Test
     fun transferCodeUsesOnlyEmployeeExtensions() {
-        val employee = Contact("Кайгородов Антон", "213", false, company = "ПОРТ")
+        val employee = Contact("Кайгородов Антон", "213", false, isEmployee = true)
         assertEquals("**213", transferCodeFor(employee))
         assertEquals(null, transferCodeFor(employee.copy(number = "+7 900 000 00 00")))
-        assertEquals(null, transferCodeFor(employee.copy(company = "Клиент")))
+        assertEquals(null, transferCodeFor(employee.copy(isEmployee = false)))
         assertEquals(null, transferCodeFor(employee.copy(number = "")))
     }
 
@@ -301,6 +307,7 @@ class SharedLogicDesktopTest {
 
             assertEquals("Иванов Иван", contact.name)
             assertEquals("216", contact.number)
+            assertEquals("", contact.company)
             assertEquals("Молокова, 68", contact.office)
             assertEquals("@ivan", contact.telegram)
             assertEquals("2-347-348 доб.216", contact.phone)
