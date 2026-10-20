@@ -19,23 +19,36 @@ import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
+import javax.imageio.ImageIO
 
 @Composable
-internal actual fun rememberTelegramAvatar(telegram: String, avatarUrl: String): ImageBitmap? {
+internal actual fun rememberTelegramAvatar(telegram: String, avatarUrl: String, pixelSize: Int): ImageBitmap? {
     val username = normalizeTelegramInput(telegram).removePrefix("@").lowercase()
     val source = avatarUrl.trim().ifBlank { username }
-    val avatar = remember(source) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(source) {
+    val memoryKey = "$source#$pixelSize"
+    val avatar = remember(memoryKey) { mutableStateOf(avatarMemoryCache[memoryKey]) }
+    LaunchedEffect(memoryKey) {
         if (source.isBlank()) return@LaunchedEffect
         withContext(Dispatchers.IO) {
             // Show the last good image immediately, including when it needs refreshing.
-            val cached = avatarMemoryCache[source] ?: runCatching {
-                avatarLoader(username, avatarUrl).readCached()?.let(::decodeAvatar)
+            val cached = avatarMemoryCache[memoryKey] ?: runCatching {
+                avatarLoader(username, avatarUrl).readCached()?.let { decodeAvatar(it, pixelSize) }
             }.getOrNull()
-            avatar.value = cached
-            runCatching { decodeAvatar(avatarLoader(username, avatarUrl).load()) }
+            if (cached != null) {
+                avatarMemoryCache[memoryKey] = cached
+                avatar.value = cached
+            }
+            runCatching {
+                val loader = avatarLoader(username, avatarUrl)
+                // Reuse the decoded bitmap on navigation; only expired files need a refresh.
+                if (cached != null && loader.isFresh()) cached
+                else decodeAvatar(loader.load(), pixelSize)
+            }
                 .onSuccess {
-                    avatarMemoryCache[source] = it
+                    avatarMemoryCache[memoryKey] = it
                     avatar.value = it
                 }
         }
@@ -43,8 +56,35 @@ internal actual fun rememberTelegramAvatar(telegram: String, avatarUrl: String):
     return avatar.value
 }
 
-private fun decodeAvatar(bytes: ByteArray): ImageBitmap =
-    Image.makeFromEncoded(bytes).toComposeImageBitmap()
+private fun decodeAvatar(bytes: ByteArray, pixelSize: Int): ImageBitmap {
+    val original = ImageIO.read(ByteArrayInputStream(bytes))
+        ?: return Image.makeFromEncoded(bytes).toComposeImageBitmap()
+    return downsampleAvatar(original, pixelSize).toComposeImageBitmap()
+}
+
+/** Progressive reduction avoids aliasing and loss of detail when drawing a 320px photo at 46px. */
+internal fun downsampleAvatar(original: BufferedImage, pixelSize: Int): BufferedImage {
+    val target = pixelSize.coerceIn(1, 4096)
+    val ratio = minOf(1.0, target.toDouble() / minOf(original.width, original.height))
+    val width = (original.width * ratio).toInt().coerceAtLeast(1)
+    val height = (original.height * ratio).toInt().coerceAtLeast(1)
+    var image = original
+    while (image.width > width || image.height > height) {
+        val next = BufferedImage(maxOf(width, image.width / 2), maxOf(height, image.height / 2),
+            BufferedImage.TYPE_INT_ARGB)
+        val graphics = next.createGraphics()
+        try {
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+            graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+            graphics.drawImage(image, 0, 0, next.width, next.height, null)
+        } finally {
+            graphics.dispose()
+        }
+        if (image !== original) image.flush()
+        image = next
+    }
+    return image
+}
 
 private fun avatarLoader(username: String, avatarUrl: String): AvatarDiskCache {
     val directUrl = avatarUrl.trim()
@@ -142,6 +182,11 @@ internal class AvatarDiskCache(
     private val validate: (ByteArray) -> Unit = {},
     private val download: () -> ByteArray
 ) {
+    fun isFresh(): Boolean = runCatching {
+        Files.isRegularFile(file) &&
+            Duration.between(Files.getLastModifiedTime(file).toInstant(), now()) < Duration.ofDays(7)
+    }.getOrDefault(false)
+
     fun readCached(): ByteArray? = runCatching {
         if (Files.isRegularFile(file) && Files.size(file) in 1..MAX_IMAGE_BYTES.toLong()) {
             Files.readAllBytes(file).also(validate)
@@ -150,9 +195,7 @@ internal class AvatarDiskCache(
 
     fun load(): ByteArray = synchronized(locks.computeIfAbsent(source) { Any() }) {
         val cached = readCached()
-        val fresh = cached != null && runCatching {
-            Duration.between(Files.getLastModifiedTime(file).toInstant(), now()) < Duration.ofDays(7)
-        }.getOrDefault(false)
+        val fresh = cached != null && isFresh()
         if (fresh) return@synchronized checkNotNull(cached)
         val bytes = try {
             download().also {

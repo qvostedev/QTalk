@@ -22,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalDensity
+import kotlin.math.roundToInt
 import com.qvoste.qtalk.ui.calls.theme.TextPrimary
 import com.qvoste.qtalk.ui.calls.theme.TextSecondary
 import com.qvoste.qtalk.ui.calls.theme.ControlBackground
@@ -64,7 +66,8 @@ internal fun Avatar(initials: String, seed: String?, size: Int) {
 
 @Composable
 internal fun ContactAvatar(name: String, telegram: String, size: Int, avatarUrl: String = "") {
-    val telegramAvatar = rememberTelegramAvatar(telegram, avatarUrl)
+    val pixelSize = with(LocalDensity.current) { size.dp.toPx().roundToInt().coerceAtLeast(1) }
+    val telegramAvatar = rememberTelegramAvatar(telegram, avatarUrl, pixelSize)
     if (telegramAvatar == null) {
         Avatar(initialsForName(name), name, size)
     } else {
