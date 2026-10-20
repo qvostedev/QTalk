@@ -19,6 +19,7 @@ import com.qvoste.qtalk.ui.calls.model.transferCodeFor
 import com.qvoste.qtalk.ui.calls.model.EmployeePresenceService
 import com.qvoste.qtalk.ui.calls.model.DisabledEmployeePresenceService
 import com.qvoste.qtalk.ui.calls.model.EmployeeStatus
+import com.qvoste.qtalk.ui.calls.model.latestFrom
 import com.qvoste.qtalk.voip.SipAccount
 import com.qvoste.qtalk.voip.SipAccountStore
 import com.qvoste.qtalk.voip.VoipEngine
@@ -31,9 +32,11 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
 
 class CallsViewModel(
@@ -55,11 +58,13 @@ class CallsViewModel(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val commandMutex = Mutex()
     private val contactSyncMutex = Mutex()
+    private val presencePublishMutex = Mutex()
+    private val knownEmployeeStatuses = MutableStateFlow<Map<String, EmployeeStatus>>(emptyMap())
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
-    private val _accountNumber = MutableStateFlow("")
-    val accountNumber = _accountNumber.asStateFlow()
     private val savedAccount = accountStore.load()
+    private val _accountNumber = MutableStateFlow(savedAccount?.username?.trim().orEmpty())
+    val accountNumber = _accountNumber.asStateFlow()
     private val _authenticationRequired = MutableStateFlow(savedAccount == null)
     val authenticationRequired = _authenticationRequired.asStateFlow()
     private val _accountDraft = MutableStateFlow(savedAccount)
@@ -154,8 +159,13 @@ class CallsViewModel(
                     if (registrationState.value == RegistrationState.REGISTERED) {
                         publishPresence(currentPresenceStatus(), force = true)
                     }
-                    refreshEmployeeStatuses()
                 }
+                delay(PRESENCE_HEARTBEAT_INTERVAL_MS)
+            }
+        }
+        scope.launch {
+            while (true) {
+                if (employeePresenceService.enabled) refreshEmployeeStatuses()
                 delay(PRESENCE_SYNC_INTERVAL_MS)
             }
         }
@@ -282,9 +292,9 @@ class CallsViewModel(
     }
     fun updateContact(previous: Contact, updated: Contact) {
         val contacts = _contacts.value.toMutableList()
-        val index = contacts.indexOf(previous)
+        val index = contacts.indexOf(previous.latestFrom(contacts))
         if (index < 0) return
-        contacts[index] = updated
+        contacts[index] = updated.copy(status = contacts[index].status)
         contactStore.save(contacts)
         _contacts.value = contacts
         if (previous.name != updated.name || previous.number != updated.number) {
@@ -306,7 +316,7 @@ class CallsViewModel(
         }
     }
     fun deleteContact(contact: Contact) {
-        val updated = _contacts.value.toMutableList().apply { remove(contact) }
+        val updated = _contacts.value.toMutableList().apply { remove(contact.latestFrom(this)) }
         contactStore.save(updated)
         _contacts.value = updated
     }
@@ -394,6 +404,7 @@ class CallsViewModel(
         val normalized = url.trim()
         employeePresenceService.saveEndpoint("")
         lastPublishedStatus = null
+        knownEmployeeStatuses.value = emptyMap()
         contactDatabaseService.saveSourceUrl(normalized)
         _contactDatabaseState.value = ContactDatabaseState(
             sourceUrl = normalized,
@@ -427,7 +438,10 @@ class CallsViewModel(
                     publishPresence(currentPresenceStatus(), force = true)
                 }
             }
-            val merged = mergeDownloadedContacts(_contacts.value, downloaded)
+            val merged = mergeDownloadedContacts(_contacts.value, downloaded).map { contact ->
+                knownEmployeeStatuses.value[contact.number.filter(Char::isDigit)]
+                    ?.let { contact.copy(status = it) } ?: contact
+            }
             contactStore.save(merged)
             _contacts.value = merged
             _contactDatabaseState.value = _contactDatabaseState.value.copy(
@@ -454,36 +468,54 @@ class CallsViewModel(
     private suspend fun publishPresence(status: EmployeeStatus, force: Boolean = false) {
         val extension = _accountNumber.value.filter(Char::isDigit)
             .ifBlank { _accountDraft.value?.username.orEmpty().filter(Char::isDigit) }
-        if (!employeePresenceService.enabled || extension.isBlank()) return
-        if (!force && lastPublishedStatus == status) return
-        runCatching { employeePresenceService.publish(extension, status) }
-            .onSuccess {
+        if (extension.isBlank()) return
+        applyPresence(mapOf(extension to status))
+        if (!employeePresenceService.enabled) return
+        presencePublishMutex.withLock {
+            if (!force && lastPublishedStatus == status) return
+            try {
+                employeePresenceService.publish(extension, status)
                 lastPublishedStatus = status
-                applyPresence(mapOf(extension to status))
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                // A failed publication is retried by the next heartbeat.
             }
+        }
     }
 
     private suspend fun refreshEmployeeStatuses() {
-        runCatching { employeePresenceService.load() }
-            .onSuccess(::applyPresence)
+        try {
+            val statuses = employeePresenceService.load().toMutableMap()
+            val ownExtension = _accountNumber.value.filter(Char::isDigit)
+            // A read started before our publication must not roll back our own status.
+            if (ownExtension.isNotBlank()) {
+                statuses[ownExtension] = if (registrationState.value == RegistrationState.REGISTERED)
+                    currentPresenceStatus() else EmployeeStatus.OFFLINE
+            }
+            applyPresence(statuses)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            // Keep the last known statuses during a temporary network failure.
+        }
     }
 
     private fun applyPresence(statuses: Map<String, EmployeeStatus>) {
         if (statuses.isEmpty()) return
-        val updated = _contacts.value.map { contact ->
+        knownEmployeeStatuses.update { it + statuses }
+        _contacts.update { contacts -> contacts.map { contact ->
             val extension = contact.number.filter(Char::isDigit)
             statuses[extension]?.let { contact.copy(status = it) } ?: contact
-        }
-        if (updated == _contacts.value) return
-        contactStore.save(updated)
-        _contacts.value = updated
+        } }
     }
 
     fun close() = scope.cancel()
 
     private companion object {
         const val CONTACT_SYNC_INTERVAL_MS = 15 * 60 * 1000L
-        const val PRESENCE_SYNC_INTERVAL_MS = 60 * 1000L
+        const val PRESENCE_SYNC_INTERVAL_MS = 5 * 1000L
+        const val PRESENCE_HEARTBEAT_INTERVAL_MS = 30 * 1000L
         const val MAX_HISTORY_ITEMS = 1000
     }
 }

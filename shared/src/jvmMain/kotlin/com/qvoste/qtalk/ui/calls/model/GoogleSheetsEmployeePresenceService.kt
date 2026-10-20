@@ -56,6 +56,8 @@ class GoogleSheetsEmployeePresenceService(
         val separator = if ('?' in endpoint) '&' else '?'
         val connection = URI("$endpoint${separator}action=statuses").toURL().openConnection() as HttpURLConnection
         try {
+            connection.useCaches = false
+            connection.setRequestProperty("Cache-Control", "no-cache")
             connection.instanceFollowRedirects = true
             connection.connectTimeout = 10_000
             connection.readTimeout = 15_000

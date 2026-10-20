@@ -489,6 +489,9 @@ private fun CallsContent(
     }
 
     LaunchedEffect(Unit) { keyboardDialFocus.requestFocus() }
+    LaunchedEffect(contacts) {
+        selectedContact = selectedContact?.latestFrom(contacts)
+    }
     LaunchedEffect(section, availableUpdateVersion) {
         if (section == AppSection.NOTIFICATIONS) {
             seenUpdateVersion = availableUpdateVersion
@@ -713,7 +716,7 @@ private fun CallsContent(
                 val deletableContact = if (showAddContact) null else contactBeingEdited ?: selectedContact
                 DialerPanel(
                     number = number,
-                    contact = selectedContact,
+                    contact = selectedContact?.latestFrom(contacts),
                     contactBeingEdited = contactBeingEdited,
                     creatingContact = showAddContact,
                     accountNumber = accountNumber,
@@ -1033,8 +1036,7 @@ private fun CallsHome(
         }
     }
     val visibleHistory = history.filter {
-        val matchesSearch = search.isBlank() || it.name.contains(search, ignoreCase = true) ||
-            it.number.contains(search) || telegramMatchesQuery(it.telegram, search)
+        val matchesSearch = it.matchesSearch(search)
         val matchesFilter = when (filter) {
             CallFilter.ALL -> true
             CallFilter.MISSED -> it.missed

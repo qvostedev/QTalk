@@ -63,20 +63,33 @@ data class HistoryItem(
 )
 
 internal fun telegramMatchesQuery(telegram: String, query: String): Boolean {
-    val handle = query.trim().removePrefix("@")
-    return handle.isNotEmpty() && telegram.trim().removePrefix("@")
+    val handle = query.withoutSearchWhitespace().removePrefix("@")
+    return handle.isNotEmpty() && telegram.withoutSearchWhitespace().removePrefix("@")
         .contains(handle, ignoreCase = true)
 }
 
-internal fun Contact.matchesSearch(query: String): Boolean =
-    name.contains(query, ignoreCase = true) ||
-        number.contains(query) ||
-        company.contains(query, ignoreCase = true) ||
-        department.contains(query, ignoreCase = true) ||
-        position.contains(query, ignoreCase = true) ||
-        office.contains(query, ignoreCase = true) ||
-        phone.contains(query, ignoreCase = true) ||
-        telegramMatchesQuery(telegram, query)
+internal fun String.withoutSearchWhitespace(): String = filterNot { it.isWhitespace() }
+
+internal fun Contact.matchesSearch(query: String): Boolean {
+    val normalized = query.withoutSearchWhitespace()
+    return listOf(name, number, company, department, position, office, phone).any {
+        it.withoutSearchWhitespace().contains(normalized, ignoreCase = true)
+    } || telegramMatchesQuery(telegram, normalized)
+}
+
+internal fun HistoryItem.matchesSearch(query: String): Boolean {
+    val normalized = query.withoutSearchWhitespace()
+    return name.withoutSearchWhitespace().contains(normalized, ignoreCase = true) ||
+        number.withoutSearchWhitespace().contains(normalized) || telegramMatchesQuery(telegram, normalized)
+}
+
+internal fun Contact.latestFrom(contacts: List<Contact>): Contact? = contacts.firstOrNull {
+    it.source == source && when {
+        number.isNotBlank() -> it.number.normalizedContactNumber() == number.normalizedContactNumber()
+        phone.isNotBlank() -> it.phone.normalizedContactNumber() == phone.normalizedContactNumber()
+        else -> it.name == name && it.telegram == telegram
+    }
+}
 
 // Пара цветов аватара стабильно вычисляется из имени или номера.
 internal fun avatarGradientFor(value: String): List<Color> {
