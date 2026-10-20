@@ -2,6 +2,13 @@ package com.qvoste.qtalk
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import com.qvoste.qtalk.ui.calls.theme.InterfaceScale
+import com.qvoste.qtalk.ui.calls.theme.LocalInterfaceScale
+import com.qvoste.qtalk.ui.calls.theme.LocalUnscaledDensity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -96,8 +103,17 @@ fun main(args: Array<String>) {
         var availableUpdateVersion by remember { mutableStateOf<String?>(null) }
         var availableUpdateDescription by remember { mutableStateOf<String?>(null) }
         var themeMode by remember { mutableStateOf(themeStore.load()) }
+        var interfaceScale by remember { mutableStateOf(themeStore.loadScale()) }
         val scope = rememberCoroutineScope()
-        val windowState = rememberWindowState(width = 1440.dp, height = 1024.dp)
+        val screenBounds = remember {
+            val config = GraphicsEnvironment.getLocalGraphicsEnvironment().defaultScreenDevice.defaultConfiguration
+            val insets = Toolkit.getDefaultToolkit().getScreenInsets(config)
+            Dimension(config.bounds.width - insets.left - insets.right, config.bounds.height - insets.top - insets.bottom)
+        }
+        val windowState = rememberWindowState(
+            width = minOf(1440, screenBounds.width).dp,
+            height = minOf(1024, screenBounds.height - 40).dp
+        )
         val call by voipEngine.callStatus.collectAsState()
         val traySupported = remember { SystemTray.isSupported() }
         var mainWindowVisible by remember { mutableStateOf(!widgetSmokeTest) }
@@ -308,6 +324,10 @@ fun main(args: Array<String>) {
         ) {
             val callOverlayVisible = !callOverlayCollapsed &&
                 (call.state == CallState.INCOMING || call.state == CallState.ACTIVE)
+            DisposableEffect(window) {
+                window.minimumSize = Dimension(minOf(760, screenBounds.width), minOf(520, screenBounds.height - 40))
+                onDispose { }
+            }
             DisposableEffect(window, themeMode) {
                 val restoreWindowsTitleBar = applyQTalkWindowsTitleBar(window, themeMode == ThemeMode.LIGHT)
                 onDispose(restoreWindowsTitleBar)
@@ -322,7 +342,19 @@ fun main(args: Array<String>) {
                 }
             }
 
-            Box(Modifier.fillMaxSize().background(if (themeMode == ThemeMode.LIGHT) Color.White else Color(0xFF090B0D))) {
+            BoxWithConstraints(Modifier.fillMaxSize().background(if (themeMode == ThemeMode.LIGHT) Color.White else Color(0xFF090B0D))) {
+                val baseDensity = LocalDensity.current
+                val scale = if (interfaceScale == 0f) {
+                    minOf(1f, maxWidth.value / 1100f, maxHeight.value / 960f).coerceAtLeast(0.65f)
+                } else interfaceScale
+                CompositionLocalProvider(
+                    LocalUnscaledDensity provides baseDensity,
+                    LocalDensity provides Density(baseDensity.density * scale, baseDensity.fontScale),
+                    LocalInterfaceScale provides InterfaceScale(interfaceScale) {
+                        themeStore.saveScale(it)
+                        interfaceScale = it
+                    }
+                ) {
                 if (!widgetSmokeTest) {
                     App(
                         voipEngine = voipEngine,
@@ -350,6 +382,7 @@ fun main(args: Array<String>) {
                             if (externalDialRequest?.id == id) externalDialRequest = null
                         }
                     )
+                }
                 }
             }
         }

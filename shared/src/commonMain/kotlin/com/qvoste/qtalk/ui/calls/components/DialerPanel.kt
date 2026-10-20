@@ -3,6 +3,8 @@ package com.qvoste.qtalk.ui.calls.components
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -111,16 +113,24 @@ internal fun DialerPanel(
     val panelHorizontalPadding = if (compact) 32.dp else 37.dp
     val panelContentWidth = panelWidth - panelHorizontalPadding * 2
 
+    BoxWithConstraints(Modifier.width(panelWidth).fillMaxHeight().background(PanelBackground)) {
+    val keypadSize = if (maxHeight < 650.dp) 44.dp else 54.dp
+    val roomy = maxHeight >= 940.dp
+    val keypadGap = ((maxHeight.value - 620f) / 10f).coerceIn(8f, 34f).dp
     Column(
-        Modifier.width(panelWidth).fillMaxHeight().background(PanelBackground)
+        Modifier.fillMaxWidth().heightIn(max = 960.dp).fillMaxHeight()
             .padding(
                 start = panelHorizontalPadding,
                 top = 16.dp,
                 end = panelHorizontalPadding,
-                bottom = 39.dp
+                bottom = if (roomy) 39.dp else 16.dp
             ),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Column(
+            Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
         Row(
             Modifier.width(panelContentWidth).height(62.dp)
                 .transferOnRightClick(
@@ -348,7 +358,8 @@ internal fun DialerPanel(
             }
         }
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(12.dp))
+        }
         Text(
             "Личная линия сотрудника:  ${accountNumber.ifBlank { "—" }}",
             color = TextSecondary,
@@ -358,7 +369,7 @@ internal fun DialerPanel(
             modifier = Modifier.width(panelContentWidth),
             textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(if (roomy) 22.dp else 10.dp))
         Box(Modifier.width(panelContentWidth).height(29.dp), contentAlignment = Alignment.Center) {
             BasicTextField(
                 value = shownNumber,
@@ -388,22 +399,22 @@ internal fun DialerPanel(
                 colorFilter = if (IsLightTheme) ColorFilter.tint(TextSecondary) else null
             )
         }
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(if (roomy) 28.dp else 12.dp))
         Column(
             Modifier.width(234.dp).align(Alignment.CenterHorizontally),
-            verticalArrangement = Arrangement.spacedBy(34.dp)
+            verticalArrangement = Arrangement.spacedBy(keypadGap)
         ) {
             keypadRows.forEach { row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     row.forEach { key ->
-                        KeypadButton(key) {
+                        KeypadButton(key, keypadSize) {
                             if (!call.state.isInProgress) onNumberChange(number + key)
                         }
                     }
                 }
             }
         }
-        Spacer(Modifier.height(34.dp))
+        Spacer(Modifier.height(if (roomy) 34.dp else 12.dp))
         val canCall = registration == RegistrationState.REGISTERED && number.isNotBlank() && !call.state.isInProgress
         CircleIconAction(
             Res.drawable.icon_phone,
@@ -415,6 +426,7 @@ internal fun DialerPanel(
             if (call.state.isInProgress) onHangUp() else if (canCall) onCall()
         }
         error?.let { Text(it, color = Danger, fontSize = 9.sp, modifier = Modifier.align(Alignment.CenterHorizontally)) }
+    }
     }
 }
 
@@ -653,8 +665,8 @@ private fun InlineTextField(
 }
 
 @Composable
-private fun KeypadButton(value: String, onClick: () -> Unit) {
-    Box(Modifier.size(54.dp).clip(CircleShape).background(ControlBackground).clickable(onClick = onClick), Alignment.Center) {
+private fun KeypadButton(value: String, size: androidx.compose.ui.unit.Dp = 54.dp, onClick: () -> Unit) {
+    Box(Modifier.size(size).clip(CircleShape).background(ControlBackground).clickable(onClick = onClick), Alignment.Center) {
         Text(value, color = TextPrimary, fontSize = 19.sp, lineHeight = 19.sp)
     }
 }

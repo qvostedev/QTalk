@@ -4,6 +4,13 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
@@ -125,6 +132,7 @@ import qtalk.shared.generated.resources.icon_settings_ringtone
 import qtalk.shared.generated.resources.icon_settings_volume_high
 import qtalk.shared.generated.resources.icon_settings_volume_low
 import qtalk.shared.generated.resources.icon_settings_theme
+import qtalk.shared.generated.resources.icon_settings_scale
 import qtalk.shared.generated.resources.icon_telegram
 import qtalk.shared.generated.resources.icon_add_contact
 import qtalk.shared.generated.resources.icon_plus
@@ -517,9 +525,13 @@ private fun CallsContent(
         // На половине экрана освобождаем место центральной колонке.
         // Windows пересчитывает половину экрана с учётом системного DPI.
         val compact = maxWidth < 1100.dp
+        val unscaledDensity = LocalUnscaledDensity.current ?: LocalDensity.current
+        val scaledDensity = LocalDensity.current
+        val appliedScale = scaledDensity.density / unscaledDensity.density
         // При любом звонке основной интерфейс остаётся виден через размытие.
         Row(Modifier.fillMaxSize().then(if (showCallOverlay) Modifier.blur(8.dp) else Modifier)) {
-            Sidebar(
+            CompositionLocalProvider(LocalDensity provides unscaledDensity) {
+              Sidebar(
                 selected = section,
                 registration = registration,
                 compact = compact,
@@ -529,7 +541,8 @@ private fun CallsContent(
                     searchFocused = false
                     section = it
                 }
-            )
+              )
+            }
 
             // Центральная часть зависит от выбранного раздела.
             when (section) {
@@ -660,7 +673,10 @@ private fun CallsContent(
                 )
             }
 
-            run {
+            CompositionLocalProvider(LocalDensity provides Density(
+                unscaledDensity.density * minOf(appliedScale, 1f),
+                unscaledDensity.fontScale * maxOf(appliedScale, 1f)
+            )) {
                 val contactBeingEdited = editingContact
                 val deletableContact = if (showAddContact) null else contactBeingEdited ?: selectedContact
                 DialerPanel(
@@ -1084,13 +1100,14 @@ private fun FavoritesSection(
     Spacer(Modifier.height(12.dp))
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val gap = if (compact) 4.dp else 6.dp
-        val visibleSlots = ((maxWidth + gap) / (104.dp + gap)).toInt().coerceAtLeast(1)
-        val visibleFavorites = (visibleSlots - 1).coerceAtLeast(0)
         Row(
-            modifier = Modifier.offset(x = (-25).dp),
+            // Symmetric overflow places the viewport 25 dp left of the content edge.
+            // This cancels the centered avatar's 25 dp inset without a second offset.
+            modifier = Modifier.requiredWidth(maxWidth + 50.dp)
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(gap)
         ) {
-            contacts.filter { it.favorite }.take(visibleFavorites).forEach { contact ->
+            contacts.filter { it.favorite }.forEach { contact ->
                 FavoriteItem(contact, canTransfer, onTransferEmployee) { onSelectContact(contact) }
             }
             Column(
@@ -1133,7 +1150,7 @@ private fun HistoryRow(
     }
     BoxWithConstraints(Modifier.fillMaxWidth().height(64.dp)) {
         Row(
-            Modifier.offset(x = (-8).dp).requiredWidth(maxWidth + 16.dp).fillMaxHeight()
+            Modifier.requiredWidth(maxWidth + 16.dp).fillMaxHeight()
                 .clip(RoundedCornerShape(12.dp)).clickable { onSelect(item) }
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1219,6 +1236,8 @@ private fun SipSettings(
     var showRingtones by remember { mutableStateOf(false) }
     var showDatabase by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
+    var showScale by remember { mutableStateOf(false) }
+    val interfaceScale = LocalInterfaceScale.current
     var updateMessage by remember { mutableStateOf<String?>(null) }
     var updateProgress by remember { mutableStateOf<Float?>(null) }
     var updating by remember { mutableStateOf(false) }
@@ -1374,6 +1393,13 @@ private fun SipSettings(
                 onClick = { onThemeModeChange(if (themeMode == ThemeMode.LIGHT) ThemeMode.DARK else ThemeMode.LIGHT) }
             )
             SettingsActionRow(
+                icon = Res.drawable.icon_settings_scale,
+                title = "Масштаб интерфейса",
+                subtitle = "Размер текста и элементов приложения",
+                value = interfaceScale.label,
+                onClick = { showScale = true }
+            )
+            SettingsActionRow(
                 icon = Res.drawable.icon_settings_database,
                 title = "База данных",
                 subtitle = contactDatabaseState.message,
@@ -1395,6 +1421,27 @@ private fun SipSettings(
     }
     }
 
+    if (showScale) {
+        AlertDialog(
+            onDismissRequest = { showScale = false },
+            containerColor = ControlBackground,
+            title = { Text("Масштаб интерфейса", color = TextPrimary) },
+            text = {
+                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                    Text("Автоматический масштаб подстраивается под размер окна.", color = TextSecondary, fontSize = 12.sp)
+                    listOf(0f, 0.65f, 0.75f, 0.8f, 0.9f, 1f, 1.1f, 1.25f).forEach { scale ->
+                        TextButton(onClick = { interfaceScale.onChange(scale) }) {
+                            Text(
+                                (if (interfaceScale.value == scale) "✓  " else "") + InterfaceScale(scale).label,
+                                color = if (interfaceScale.value == scale) Primary else TextPrimary
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showScale = false }) { Text("Готово", color = Primary) } }
+        )
+    }
     if (showAccount) {
         AlertDialog(
             onDismissRequest = { showAccount = false },
@@ -1608,6 +1655,7 @@ private fun SettingsActionRow(
     onClick: () -> Unit
 ) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val maxValueWidth = minOf(260.dp, maxWidth * 0.4f)
         Row(
             Modifier.fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick)
@@ -1637,7 +1685,7 @@ private fun SettingsActionRow(
                     fontSize = 11.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 260.dp)
+                    modifier = Modifier.widthIn(max = maxValueWidth)
                 )
                 Spacer(Modifier.width(12.dp))
             }
@@ -1673,7 +1721,7 @@ private fun SettingsSliderRow(
                 )
             }
             Spacer(Modifier.width(9.dp))
-            Box(Modifier.width(330.dp).height(24.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.weight(1f).height(24.dp), contentAlignment = Alignment.Center) {
                 Canvas(Modifier.fillMaxWidth().height(8.dp)) {
                     val centerY = size.height / 2f
                     val progress = value.coerceIn(0f, 1f)
@@ -2012,7 +2060,7 @@ private fun ContactRow(
 ) {
     BoxWithConstraints(Modifier.fillMaxWidth().height(64.dp)) {
         Row(
-            Modifier.offset(x = (-8).dp).requiredWidth(maxWidth + 16.dp).fillMaxHeight()
+            Modifier.requiredWidth(maxWidth + 16.dp).fillMaxHeight()
                 .clip(RoundedCornerShape(12.dp))
                 .transferOnRightClick(canTransfer && transferCodeFor(contact) != null) { onTransferEmployee(contact) }
                 .clickable { onSelect(contact) }.padding(horizontal = 8.dp),
