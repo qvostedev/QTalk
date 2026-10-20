@@ -11,6 +11,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import com.qvoste.qtalk.voip.ConferenceStatus
+import com.qvoste.qtalk.voip.ConferencePhase
+import com.qvoste.qtalk.ui.calls.model.Contact
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -69,6 +73,14 @@ internal fun IncomingCallOverlay(
 
 @Composable
 internal fun ActiveCallOverlay(
+    conference: ConferenceStatus,
+    conferenceError: String?,
+    ownNumber: String,
+    contactForNumber: (String) -> Contact?,
+    onRemoveParticipant: (String) -> Unit,
+    onAddParticipant: () -> Unit,
+    onMergeConference: () -> Unit,
+    onCancelConference: () -> Unit,
     number: String,
     callerName: String?,
     callerTelegram: String,
@@ -88,6 +100,10 @@ internal fun ActiveCallOverlay(
     var onHold by rememberSaveable { mutableStateOf(false) }
     var keypadVisible by rememberSaveable { mutableStateOf(false) }
     var enteredDigits by remember(number) { mutableStateOf("") }
+    LaunchedEffect(conference.microphoneMuted, conference.speakerMuted, number) {
+        microphoneMuted = conference.microphoneMuted
+        speakerMuted = conference.speakerMuted
+    }
 
     fun enterDtmf(digit: Char) {
         if (digit !in "0123456789*#") return
@@ -107,6 +123,12 @@ internal fun ActiveCallOverlay(
         0
     }
 
+    if (conference.phase != ConferencePhase.NONE) {
+        ConferenceCallOverlay(conference, ownNumber, contactForNumber, seconds, conferenceError,
+            onMergeConference, onCancelConference, onRemoveParticipant, onMicrophoneMutedChange,
+            onSpeakerMutedChange, onCollapse, onHangUp)
+        return
+    }
     Box(Modifier.fillMaxSize().background(Color(0xD9090B0D)), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             if (callerName == null) {
@@ -120,6 +142,10 @@ internal fun ActiveCallOverlay(
             Text(uiText("${formatPhoneNumber(number)}  •  Личная линия"), color = TextSecondary, fontSize = 16.sp)
             Spacer(Modifier.height(20.dp))
             Text(formatDuration(seconds), color = TextSecondary, fontSize = 18.sp)
+            (conferenceError ?: conference.message.takeIf(String::isNotBlank))?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(uiText(it), color = Danger, fontSize = 12.sp, modifier = Modifier.widthIn(max = 480.dp))
+            }
             Spacer(Modifier.height(20.dp))
 
             if (keypadVisible) {
@@ -177,6 +203,10 @@ internal fun ActiveCallOverlay(
                     TextCallControl("×", "Отмена", 48, columnWidth = 48) { keypadVisible = false }
                 }
             } else {
+                if (conference.phase == ConferencePhase.NONE) {
+                    TextButton(onClick = onAddParticipant) { Text(uiText("Добавить участника"), color = Primary) }
+                    Spacer(Modifier.height(8.dp))
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CallControl(
                         Res.drawable.icon_call_microphone,
@@ -200,7 +230,9 @@ internal fun ActiveCallOverlay(
                         speakerMuted = !speakerMuted
                         onSpeakerMutedChange(speakerMuted)
                     }
-                    CallControl(Res.drawable.icon_call_hold, "Удержание", onHold, 18, 20) { onHold = !onHold }
+                    if (conference.phase == ConferencePhase.NONE) {
+                        CallControl(Res.drawable.icon_call_hold, "Удержание", onHold, 18, 20) { onHold = !onHold }
+                    }
                 }
                 Spacer(Modifier.height(14.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -218,7 +250,7 @@ internal fun ActiveCallOverlay(
 }
 
 @Composable
-private fun CallControl(
+internal fun CallControl(
     icon: DrawableResource,
     label: String,
     active: Boolean,

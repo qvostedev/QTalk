@@ -50,6 +50,7 @@ class CallsViewModel(
     val registrationMessage = voipEngine.registrationMessage
     val connectionStatus = voipEngine.connectionStatus
     val callStatus = voipEngine.callStatus
+    val conferenceStatus = voipEngine.conferenceStatus
     val audioSettings = voipEngine.audioSettings
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val commandMutex = Mutex()
@@ -210,6 +211,12 @@ class CallsViewModel(
     fun editSipAccount() { _authenticationRequired.value = true }
     fun declineCall() = execute { voipEngine.declineCall() }
     fun hangUp() = execute { voipEngine.hangUp() }
+    fun inviteConferenceParticipant(number: String) = execute {
+        voipEngine.inviteConferenceParticipant(dialablePhoneNumber(number))
+    }
+    fun mergeConference() = execute { voipEngine.mergeConference() }
+    fun cancelConferenceInvite() = execute { voipEngine.cancelConferenceInvite() }
+    fun removeConferenceParticipant(number: String) = execute { voipEngine.removeConferenceParticipant(number) }
     fun sendDtmf(digit: Char) {
         scope.launch {
             try {
@@ -222,6 +229,9 @@ class CallsViewModel(
         }
     }
     fun transferToEmployee(contact: Contact) = execute {
+        check(conferenceStatus.value.phase == com.qvoste.qtalk.voip.ConferencePhase.NONE) {
+            "Перевод недоступен во время конференции"
+        }
         val code = transferCodeFor(contact)
             ?: error("Перевод доступен только на внутренний номер сотрудника")
         val activeCall = voipEngine.callStatus.value

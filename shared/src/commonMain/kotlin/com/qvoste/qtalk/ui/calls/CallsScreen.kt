@@ -101,6 +101,8 @@ import kotlin.time.Clock
 import com.qvoste.qtalk.ui.calls.model.formatPhoneNumber
 import com.qvoste.qtalk.voip.CallState
 import com.qvoste.qtalk.voip.TelephonyConnection
+import com.qvoste.qtalk.voip.ConferenceStatus
+import com.qvoste.qtalk.voip.ConferencePhase
 import com.qvoste.qtalk.voip.CallStatus
 import com.qvoste.qtalk.voip.AudioDeviceInfo
 import com.qvoste.qtalk.voip.AudioSettings
@@ -180,6 +182,7 @@ fun CallsScreen(
     val registrationMessage by viewModel.registrationMessage.collectAsState()
     val connection by viewModel.connectionStatus.collectAsState()
     val call by viewModel.callStatus.collectAsState()
+    val conference by viewModel.conferenceStatus.collectAsState()
     val error by viewModel.error.collectAsState()
     val accountNumber by viewModel.accountNumber.collectAsState()
     val authenticationRequired by viewModel.authenticationRequired.collectAsState()
@@ -202,6 +205,11 @@ fun CallsScreen(
     }
 
     CallsContent(
+        conference = conference,
+        onRemoveParticipant = viewModel::removeConferenceParticipant,
+        onInviteConference = viewModel::inviteConferenceParticipant,
+        onMergeConference = viewModel::mergeConference,
+        onCancelConference = viewModel::cancelConferenceInvite,
         connection = connection,
         onRetryConnection = viewModel::retryRegistration,
         onEditSipAccount = viewModel::editSipAccount,
@@ -406,6 +414,11 @@ private fun LoginField(
 
 @Composable
 private fun CallsContent(
+    conference: ConferenceStatus,
+    onRemoveParticipant: (String) -> Unit,
+    onInviteConference: (String) -> Unit,
+    onMergeConference: () -> Unit,
+    onCancelConference: () -> Unit,
     connection: TelephonyConnection,
     onRetryConnection: () -> Unit,
     onEditSipAccount: () -> Unit,
@@ -462,6 +475,7 @@ private fun CallsContent(
     var selectedContact by remember { mutableStateOf<Contact?>(null) }
     var showAddContact by rememberSaveable { mutableStateOf(false) }
     var editingContact by remember { mutableStateOf<Contact?>(null) }
+    var showConferencePicker by remember { mutableStateOf(false) }
     var searchFocused by remember { mutableStateOf(false) }
     var dialerTextInputFocused by remember { mutableStateOf(false) }
     var seenUpdateVersion by rememberSaveable { mutableStateOf<String?>(null) }
@@ -470,6 +484,9 @@ private fun CallsContent(
     val hasUnreadUpdate = availableUpdateVersion != null && availableUpdateVersion != seenUpdateVersion
     val showCallOverlay = (call.state == CallState.INCOMING && !callOverlayCollapsed) ||
         (call.state == CallState.ACTIVE && !callOverlayCollapsed)
+    LaunchedEffect(call.state) {
+        if (call.state != CallState.ACTIVE) showConferencePicker = false
+    }
 
     LaunchedEffect(Unit) { keyboardDialFocus.requestFocus() }
     LaunchedEffect(section, availableUpdateVersion) {
@@ -592,7 +609,7 @@ private fun CallsContent(
                         }
                     },
                     onMissedCallsSeen = onMissedCallsSeen,
-                    canTransfer = call.state == CallState.ACTIVE,
+                    canTransfer = call.state == CallState.ACTIVE && conference.phase == ConferencePhase.NONE,
                     onTransferEmployee = onTransferEmployee,
                     onSearchFocusChange = { searchFocused = it },
                     searchFocusRequester = searchFocusRequester
@@ -620,7 +637,7 @@ private fun CallsContent(
                         showAddContact = false
                         editingContact = it
                     },
-                    canTransfer = call.state == CallState.ACTIVE,
+                    canTransfer = call.state == CallState.ACTIVE && conference.phase == ConferencePhase.NONE,
                     onTransferEmployee = onTransferEmployee,
                     onSearchFocusChange = { searchFocused = it },
                     searchFocusRequester = searchFocusRequester
@@ -659,7 +676,7 @@ private fun CallsContent(
                         selectedContact = it
                         number = formatPhoneNumber(it.number)
                     },
-                    canTransfer = call.state == CallState.ACTIVE,
+                    canTransfer = call.state == CallState.ACTIVE && conference.phase == ConferencePhase.NONE,
                     onTransferEmployee = onTransferEmployee,
                     onSearchFocusChange = { searchFocused = it },
                     searchFocusRequester = searchFocusRequester
@@ -678,7 +695,7 @@ private fun CallsContent(
                         selectedContact = it
                         number = formatPhoneNumber(it.number)
                     },
-                    canTransfer = call.state == CallState.ACTIVE,
+                    canTransfer = call.state == CallState.ACTIVE && conference.phase == ConferencePhase.NONE,
                     onTransferEmployee = onTransferEmployee,
                     onSearchFocusChange = { searchFocused = it },
                     searchFocusRequester = searchFocusRequester,
@@ -782,6 +799,14 @@ private fun CallsContent(
             val activeContact = contacts.firstOrNull { it.matchesCallNumber(call.number) }
             CallsTheme(ThemeMode.DARK) {
                 ActiveCallOverlay(
+                    conference = conference,
+                    conferenceError = error,
+                    ownNumber = accountNumber,
+                    contactForNumber = { participant -> contacts.firstOrNull { it.matchesCallNumber(participant) } },
+                    onRemoveParticipant = onRemoveParticipant,
+                    onAddParticipant = { showConferencePicker = true },
+                    onMergeConference = onMergeConference,
+                    onCancelConference = onCancelConference,
                     number = call.number,
                     callerName = activeContact?.name,
                     callerTelegram = activeContact?.telegram.orEmpty(),
@@ -796,11 +821,55 @@ private fun CallsContent(
             }
         }
 
+        if (showConferencePicker && call.state == CallState.ACTIVE) {
+            ConferenceParticipantDialog(contacts, accountNumber, call.number,
+                onInvite = { target -> showConferencePicker = false; onInviteConference(target) },
+                onDismiss = { showConferencePicker = false })
+        }
         if (connection.showWarning) {
             TelephonyConnectionBanner(connection, onRetryConnection, onEditSipAccount,
                 Modifier.align(Alignment.TopCenter))
         }
     }
+}
+
+@Composable
+private fun ConferenceParticipantDialog(
+    contacts: List<Contact>, ownNumber: String, currentNumber: String,
+    onInvite: (String) -> Unit, onDismiss: () -> Unit
+) {
+    var search by remember { mutableStateOf("") }
+    val target = search.filter { it.isDigit() || it == '+' }
+    val excluded = setOf(ownNumber.normalizedContactNumber(), currentNumber.normalizedContactNumber())
+    val canInvite = search.isNotBlank() && search.all { it.isDigit() || it in "+ ()-" } &&
+        target.normalizedContactNumber().isNotBlank() && target.normalizedContactNumber() !in excluded
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = ControlBackground,
+        title = { Text(uiText("Добавить участника"), color = TextPrimary) },
+        text = {
+            Column(Modifier.widthIn(min = 280.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(uiText("Первый собеседник будет на удержании до объединения звонков."), color = TextSecondary, fontSize = 12.sp)
+                OutlinedTextField(search, { search = it }, label = { Text(uiText("Имя или номер")) },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true, colors = darkTextFieldColors())
+                LazyColumn(Modifier.heightIn(max = 230.dp)) {
+                    items(contacts.filter {
+                        val number = it.number.ifBlank { it.phone }.normalizedContactNumber()
+                        number.isNotBlank() && number !in excluded && it.matchesSearch(search)
+                    }) { contact ->
+                        TextButton(onClick = { onInvite(contact.number.ifBlank { contact.phone }) }, modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.fillMaxWidth()) {
+                                Text(contact.name, color = TextPrimary, fontSize = 12.sp)
+                                Text(contact.number.ifBlank { contact.phone }, color = TextSecondary, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onInvite(target) }, enabled = canInvite) { Text(uiText("Позвонить"), color = Primary) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(uiText("Отмена"), color = TextPrimary) } }
+    )
 }
 
 @Composable

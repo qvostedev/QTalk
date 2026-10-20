@@ -48,6 +48,8 @@ import com.qvoste.qtalk.ui.calls.theme.Danger
 import com.qvoste.qtalk.ui.calls.theme.TextPrimary
 import com.qvoste.qtalk.ui.calls.theme.TextSecondary
 import com.qvoste.qtalk.voip.CallState
+import com.qvoste.qtalk.voip.ConferenceStatus
+import com.qvoste.qtalk.voip.ConferencePhase
 import kotlinx.coroutines.delay
 import kotlin.time.Clock
 import org.jetbrains.compose.resources.DrawableResource
@@ -73,13 +75,19 @@ fun CompactCallWidget(
     onMicrophoneMutedChange: (Boolean) -> Unit = {},
     onSpeakerMutedChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier.fillMaxSize(),
-    callerAvatarUrl: String = ""
+    callerAvatarUrl: String = "",
+    conference: ConferenceStatus = ConferenceStatus()
 ) {
     var nowEpochMillis by remember(connectedAtEpochMillis) {
         mutableStateOf(Clock.System.now().toEpochMilliseconds())
     }
     var microphoneMuted by remember(number) { mutableStateOf(false) }
     var speakerMuted by remember(number) { mutableStateOf(false) }
+    val isConference = conference.phase != ConferencePhase.NONE
+    LaunchedEffect(conference.microphoneMuted, conference.speakerMuted, isConference, number) {
+        microphoneMuted = conference.microphoneMuted
+        speakerMuted = conference.speakerMuted
+    }
     LaunchedEffect(connectedAtEpochMillis, state) {
         if (state == CallState.ACTIVE) {
             while (true) {
@@ -98,13 +106,15 @@ fun CompactCallWidget(
         modifier
             .background(AppBackground)
             .combinedClickable(
-                onClick = {},
+                onClick = { if (isConference) onOpen() },
                 onDoubleClick = onOpen
             )
             .padding(horizontal = 8.dp, vertical = 6.dp)
     ) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            if (callerName == null) {
+            if (isConference) {
+                Avatar((conference.participants.size + 1).toString(), "conference", 38)
+            } else if (callerName == null) {
                 Avatar("?", number, 38)
             } else {
                 ContactAvatar(callerName, callerTelegram, 38, callerAvatarUrl)
@@ -116,7 +126,7 @@ fun CompactCallWidget(
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    callerName ?: formatPhoneNumber(number).ifBlank { uiText("Неизвестный номер") },
+                    if (isConference) uiText("Конференция") else callerName ?: formatPhoneNumber(number).ifBlank { uiText("Неизвестный номер") },
                     color = TextPrimary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -124,7 +134,7 @@ fun CompactCallWidget(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    uiText(when (state) {
+                    if (isConference) "${conference.participants.size + 1} • ${formatDuration(seconds)}" else uiText(when (state) {
                         CallState.INCOMING -> "Входящий звонок"
                         CallState.DIALING -> "Вызов  •  ${formatPhoneNumber(number)}"
                         CallState.RINGING -> "Ожидание ответа"

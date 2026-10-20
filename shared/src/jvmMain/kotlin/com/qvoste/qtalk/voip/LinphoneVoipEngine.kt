@@ -18,6 +18,7 @@ import org.linphone.core.AudioDevice
 import org.linphone.core.Reason
 import org.linphone.core.Account
 import org.linphone.core.Core
+import org.linphone.core.Conference
 import org.linphone.core.CoreListenerStub
 import org.linphone.core.Factory
 import org.linphone.core.RegistrationState as LinphoneRegistrationState
@@ -33,6 +34,18 @@ import javax.sound.sampled.FloatControl
 import kotlin.math.log10
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
+
+private fun conferenceLegState(state: Call.State): ConferenceLegState? = when (state) {
+    Call.State.OutgoingInit, Call.State.OutgoingProgress, Call.State.Connected -> ConferenceLegState.DIALING
+    Call.State.OutgoingRinging, Call.State.OutgoingEarlyMedia -> ConferenceLegState.RINGING
+    Call.State.StreamsRunning -> ConferenceLegState.ACTIVE
+    Call.State.Pausing -> ConferenceLegState.PAUSING
+    Call.State.Paused -> ConferenceLegState.PAUSED
+    Call.State.End -> ConferenceLegState.ENDED
+    Call.State.Error -> ConferenceLegState.FAILED
+    Call.State.Released -> ConferenceLegState.RELEASED
+    else -> null
+}
 
 class LinphoneVoipEngine : VoipEngine {
     private val linphoneResources = LinphoneResourceInstaller.install()
@@ -68,6 +81,66 @@ class LinphoneVoipEngine : VoipEngine {
     private var lastNetworkCheckAt = 0L
     private var networkAvailable = true
     private var lastRegistrationOkAt = 0L
+    private var localConference: Conference? = null
+    private var conferenceInviteJob: Job? = null
+    private var microphoneMuted = false
+    private var speakerMuted = false
+    private var lastConferenceAudioAt = 0L
+    private val conferenceSession = LocalConferenceSession(object : LocalConferenceBackend<Call> {
+        override fun number(call: Call): String = call.remoteAddress?.username.orEmpty()
+        override fun state(call: Call): ConferenceLegState = conferenceLegState(call.state) ?: ConferenceLegState.PAUSING
+        override fun pause(call: Call) { check(call.pause() == 0) { "Не удалось поставить первый звонок на удержание" } }
+        override fun resume(call: Call) { check(call.resume() == 0) { "Не удалось вернуться к первому звонку" } }
+        override fun invite(number: String): Call {
+            val address = checkNotNull(currentAccount?.params?.serverAddress).clone()
+            address.username = number
+            val params = checkNotNull(core.createCallParams(null))
+            params.isVideoEnabled = false
+            return checkNotNull(core.inviteAddressWithParams(address, params)) { "Не удалось добавить участника" }.also {
+                it.setMicrophoneMuted(microphoneMuted)
+                it.setSpeakerMuted(speakerMuted)
+            }
+        }
+        override fun merge(first: Call, second: Call) {
+            val params = core.createConferenceParams(null).apply {
+                isAudioEnabled = true
+                isVideoEnabled = false
+                isLocalParticipantEnabled = true
+                isOneParticipantConferenceEnabled = true
+                account = currentAccount
+                conferenceFactoryAddress = null
+            }
+            val conference = checkNotNull(core.createConferenceWithParams(params)) { "Не удалось создать локальную конференцию" }
+            localConference = conference
+            try {
+                // The SDK's batch wrapper returns a C++ boolean, unlike addParticipant's status code.
+                check(conference.addParticipant(first) == 0) { "Не удалось объединить звонки" }
+                check(conference.addParticipant(second) == 0) { "Не удалось объединить звонки" }
+                check(conference.enter() == 0) { "Не удалось подключить звук конференции" }
+                conference.microphoneMuted = microphoneMuted
+            } catch (error: Exception) {
+                runCatching { conference.removeParticipant(first) }
+                runCatching { conference.removeParticipant(second) }
+                runCatching { conference.leave() }
+                localConference = null
+                throw error
+            }
+        }
+        override fun end(call: Call) {
+            if (call.state !in setOf(Call.State.End, Call.State.Error, Call.State.Released)) {
+                check(call.terminate() == 0) { "Не удалось завершить звонок участника" }
+            }
+        }
+    }, onPrimaryChanged = {
+        currentCall = it
+        _callStatus.value = _callStatus.value.copy(number = it.remoteAddress?.username.orEmpty())
+    }, onFinished = {
+        currentCall = null
+        localConference = null
+        conferenceInviteJob?.cancel()
+        _callStatus.value = _callStatus.value.copy(state = CallState.ENDED)
+    })
+    override val conferenceStatus = conferenceSession.status
     private val _callStatus = MutableStateFlow(CallStatus())
     override val callStatus = _callStatus.asStateFlow()
     private val audioPreferences = Preferences.userRoot().node("com/qvoste/qtalk/audio")
@@ -93,6 +166,8 @@ class LinphoneVoipEngine : VoipEngine {
 
     private val coreListener = object : CoreListenerStub() {
         override fun onCallStateChanged(core: Core, call: Call, state: Call.State, message: String) {
+            val conferenceState = conferenceLegState(state)
+            if (conferenceState != null && conferenceSession.onCallState(call, conferenceState)) return
             if (state == Call.State.IncomingReceived) {
                 if (currentCall != null) {
                     call.decline(Reason.Busy)
@@ -100,6 +175,9 @@ class LinphoneVoipEngine : VoipEngine {
                 }
 
                 currentCall = call
+                conferenceSession.reset()
+                microphoneMuted = false
+                speakerMuted = false
                 val caller = call.remoteAddress?.username.orEmpty()
                 _callStatus.value = CallStatus(
                     state = CallState.INCOMING,
@@ -227,6 +305,7 @@ class LinphoneVoipEngine : VoipEngine {
                 error("Unable to start Linphone Core: $startResult")
             }
             coreStarted = true
+            core.maxCalls = 2
         }
 
         // На Windows автоопределение сети иногда не срабатывает.
@@ -257,6 +336,7 @@ class LinphoneVoipEngine : VoipEngine {
             while (isActive) {
                 core.iterate()
                 checkTelephonyConnection()
+                refreshConferenceAudio()
                 delay(20.milliseconds)
             }
         }
@@ -402,6 +482,9 @@ class LinphoneVoipEngine : VoipEngine {
         check(_registrationState.value == RegistrationState.REGISTERED) { "Сначала подключитесь к SIP-серверу" }
         check(currentCall == null) { "Предыдущий звонок ещё не завершён" }
         val extension = normalizeOutgoingNumber(number)
+        conferenceSession.reset()
+        microphoneMuted = false
+        speakerMuted = false
         val server = checkNotNull(currentAccount?.params?.serverAddress).clone()
         server.username = extension
         val params = checkNotNull(core.createCallParams(null))
@@ -440,6 +523,16 @@ class LinphoneVoipEngine : VoipEngine {
     }
 
     override suspend fun hangUp() = withContext(linphoneDispatcher) {
+        if (conferenceSession.hasSession) {
+            val previous = _callStatus.value
+            _callStatus.value = _callStatus.value.copy(state = CallState.ENDING)
+            conferenceInviteJob?.cancel()
+            try { conferenceSession.hangUpAll() } catch (error: Exception) {
+                if (conferenceSession.hasSession) _callStatus.value = previous
+                throw error
+            }
+            return@withContext
+        }
         val call = currentCall ?: return@withContext
         val previous = _callStatus.value
         _callStatus.value = previous.copy(state = CallState.ENDING)
@@ -451,19 +544,65 @@ class LinphoneVoipEngine : VoipEngine {
 
     override suspend fun sendDtmf(digit: Char) = withContext(linphoneDispatcher) {
         require(digit in "0123456789*#") { "Недопустимый DTMF-символ" }
-        val call = checkNotNull(currentCall) { "Нет активного звонка" }
+        val call = checkNotNull(conferenceSession.foregroundCall ?: currentCall) { "Нет активного звонка" }
         check(_callStatus.value.state == CallState.ACTIVE) { "Звонок ещё не установлен" }
+        check(call.state == Call.State.StreamsRunning) { "Звонок ещё не установлен" }
         if (call.sendDtmf(digit) != 0) error("Не удалось отправить DTMF")
     }
 
     override suspend fun setMicrophoneMuted(muted: Boolean) = withContext(linphoneDispatcher) {
-        val call = checkNotNull(currentCall) { "Нет активного звонка" }
+        microphoneMuted = muted
+        localConference?.microphoneMuted = muted
+        val call = checkNotNull(conferenceSession.foregroundCall ?: currentCall) { "Нет активного звонка" }
         call.setMicrophoneMuted(muted)
     }
 
     override suspend fun setSpeakerMuted(muted: Boolean) = withContext(linphoneDispatcher) {
-        val call = checkNotNull(currentCall) { "Нет активного звонка" }
-        call.setSpeakerMuted(muted)
+        speakerMuted = muted
+        val call = checkNotNull(conferenceSession.foregroundCall ?: currentCall) { "Нет активного звонка" }
+        (conferenceSession.calls.ifEmpty { listOf(call) }).forEach { it.setSpeakerMuted(muted) }
+    }
+
+    override suspend fun inviteConferenceParticipant(number: String) = withContext(linphoneDispatcher) {
+        check(_registrationState.value == RegistrationState.REGISTERED) { "Нет связи с сервером телефонии" }
+        val target = normalizeOutgoingNumber(number)
+        require(target != currentAccount?.params?.identityAddress?.username) { "Нельзя добавить свой номер" }
+        conferenceSession.begin(checkNotNull(currentCall) { "Нет активного звонка" }, target)
+        conferenceInviteJob?.cancel()
+        conferenceInviteJob = scope.launch {
+            delay(45_000)
+            if (conferenceStatus.value.phase == ConferencePhase.INVITING) conferenceSession.cancel()
+        }
+    }
+
+    override suspend fun mergeConference() = withContext(linphoneDispatcher) {
+        conferenceSession.merge()
+        conferenceInviteJob?.cancel()
+        Unit
+    }
+
+    override suspend fun cancelConferenceInvite() = withContext(linphoneDispatcher) {
+        conferenceInviteJob?.cancel()
+        conferenceSession.cancel()
+    }
+
+    override suspend fun removeConferenceParticipant(number: String) = withContext(linphoneDispatcher) {
+        conferenceSession.removeParticipant(number)
+    }
+
+    private fun refreshConferenceAudio() {
+        val now = System.nanoTime()
+        if (now - lastConferenceAudioAt < 150_000_000L) return
+        lastConferenceAudioAt = now
+        val conference = localConference?.takeIf { conferenceSession.hasSession }
+        val participants = conference?.participantList.orEmpty()
+        val speaking = participants.filter { participant -> participant.devices.any { it.getIsSpeaking() } }
+            .mapNotNull { it.address?.username }.toSet()
+        val muted = participants.filter { participant ->
+            participant.devices.isNotEmpty() && participant.devices.all { it.getIsMuted() }
+        }.mapNotNull { it.address?.username }.toSet()
+        val localSpeaking = conference?.me?.devices?.any { it.getIsSpeaking() } == true
+        conferenceSession.updateAudioState(microphoneMuted, speakerMuted, speaking, muted, localSpeaking)
     }
 
     override suspend fun unregister() =
@@ -482,6 +621,7 @@ class LinphoneVoipEngine : VoipEngine {
 
 
     override suspend fun stop() {
+        conferenceInviteJob?.cancel()
         stopRingtonePreview()
         iterateJob?.cancelAndJoin()
         iterateJob = null
@@ -506,6 +646,8 @@ class LinphoneVoipEngine : VoipEngine {
             }
             currentCall = null
             currentAccount = null
+            localConference = null
+            conferenceSession.reset()
             _callStatus.value = CallStatus()
             _registrationState.value = RegistrationState.DISCONNECTED
             _connectionStatus.value = TelephonyConnection.DISCONNECTED

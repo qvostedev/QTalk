@@ -119,6 +119,7 @@ fun main(args: Array<String>) {
             height = minOf(1024, screenBounds.height - 40).dp
         )
         val call by voipEngine.callStatus.collectAsState()
+        val conference by voipEngine.conferenceStatus.collectAsState()
         val traySupported = remember { SystemTray.isSupported() }
         var mainWindowVisible by remember { mutableStateOf(!widgetSmokeTest) }
         var callOverlayCollapsed by remember { mutableStateOf(false) }
@@ -181,11 +182,13 @@ fun main(args: Array<String>) {
         }
 
         val widgetCallState = remember { mutableStateOf(widgetCall) }
+        val widgetConferenceState = remember { mutableStateOf(conference) }
         val widgetCallerState = remember { mutableStateOf(caller) }
         val widgetThemeState = remember { mutableStateOf(themeMode) }
         val widgetLanguageState = remember { mutableStateOf(appLanguage) }
         SideEffect {
             widgetCallState.value = widgetCall
+            widgetConferenceState.value = conference
             widgetCallerState.value = if (widgetSmokeTest) null else caller
             widgetThemeState.value = themeMode
             widgetLanguageState.value = appLanguage
@@ -205,6 +208,7 @@ fun main(args: Array<String>) {
                     CompositionLocalProvider(LocalAppLanguage provides LanguageSettings(widgetLanguage)) {
                         CallsTheme(widgetTheme) {
                             CompactCallWidget(
+                                conference = widgetConferenceState.value,
                                 state = widgetCall.state,
                                 number = widgetCall.number,
                                 callerName = widgetCaller?.name,

@@ -72,6 +72,9 @@ kotlin {
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
+        jvmTest.dependencies {
+            runtimeOnly(compose.desktop.currentOs)
+        }
     }
 }
 

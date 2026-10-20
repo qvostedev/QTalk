@@ -4,12 +4,18 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 
 private val disconnectedTelephony = MutableStateFlow(TelephonyConnection.DISCONNECTED)
+private val noConference = MutableStateFlow(ConferenceStatus())
 
 interface VoipEngine {
     val registrationState: StateFlow<RegistrationState>
     val registrationMessage: StateFlow<String>
     val connectionStatus: StateFlow<TelephonyConnection> get() = disconnectedTelephony
     suspend fun retryRegistration() = Unit
+    val conferenceStatus: StateFlow<ConferenceStatus> get() = noConference
+    suspend fun inviteConferenceParticipant(number: String) { error("Конференции недоступны") }
+    suspend fun mergeConference() { error("Конференции недоступны") }
+    suspend fun cancelConferenceInvite() = Unit
+    suspend fun removeConferenceParticipant(number: String) { error("Конференции недоступны") }
 
     val callStatus: StateFlow<CallStatus>
     val audioSettings: StateFlow<AudioSettings>
