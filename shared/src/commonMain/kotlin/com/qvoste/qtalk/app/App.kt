@@ -38,7 +38,7 @@ fun App(
     employeePresenceService: EmployeePresenceService = DisabledEmployeePresenceService,
     themeMode: ThemeMode = ThemeMode.DARK,
     onThemeModeChange: (ThemeMode) -> Unit = {},
-    appVersion: String = "1.0.7",
+    appVersion: String = "1.0.8",
     availableUpdateVersion: String? = null,
     availableUpdateDescription: String? = null,
     onCheckForUpdates: suspend ((String, Float?) -> Unit) -> Unit = {
