@@ -3,6 +3,8 @@
  * Only public Telegram photos are copied. No bot token or Cloudflare account is needed.
  * Run testDriveAvatar first, then syncAvatars, then installAvatarTrigger.
  * The first run asks the owner to authorize Sheets, Drive and external requests.
+ * To move an existing setup, set spreadsheetId in Script Properties to the target
+ * spreadsheet ID. Existing avatar files and the daily trigger are reused.
  */
 function testDriveAvatar() {
   const sheet = avatarSheet_();
@@ -72,10 +74,10 @@ function installAvatarTrigger() {
 function avatarSheet_() {
   const properties = PropertiesService.getScriptProperties();
   const active = SpreadsheetApp.getActiveSpreadsheet();
-  const id = active ? active.getId() : properties.getProperty('spreadsheetId');
+  const id = properties.getProperty('spreadsheetId') || (active && active.getId());
   if (!id) throw new Error('Open this script from the contact spreadsheet');
   properties.setProperty('spreadsheetId', id);
-  const spreadsheet = active || SpreadsheetApp.openById(id);
+  const spreadsheet = active && active.getId() === id ? active : SpreadsheetApp.openById(id);
   const sheet = spreadsheet.getSheets().find(s => {
     const rows = s.getRange(1, 1, Math.min(s.getLastRow(), 10), s.getLastColumn()).getDisplayValues();
     return rows.some(r => r.some(v => /^(telegram|телеграм)$/i.test(v.trim())));
