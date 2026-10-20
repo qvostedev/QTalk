@@ -74,7 +74,6 @@ class CallsViewModel(
     private val _contactDatabaseState = MutableStateFlow(
         ContactDatabaseState(
             sourceUrl = savedContactDatabaseUrl,
-            presenceServiceUrl = employeePresenceService.loadEndpoint(),
             message = if (savedContactDatabaseUrl.isBlank()) {
                 "Google Таблица не подключена"
             } else {
@@ -379,28 +378,23 @@ class CallsViewModel(
         activeCallSeen = false
         connectedAtMillis = 0L
     }
-    fun saveContactDatabaseUrl(url: String, presenceUrl: String) = execute {
+    fun saveContactDatabaseUrl(url: String) = execute {
         val normalized = url.trim()
-        employeePresenceService.saveEndpoint(presenceUrl)
+        employeePresenceService.saveEndpoint("")
         lastPublishedStatus = null
         contactDatabaseService.saveSourceUrl(normalized)
         _contactDatabaseState.value = ContactDatabaseState(
             sourceUrl = normalized,
-            presenceServiceUrl = employeePresenceService.loadEndpoint(),
             message = if (normalized.isBlank()) "Google Таблица не подключена" else "Ожидает синхронизации"
         )
         if (normalized.isNotBlank()) syncContactDatabase()
-        if (registrationState.value == RegistrationState.REGISTERED) {
-            publishPresence(currentPresenceStatus(), force = true)
-        }
-        refreshEmployeeStatuses()
     }
     fun syncContactDatabase() {
         val url = _contactDatabaseState.value.sourceUrl
         if (url.isBlank()) return
         scope.launch { performContactSync(url) }
     }
-    fun disconnectContactDatabase() = saveContactDatabaseUrl("", "")
+    fun disconnectContactDatabase() = saveContactDatabaseUrl("")
 
     private suspend fun performContactSync(url: String) {
         if (!contactSyncMutex.tryLock()) return
@@ -412,6 +406,15 @@ class CallsViewModel(
                 lastSyncSuccessful = null
             )
             val downloaded = contactDatabaseService.downloadContacts(url)
+            val presenceEndpoint = contactDatabaseService.downloadPresenceEndpoint(url)
+            if (_contactDatabaseState.value.sourceUrl != url) return
+            if (employeePresenceService.loadEndpoint() != presenceEndpoint) {
+                employeePresenceService.saveEndpoint(presenceEndpoint)
+                lastPublishedStatus = null
+                if (registrationState.value == RegistrationState.REGISTERED) {
+                    publishPresence(currentPresenceStatus(), force = true)
+                }
+            }
             val merged = mergeDownloadedContacts(_contacts.value, downloaded)
             contactStore.save(merged)
             _contacts.value = merged

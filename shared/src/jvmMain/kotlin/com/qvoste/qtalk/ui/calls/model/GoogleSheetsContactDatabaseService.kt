@@ -17,6 +17,36 @@ class GoogleSheetsContactDatabaseService(
         preferences.flush()
     }
 
+    override suspend fun downloadPresenceEndpoint(url: String): String = withContext(Dispatchers.IO) {
+        val spreadsheetId = Regex("/spreadsheets/d/([A-Za-z0-9_-]+)")
+            .find(url.trim())?.groupValues?.get(1) ?: error("Вставьте ссылку на Google Таблицу")
+        val configUrl = "https://docs.google.com/spreadsheets/d/$spreadsheetId/gviz/tq?tqx=out:csv&sheet=QTalkConfig&headers=0"
+        val connection = URI(configUrl).toURL().openConnection() as HttpURLConnection
+        try {
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 20_000
+            connection.setRequestProperty("User-Agent", "QTalk/1.0")
+            check(connection.responseCode in 200..299) {
+                "Не удалось загрузить настройки таблицы: HTTP ${connection.responseCode}"
+            }
+            val csv = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            parsePresenceEndpoint(csv)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    internal fun parsePresenceEndpoint(csv: String): String {
+        val values = parseCsv(csv.removePrefix("\uFEFF"))
+            .filter { it.getOrNull(0)?.trim() == "presence_url" }
+        require(values.size <= 1) { "В QTalkConfig найдено несколько адресов сервиса статусов" }
+        val endpoint = values.singleOrNull()?.getOrNull(1)?.trim().orEmpty()
+        require(endpoint.isEmpty() || isPresenceEndpoint(endpoint)) {
+            "Некорректный адрес presence_url на вкладке QTalkConfig"
+        }
+        return endpoint
+    }
+
     override suspend fun downloadContacts(url: String): List<Contact> = withContext(Dispatchers.IO) {
         val exportUrl = buildExportUrl(url)
         val connection = URI(exportUrl).toURL().openConnection() as HttpURLConnection

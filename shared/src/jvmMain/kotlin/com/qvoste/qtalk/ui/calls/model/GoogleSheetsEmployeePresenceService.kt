@@ -13,26 +13,19 @@ class GoogleSheetsEmployeePresenceService(
     private val preferences: Preferences = Preferences.userRoot().node("com/qvoste/qtalk/presence")
 ) : EmployeePresenceService {
     @Volatile private var configuredEndpoint = (endpoint ?: preferences.get("endpointUrl", "")).trim()
-    override val enabled: Boolean get() = isValidEndpoint(configuredEndpoint)
+    override val enabled: Boolean get() = isPresenceEndpoint(configuredEndpoint)
 
     override fun loadEndpoint(): String = configuredEndpoint
 
     override fun saveEndpoint(url: String) {
         val normalized = url.trim()
-        require(normalized.isEmpty() || isValidEndpoint(normalized)) {
+        require(normalized.isEmpty() || isPresenceEndpoint(normalized)) {
             "Вставьте HTTPS-ссылку развёрнутого Google Apps Script, заканчивающуюся на /exec"
         }
         preferences.put("endpointUrl", normalized)
         preferences.flush()
         configuredEndpoint = normalized
     }
-
-    private fun isValidEndpoint(value: String): Boolean = runCatching {
-        val uri = URI(value)
-        uri.scheme == "https" && uri.host == "script.google.com" &&
-            uri.userInfo == null && uri.port == -1 && uri.query == null && uri.fragment == null &&
-            Regex("/macros/s/[A-Za-z0-9_-]+/exec").matches(uri.path)
-    }.getOrDefault(false)
 
     override suspend fun publish(extension: String, status: EmployeeStatus) = withContext(Dispatchers.IO) {
         if (!enabled || extension.none(Char::isDigit)) return@withContext
@@ -86,3 +79,10 @@ class GoogleSheetsEmployeePresenceService(
     private fun encode(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8)
 
 }
+
+internal fun isPresenceEndpoint(value: String): Boolean = runCatching {
+    val uri = URI(value)
+    uri.scheme == "https" && uri.host == "script.google.com" &&
+        uri.userInfo == null && uri.port == -1 && uri.query == null && uri.fragment == null &&
+        Regex("/macros/s/[A-Za-z0-9_-]+/exec").matches(uri.path)
+}.getOrDefault(false)

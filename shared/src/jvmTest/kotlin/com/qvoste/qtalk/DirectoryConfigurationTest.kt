@@ -14,6 +14,20 @@ import kotlin.test.assertFailsWith
 
 class DirectoryConfigurationTest {
     @Test
+    fun directoryPresenceConfigurationIsOptionalAndValidated() {
+        val service = GoogleSheetsContactDatabaseService()
+        val url = "https://script.google.com/macros/s/example-deployment/exec"
+        assertEquals(url, service.parsePresenceEndpoint("\"key\",\"value\"\n\"presence_url\",\"$url\""))
+        assertEquals("", service.parsePresenceEndpoint("\"name\",\"number\"\n\"Person\",\"101\""))
+        assertFailsWith<IllegalArgumentException> {
+            service.parsePresenceEndpoint("presence_url,https://evil.example/exec")
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.parsePresenceEndpoint("presence_url,$url\npresence_url,$url")
+        }
+    }
+
+    @Test
     fun presenceEndpointIsExplicitPersistentAndCanBeCleared() {
         val preferences = Preferences.userRoot().node("com/qvoste/qtalk/test/" + UUID.randomUUID())
         try {

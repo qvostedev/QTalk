@@ -4,13 +4,14 @@ Set `SPREADSHEET_ID` in the Apps Script project's Script Properties before deplo
 `employee-presence.gs`. Keep the real spreadsheet ID and deployment URL outside the
 repository.
 
-The desktop client has no default presence endpoint. Configure the deployed script
-URL in Settings > Database > Presence service. It is saved in local user preferences,
-separately from the contact-directory URL. An empty endpoint disables remote presence
-requests. The optional JVM property `qtalk.presenceUrl` supplies an initial endpoint
-for managed deployments; the database settings can change it for the current session
-and save the new value locally. Remove the JVM property to use that saved value on
-subsequent launches.
+The desktop client has no default presence endpoint and no separate endpoint field.
+In the contact spreadsheet, create a sheet named `QTalkConfig`. Put `key,value` in
+the first row and `presence_url,<deployed script URL>` in the second row (two cells).
+The client reads this sheet when synchronizing the directory and caches the endpoint
+locally. All employees keep the same directory link. An absent or empty `presence_url`
+disables presence requests. Only HTTPS Google Apps Script `/exec` URLs are accepted.
+Hide the sheet if desired; hiding is not an access-control mechanism. The endpoint is
+visible to readers of the spreadsheet, so it must not be treated as a secret.
 
 This example assumes the employee sheet layout defined at the top of the script.
 It does not implement authentication; review access controls before making the
