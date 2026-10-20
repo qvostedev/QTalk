@@ -97,7 +97,7 @@ fun main(args: Array<String>) {
         val employeePresenceService = remember { GoogleSheetsEmployeePresenceService() }
         val themeStore = remember { PreferencesThemeStore() }
         val appVersion = remember {
-            GitHubReleaseUpdater::class.java.`package`?.implementationVersion ?: "1.0.6"
+            GitHubReleaseUpdater::class.java.`package`?.implementationVersion ?: "1.0.7"
         }
         val updater = remember(appVersion) { GitHubReleaseUpdater(appVersion) }
         var availableUpdateVersion by remember { mutableStateOf<String?>(null) }

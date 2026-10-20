@@ -1,4 +1,3 @@
-const SPREADSHEET_ID = '1gfI_Bh5lth1xfziycIAw9rYySSVwv_PHcb_HsdYZkA4';
 const SHEET_NAME = 'Сотрудники';
 const HEADER_ROW = 4;
 const EXTENSION_COLUMN = 6;
@@ -17,7 +16,7 @@ function doPost(event) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+    const sheet = presenceSheet();
     const lastRow = sheet.getLastRow();
     const extensions = sheet.getRange(HEADER_ROW + 1, EXTENSION_COLUMN, lastRow - HEADER_ROW, 1)
       .getDisplayValues();
@@ -32,7 +31,7 @@ function doPost(event) {
 }
 
 function doGet() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  const sheet = presenceSheet();
   const lastRow = sheet.getLastRow();
   const values = sheet.getRange(HEADER_ROW + 1, EXTENSION_COLUMN, lastRow - HEADER_ROW, 5).getValues();
   const now = Date.now();
@@ -50,4 +49,12 @@ function doGet() {
 
 function textResponse(message) {
   return ContentService.createTextOutput(message).setMimeType(ContentService.MimeType.TEXT);
+}
+
+function presenceSheet() {
+  const spreadsheetId = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+  if (!spreadsheetId) throw new Error('Set SPREADSHEET_ID in Script Properties');
+  const sheet = SpreadsheetApp.openById(spreadsheetId).getSheetByName(SHEET_NAME);
+  if (!sheet) throw new Error('Configured employee sheet was not found');
+  return sheet;
 }

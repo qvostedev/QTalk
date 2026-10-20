@@ -8,7 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class GoogleSheetsEmployeePresenceService(
-    private val endpoint: String = System.getProperty("qtalk.presenceUrl", DEFAULT_ENDPOINT).trim()
+    private val endpoint: String = System.getProperty("qtalk.presenceUrl", "").trim()
 ) : EmployeePresenceService {
     override val enabled: Boolean get() = endpoint.startsWith("https://script.google.com/macros/s/")
 
@@ -61,7 +61,4 @@ class GoogleSheetsEmployeePresenceService(
 
     private fun encode(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8)
 
-    private companion object {
-        const val DEFAULT_ENDPOINT = "https://script.google.com/macros/s/AKfycbwi7cYLHfZsPmn-nW29xYOyJsYzFGxn6OUHpPJ0zzHDzCPBrXIlKZGK8ru2K7FXr0OqCQ/exec"
-    }
 }

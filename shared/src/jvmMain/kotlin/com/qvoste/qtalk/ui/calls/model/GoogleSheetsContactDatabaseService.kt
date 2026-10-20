@@ -10,7 +10,7 @@ class GoogleSheetsContactDatabaseService(
     private val preferences: Preferences = Preferences.userRoot().node("com/qvoste/qtalk/contactDatabase")
 ) : ContactDatabaseService {
 
-    override fun loadSourceUrl(): String = preferences.get(KEY_SOURCE_URL, DEFAULT_SOURCE_URL)
+    override fun loadSourceUrl(): String = preferences.get(KEY_SOURCE_URL, "")
 
     override fun saveSourceUrl(url: String) {
         preferences.put(KEY_SOURCE_URL, url.trim())
@@ -158,7 +158,5 @@ class GoogleSheetsContactDatabaseService(
 
     private companion object {
         const val KEY_SOURCE_URL = "googleSheetsUrl"
-        const val DEFAULT_SOURCE_URL =
-            "https://docs.google.com/spreadsheets/d/1gfI_Bh5lth1xfziycIAw9rYySSVwv_PHcb_HsdYZkA4/edit?usp=sharing"
     }
 }

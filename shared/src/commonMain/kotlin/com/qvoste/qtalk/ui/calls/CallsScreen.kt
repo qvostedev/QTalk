@@ -160,7 +160,7 @@ fun CallsScreen(
     viewModel: CallsViewModel,
     themeMode: ThemeMode = ThemeMode.DARK,
     onThemeModeChange: (ThemeMode) -> Unit = {},
-    appVersion: String = "1.0.6",
+    appVersion: String = "1.0.7",
     availableUpdateVersion: String? = null,
     availableUpdateDescription: String? = null,
     onCheckForUpdates: suspend ((String, Float?) -> Unit) -> Unit = { it("Проверка обновлений недоступна", null) },
