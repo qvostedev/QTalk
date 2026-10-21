@@ -1,7 +1,7 @@
 # QTalk
 
 <p align="center">
-  <img src="logo_2.svg" alt="QTalk logo" width="300">
+  <img src="branding/logo_2.svg" alt="QTalk logo" width="300">
 </p>
 
 <p align="center">
