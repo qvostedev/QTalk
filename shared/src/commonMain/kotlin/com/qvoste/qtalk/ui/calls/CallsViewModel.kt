@@ -98,6 +98,7 @@ class CallsViewModel(
     private var lastPublishedStatus: EmployeeStatus? = null
 
     init {
+        scope.launch { voipEngine.configureConferenceService(employeePresenceService.loadEndpoint()) }
         scope.launch {
             registrationState.collectLatest { state ->
                 when (state) {
@@ -230,6 +231,12 @@ class CallsViewModel(
     fun mergeConference() = execute { voipEngine.mergeConference() }
     fun cancelConferenceInvite() = execute { voipEngine.cancelConferenceInvite() }
     fun removeConferenceParticipant(number: String) = execute { voipEngine.removeConferenceParticipant(number) }
+    fun inviteConferenceParticipants(numbers: List<String>) = execute {
+        voipEngine.inviteConferenceParticipants(numbers.map(::dialablePhoneNumber))
+    }
+    fun startConference(numbers: List<String>) = execute {
+        voipEngine.startConference(numbers.map(::dialablePhoneNumber))
+    }
     fun sendDtmf(digit: Char) {
         scope.launch {
             try {
@@ -262,6 +269,8 @@ class CallsViewModel(
             if (index != code.lastIndex) delay(120)
         }
     }
+    fun setConferenceHeld(held: Boolean) = execute { voipEngine.setConferenceHeld(held) }
+
     fun setMicrophoneMuted(muted: Boolean) = execute {
         voipEngine.setMicrophoneMuted(muted)
     }
@@ -408,6 +417,7 @@ class CallsViewModel(
     fun saveContactDatabaseUrl(url: String) = execute {
         val normalized = url.trim()
         employeePresenceService.saveEndpoint("")
+        voipEngine.configureConferenceService("")
         lastPublishedStatus = null
         knownEmployeeStatuses.value = emptyMap()
         contactDatabaseService.saveSourceUrl(normalized)
@@ -436,6 +446,7 @@ class CallsViewModel(
             val downloaded = contactDatabaseService.downloadContacts(url)
             val presenceEndpoint = contactDatabaseService.downloadPresenceEndpoint(url)
             if (_contactDatabaseState.value.sourceUrl != url) return
+            voipEngine.configureConferenceService(presenceEndpoint)
             if (employeePresenceService.loadEndpoint() != presenceEndpoint) {
                 employeePresenceService.saveEndpoint(presenceEndpoint)
                 lastPublishedStatus = null
@@ -512,7 +523,7 @@ class CallsViewModel(
         _contacts.update { contacts -> contacts.map { contact ->
             val extension = contact.number.filter(Char::isDigit)
             statuses[extension]?.let { contact.copy(status = it) } ?: contact
-        } }
+        }.classifyForAccount(_accountNumber.value) }
     }
 
     fun close() = scope.cancel()

@@ -23,7 +23,8 @@ class ConferenceLayoutTest {
             for (width in listOf(960, 640)) {
                 val state = ConferenceStatus(phase,
                     participants = if (phase == ConferencePhase.ACTIVE) listOf("102", "103") else listOf("102"),
-                    invitedNumber = "103", speakingNumbers = if (phase == ConferencePhase.ACTIVE) setOf("102") else emptySet())
+                    invitedNumber = "103", mutedNumbers = setOf("103"),
+                    speakingNumbers = if (phase == ConferencePhase.ACTIVE) setOf("102") else emptySet())
                 val image = renderComposeScene(width, 700) {
                     CallsTheme(ThemeMode.DARK) {
                         ConferenceCallOverlay(state, "101", { number -> contacts.firstOrNull { it.number == number } },

@@ -11,11 +11,18 @@ interface VoipEngine {
     val registrationMessage: StateFlow<String>
     val connectionStatus: StateFlow<TelephonyConnection> get() = disconnectedTelephony
     suspend fun retryRegistration() = Unit
+    suspend fun configureConferenceService(endpoint: String) = Unit
+    suspend fun setConferenceHeld(held: Boolean) = Unit
     val conferenceStatus: StateFlow<ConferenceStatus> get() = noConference
     suspend fun inviteConferenceParticipant(number: String) { error("Конференции недоступны") }
     suspend fun mergeConference() { error("Конференции недоступны") }
     suspend fun cancelConferenceInvite() = Unit
     suspend fun removeConferenceParticipant(number: String) { error("Конференции недоступны") }
+    suspend fun inviteConferenceParticipants(numbers: List<String>) {
+        require(numbers.size == 1)
+        inviteConferenceParticipant(numbers.single())
+    }
+    suspend fun startConference(numbers: List<String>) { error("Конференции недоступны") }
 
     val callStatus: StateFlow<CallStatus>
     val audioSettings: StateFlow<AudioSettings>

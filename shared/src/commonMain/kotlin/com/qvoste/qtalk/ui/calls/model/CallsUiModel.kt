@@ -39,13 +39,30 @@ internal fun List<Contact>.classifyForAccount(accountNumber: String): List<Conta
     val ownContact = if (ownNumber.isBlank()) null else
         firstOrNull { it.source == ContactSource.DIRECTORY && it.number.normalizedContactNumber() == ownNumber }
             ?: firstOrNull { it.number.normalizedContactNumber() == ownNumber }
-    val organization = ownContact?.company?.normalizedOrganization().orEmpty()
-    return map { contact -> contact.copy(isEmployee = organization.isNotBlank() &&
-        contact.company.normalizedOrganization() == organization) }
+    val organization = ownContact?.organizationKey().orEmpty()
+    return map { contact -> contact.copy(isEmployee = ownNumber.isNotBlank() &&
+        (contact.number.normalizedContactNumber() == ownNumber || organization.isNotBlank() &&
+        contact.organizationKey() == organization)) }
 }
 
-private fun String.normalizedOrganization(): String = trim().split(Regex("[\\s\\u00a0]+"))
-    .joinToString(" ").lowercase()
+private fun Contact.organizationKey(): String {
+    if (company.isNotBlank()) return company.normalizedOrganization()
+    val normalizedOffice = office.normalizedOrganizationWhitespace()
+    val organization = normalizedOffice.withoutBranchAddress()
+    // In legacy sheets, Office may contain both organization and branch address.
+    // A plain office/address without an organization is not an organization key.
+    return organization.takeIf { it != normalizedOffice }.orEmpty()
+}
+
+private fun String.normalizedOrganizationWhitespace(): String = trim().split(Regex("[\\s\\u00a0]+")).joinToString(" ").lowercase()
+
+private fun String.normalizedOrganization(): String {
+    return normalizedOrganizationWhitespace().withoutBranchAddress()
+}
+
+private fun String.withoutBranchAddress(): String = replace(
+    Regex("\\s+(?:(?:ул\\.?|улица|проспект|пр-т|переулок|пер\\.?)\\s+)?[\\p{L}.-]+,\\s*\\d[\\p{L}\\d /.-]*$"), ""
+).trim().trimEnd(' ', '·', '•', '-', '—', ':')
 
 enum class ContactSource { LEGACY, DIRECTORY, LOCAL }
 

@@ -35,6 +35,17 @@ fun translateUiText(source: String, language: AppLanguage): String {
 }
 
 private val english = mapOf(
+    "Не все участники подтвердили общий экран. Проверьте подключение к сервису конференций и версию QTalk у участников." to "Some participants have not confirmed the shared view. Check the conference service connection and participants' QTalk versions.",
+    "Выберите участников для группового звонка" to "Select participants for the group call",
+    "Создать конференцию" to "Create group call", "Добавить участников" to "Add participants",
+    "Пригласить" to "Invite", "Групповой звонок" to "Group call", "Приглашаем участников…" to "Inviting participants…",
+    "Выход организатора завершит звонок" to "The call ends when the host leaves",
+    "Отменить приглашение" to "Cancel invitation", "Выйти" to "Leave",
+    "При выходе организатора групповой звонок завершится." to "The group call ends when the host leaves.",
+    "Приглашение в групповой звонок" to "Group call invitation",
+    "Достигнут лимит участников" to "Participant limit reached",
+    "Приглашать участников может только организатор" to "Only the host can invite participants",
+    "Дождитесь завершения приглашения" to "Wait for the current invitations to finish",
     "Организатор" to "Host", "Звоним…" to "Calling…",
     "Готов к подключению" to "Ready to join", "Возвращаемся к звонку…" to "Returning to the call…",
     "На удержании" to "On hold", "Подключаем…" to "Connecting…", "В звонке" to "In call",

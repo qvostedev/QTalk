@@ -20,6 +20,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.geometry.Offset
@@ -44,7 +45,8 @@ internal fun IncomingCallOverlay(
     callerTelegram: String,
     callerAvatarUrl: String,
     onAccept: () -> Unit,
-    onDecline: () -> Unit
+    onDecline: () -> Unit,
+    roomParticipants: List<String> = emptyList()
 ) {
     Box(
         Modifier.fillMaxSize().background(Color(0xD9090B0D)),
@@ -60,6 +62,11 @@ internal fun IncomingCallOverlay(
             }
             Spacer(Modifier.height(20.dp))
             Text(callerName ?: uiText("Входящий вызов"), color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+            if (roomParticipants.isNotEmpty()) {
+                Text(uiText("Приглашение в групповой звонок"), color = Primary, fontSize = 13.sp)
+                Text(roomParticipants.joinToString(" • "), color = TextSecondary, fontSize = 11.sp,
+                    modifier = Modifier.widthIn(max = 480.dp))
+            }
             Spacer(Modifier.height(9.dp))
             Text(uiText("${formatPhoneNumber(number)}  •  Личная линия"), color = TextSecondary, fontSize = 13.sp)
             Spacer(Modifier.height(20.dp))
@@ -90,7 +97,8 @@ internal fun ActiveCallOverlay(
     onCollapse: () -> Unit,
     onDtmf: (Char) -> Unit,
     onMicrophoneMutedChange: (Boolean) -> Unit,
-    onSpeakerMutedChange: (Boolean) -> Unit
+    onSpeakerMutedChange: (Boolean) -> Unit,
+    onConferenceHeldChange: (Boolean) -> Unit = {}
 ) {
     var nowEpochMillis by remember(connectedAtEpochMillis) {
         mutableStateOf(Clock.System.now().toEpochMilliseconds())
@@ -126,7 +134,7 @@ internal fun ActiveCallOverlay(
     if (conference.phase != ConferencePhase.NONE) {
         ConferenceCallOverlay(conference, ownNumber, contactForNumber, seconds, conferenceError,
             onMergeConference, onCancelConference, onRemoveParticipant, onMicrophoneMutedChange,
-            onSpeakerMutedChange, onCollapse, onHangUp)
+            onSpeakerMutedChange, onCollapse, onHangUp, onAddParticipant, onDtmf, onConferenceHeldChange)
         return
     }
     Box(Modifier.fillMaxSize().background(Color(0xD9090B0D)), contentAlignment = Alignment.Center) {
@@ -203,10 +211,6 @@ internal fun ActiveCallOverlay(
                     TextCallControl("×", "Отмена", 48, columnWidth = 48) { keypadVisible = false }
                 }
             } else {
-                if (conference.phase == ConferencePhase.NONE) {
-                    TextButton(onClick = onAddParticipant) { Text(uiText("Добавить участника"), color = Primary) }
-                    Spacer(Modifier.height(8.dp))
-                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CallControl(
                         Res.drawable.icon_call_microphone,
@@ -240,7 +244,7 @@ internal fun ActiveCallOverlay(
                     CallControl(Res.drawable.icon_call_keypad, "Клавиатура", false, 22, 14) {
                         keypadVisible = true
                     }
-                    CallControl(Res.drawable.icon_call_record, "Запись", false, 20, 20) {}
+                    CallControl(Res.drawable.icon_call_add, "Добавить", false, 22, 22, onClick = onAddParticipant)
                 }
                 Spacer(Modifier.height(18.dp))
                 CircleIconAction(Res.drawable.icon_phone, 42, Danger) { onHangUp() }
@@ -260,13 +264,15 @@ internal fun CallControl(
     overrideColor: Color? = null,
     crossedOut: Boolean = false,
     columnWidth: Int = 56,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     Column(Modifier.width(columnWidth.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.size(buttonSize.dp).clip(CircleShape)
+                .alpha(if (enabled) 1f else 0.35f)
                 .background(overrideColor ?: if (active) Primary else ControlBackground)
-                .clickable(onClick = onClick),
+                .clickable(enabled = enabled, onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
             Image(

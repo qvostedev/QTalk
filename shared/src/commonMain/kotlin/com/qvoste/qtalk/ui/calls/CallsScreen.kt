@@ -207,7 +207,8 @@ fun CallsScreen(
     CallsContent(
         conference = conference,
         onRemoveParticipant = viewModel::removeConferenceParticipant,
-        onInviteConference = viewModel::inviteConferenceParticipant,
+        onInviteConference = viewModel::inviteConferenceParticipants,
+        onStartConference = viewModel::startConference,
         onMergeConference = viewModel::mergeConference,
         onCancelConference = viewModel::cancelConferenceInvite,
         connection = connection,
@@ -236,6 +237,7 @@ fun CallsScreen(
         onDtmf = viewModel::sendDtmf,
         onTransferEmployee = viewModel::transferToEmployee,
         onMicrophoneMutedChange = viewModel::setMicrophoneMuted,
+        onConferenceHeldChange = viewModel::setConferenceHeld,
         onSpeakerMutedChange = viewModel::setSpeakerMuted,
         callOverlayCollapsed = callOverlayCollapsed,
         onCollapseCall = onCollapseCall,
@@ -416,7 +418,8 @@ private fun LoginField(
 private fun CallsContent(
     conference: ConferenceStatus,
     onRemoveParticipant: (String) -> Unit,
-    onInviteConference: (String) -> Unit,
+    onInviteConference: (List<String>) -> Unit,
+    onStartConference: (List<String>) -> Unit,
     onMergeConference: () -> Unit,
     onCancelConference: () -> Unit,
     connection: TelephonyConnection,
@@ -445,6 +448,7 @@ private fun CallsContent(
     onDtmf: (Char) -> Unit,
     onTransferEmployee: (Contact) -> Unit,
     onMicrophoneMutedChange: (Boolean) -> Unit,
+    onConferenceHeldChange: (Boolean) -> Unit,
     onSpeakerMutedChange: (Boolean) -> Unit,
     callOverlayCollapsed: Boolean,
     onCollapseCall: () -> Unit,
@@ -476,6 +480,7 @@ private fun CallsContent(
     var showAddContact by rememberSaveable { mutableStateOf(false) }
     var editingContact by remember { mutableStateOf<Contact?>(null) }
     var showConferencePicker by remember { mutableStateOf(false) }
+    var creatingRoom by remember { mutableStateOf(false) }
     var searchFocused by remember { mutableStateOf(false) }
     var dialerTextInputFocused by remember { mutableStateOf(false) }
     var seenUpdateVersion by rememberSaveable { mutableStateOf<String?>(null) }
@@ -582,6 +587,8 @@ private fun CallsContent(
             // Центральная часть зависит от выбранного раздела.
             when (section) {
                 AppSection.CALLS -> CallsHome(
+                    onCreateConference = if (registration == RegistrationState.REGISTERED && !call.state.isInProgress)
+                        ({ creatingRoom = true; showConferencePicker = true }) else null,
                     modifier = Modifier.weight(1f),
                     compact = compact,
                     contacts = contacts,
@@ -787,6 +794,8 @@ private fun CallsContent(
             val caller = contacts.firstOrNull { it.matchesCallNumber(call.number) }
             CallsTheme(ThemeMode.DARK) {
                 IncomingCallOverlay(
+                    roomParticipants = if (conference.roomId.isBlank()) emptyList() else conference.participants.map { participant ->
+                        contacts.firstOrNull { it.matchesCallNumber(participant) }?.name ?: formatPhoneNumber(participant) },
                     number = call.number.ifBlank { "Неизвестный номер" },
                     callerName = caller?.name,
                     callerTelegram = caller?.telegram.orEmpty(),
@@ -807,7 +816,7 @@ private fun CallsContent(
                     ownNumber = accountNumber,
                     contactForNumber = { participant -> contacts.firstOrNull { it.matchesCallNumber(participant) } },
                     onRemoveParticipant = onRemoveParticipant,
-                    onAddParticipant = { showConferencePicker = true },
+                    onAddParticipant = { creatingRoom = false; showConferencePicker = true },
                     onMergeConference = onMergeConference,
                     onCancelConference = onCancelConference,
                     number = call.number,
@@ -819,14 +828,18 @@ private fun CallsContent(
                     onCollapse = onCollapseCall,
                     onDtmf = onDtmf,
                     onMicrophoneMutedChange = onMicrophoneMutedChange,
+                    onConferenceHeldChange = onConferenceHeldChange,
                     onSpeakerMutedChange = onSpeakerMutedChange
                 )
             }
         }
 
-        if (showConferencePicker && call.state == CallState.ACTIVE) {
-            ConferenceParticipantDialog(contacts, accountNumber, call.number,
-                onInvite = { target -> showConferencePicker = false; onInviteConference(target) },
+        if (showConferencePicker) {
+            ConferenceParticipantDialog(contacts, accountNumber, if (creatingRoom) "" else call.number,
+                existingNumbers = if (creatingRoom) emptyList() else conference.participants + conference.pendingNumbers,
+                creatingRoom = creatingRoom,
+                onInvite = { targets -> showConferencePicker = false
+                    if (creatingRoom) onStartConference(targets) else onInviteConference(targets) },
                 onDismiss = { showConferencePicker = false })
         }
         if (connection.showWarning) {
@@ -839,38 +852,46 @@ private fun CallsContent(
 @Composable
 private fun ConferenceParticipantDialog(
     contacts: List<Contact>, ownNumber: String, currentNumber: String,
-    onInvite: (String) -> Unit, onDismiss: () -> Unit
+    existingNumbers: List<String>, creatingRoom: Boolean,
+    onInvite: (List<String>) -> Unit, onDismiss: () -> Unit
 ) {
     var search by remember { mutableStateOf("") }
-    val target = search.filter { it.isDigit() || it == '+' }
-    val excluded = setOf(ownNumber.normalizedContactNumber(), currentNumber.normalizedContactNumber())
-    val canInvite = search.isNotBlank() && search.all { it.isDigit() || it in "+ ()-" } &&
-        target.normalizedContactNumber().isNotBlank() && target.normalizedContactNumber() !in excluded
+    var selected by remember { mutableStateOf(setOf<String>()) }
+    val excluded = (existingNumbers + ownNumber + currentNumber).map { it.normalizedContactNumber() }.filter(String::isNotBlank).toSet()
+    val capacity = com.qvoste.qtalk.voip.MAX_CONFERENCE_PARTICIPANTS - excluded.size
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = ControlBackground,
-        title = { Text(uiText("Добавить участника"), color = TextPrimary) },
+        title = { Text(uiText(if (creatingRoom) "Создать конференцию" else "Добавить участников"), color = TextPrimary) },
         text = {
             Column(Modifier.widthIn(min = 280.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(uiText("Первый собеседник будет на удержании до объединения звонков."), color = TextSecondary, fontSize = 12.sp)
                 OutlinedTextField(search, { search = it }, label = { Text(uiText("Имя или номер")) },
                     modifier = Modifier.fillMaxWidth(), singleLine = true, colors = darkTextFieldColors())
-                LazyColumn(Modifier.heightIn(max = 230.dp)) {
+                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
                     items(contacts.filter {
                         val number = it.number.ifBlank { it.phone }.normalizedContactNumber()
                         number.isNotBlank() && number !in excluded && it.matchesSearch(search)
                     }) { contact ->
-                        TextButton(onClick = { onInvite(contact.number.ifBlank { contact.phone }) }, modifier = Modifier.fillMaxWidth()) {
-                            Column(Modifier.fillMaxWidth()) {
-                                Text(contact.name, color = TextPrimary, fontSize = 12.sp)
-                                Text(contact.number.ifBlank { contact.phone }, color = TextSecondary, fontSize = 11.sp)
+                        val target = contact.number.ifBlank { contact.phone }
+                        val checked = target in selected
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                            .background(if (checked) Primary.copy(alpha = .12f) else Color.Transparent)
+                            .clickable { selected = if (checked) selected - target else if (selected.size < capacity) selected + target else selected }
+                            .padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            ContactAvatarWithStatus(contact.name, contact.telegram, 38, contact.status.color, contact.avatarUrl)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(contact.name, color = TextPrimary, fontSize = 12.sp, maxLines = 1)
+                                Text(listOf(target, contact.position).filter(String::isNotBlank).joinToString(" • "), color = TextSecondary, fontSize = 11.sp)
                             }
+                            androidx.compose.material3.Checkbox(checked, onCheckedChange = null, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onInvite(target) }, enabled = canInvite) { Text(uiText("Позвонить"), color = Primary) } },
+        confirmButton = { TextButton(onClick = { onInvite(selected.toList()) },
+            enabled = selected.size >= if (creatingRoom) 2 else 1) { Text(uiText("Пригласить") + " (${selected.size})", color = Primary) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(uiText("Отмена"), color = TextPrimary) } }
     )
 }
@@ -1012,6 +1033,7 @@ private fun NotificationsSection(
 
 @Composable
 private fun CallsHome(
+    onCreateConference: (() -> Unit)?,
     modifier: Modifier,
     compact: Boolean,
     contacts: List<Contact>,
@@ -1068,7 +1090,13 @@ private fun CallsHome(
         )
 
         Spacer(Modifier.height(if (compact) 28.dp else 32.dp))
-        FilterBar(filter, false, unreadMissedCount) { filter = it }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween) {
+            FilterBar(filter, false, unreadMissedCount) { filter = it }
+            onCreateConference?.let { create -> TextButton(onClick = create) {
+                Text(uiText("Создать конференцию"), color = Primary, fontSize = 11.sp)
+            } }
+        }
         Spacer(Modifier.height(18.dp))
 
         if (visibleHistory.isEmpty()) {

@@ -12,6 +12,7 @@ class LocalConferenceTest {
         var finished = false
         var promoted: Leg? = null
         var failInvite = false
+        var keepAudioDuringInvite = false
         var failMerge = false
         var failEndFirst = false
         var leaveDuringMerge = false
@@ -20,6 +21,7 @@ class LocalConferenceTest {
             override fun number(call: Leg) = call.number
             override fun state(call: Leg) = call.state
             override fun pause(call: Leg) { call.state = ConferenceLegState.PAUSING }
+            override fun prepareConference(call: Leg) = keepAudioDuringInvite
             override fun resume(call: Leg) { call.state = ConferenceLegState.ACTIVE }
             override fun invite(number: String): Leg {
                 check(!failInvite) { "Invite failed" }
@@ -29,6 +31,7 @@ class LocalConferenceTest {
                 check(!failMerge)
                 if (leaveDuringMerge) event(second, ConferenceLegState.ENDED)
                 merged = true
+                first.state = ConferenceLegState.ACTIVE
             }
             override fun end(call: Leg) {
                 ended += call.number
@@ -62,6 +65,19 @@ class LocalConferenceTest {
         assertTrue(f.merged)
         assertEquals(listOf("201", "202"), f.session.status.value.participants)
         assertEquals(ConferencePhase.ACTIVE, f.session.status.value.phase)
+    }
+
+    @Test fun hostedInvitationKeepsFirstParticipantActiveBeforeNextAnswer() {
+        val f = Fixture()
+        f.keepAudioDuringInvite = true
+        f.session.begin(f.first, "202")
+        assertNotNull(f.invited)
+        assertEquals(ConferenceLegState.ACTIVE, f.first.state)
+        assertEquals(ConferencePhase.INVITING, f.session.status.value.phase)
+        f.event(checkNotNull(f.invited), ConferenceLegState.ACTIVE)
+        f.session.merge()
+        assertEquals(ConferencePhase.ACTIVE, f.session.status.value.phase)
+        assertEquals(listOf("201", "202"), f.session.status.value.participants)
     }
 
     @Test fun cancellationAndDeclineReturnToFirstWithoutEndingIt() {
@@ -151,5 +167,19 @@ class LocalConferenceTest {
         assertEquals(setOf("202"), f.session.status.value.speakingNumbers)
         f.session.reset()
         assertTrue(f.session.status.value.speakingNumbers.isEmpty())
+    }
+
+    @Test fun addsFurtherParticipantsAndPreservesJoinedCalls() {
+        val f = Fixture(); f.consult(); f.session.merge()
+        f.session.begin(f.first, "203")
+        val third = checkNotNull(f.invited)
+        f.event(third, ConferenceLegState.ACTIVE)
+        f.session.merge()
+        assertEquals(listOf("201", "202", "203"), f.session.status.value.participants)
+        f.session.removeParticipant("202")
+        assertEquals(listOf("201", "203"), f.session.status.value.participants)
+        assertFalse(f.finished)
+        f.session.hangUpAll()
+        assertTrue(f.finished)
     }
 }

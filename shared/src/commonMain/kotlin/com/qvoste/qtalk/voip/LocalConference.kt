@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 enum class ConferencePhase { NONE, INVITING, CONSULTING, MERGING, ACTIVE, RESTORING }
 enum class ConferenceLegState { DIALING, RINGING, ACTIVE, PAUSING, PAUSED, ENDED, FAILED, RELEASED }
+const val MAX_CONFERENCE_PARTICIPANTS = 8
 
 data class ConferenceStatus(
     val phase: ConferencePhase = ConferencePhase.NONE,
@@ -15,20 +16,27 @@ data class ConferenceStatus(
     val speakerMuted: Boolean = false,
     val speakingNumbers: Set<String> = emptySet(),
     val mutedNumbers: Set<String> = emptySet(),
-    val localSpeaking: Boolean = false
+    val localSpeaking: Boolean = false,
+    val isHost: Boolean = true,
+    val hostNumber: String = "",
+    val roomId: String = "",
+    val pendingNumbers: List<String> = emptyList(),
+    val unsynchronizedNumbers: Set<String> = emptySet(),
+    val held: Boolean = false
 )
 
 internal interface LocalConferenceBackend<T : Any> {
     fun number(call: T): String
     fun state(call: T): ConferenceLegState
     fun pause(call: T)
+    fun prepareConference(call: T): Boolean = false
     fun resume(call: T)
     fun invite(number: String): T
     fun merge(first: T, second: T)
     fun end(call: T)
 }
 
-/** Coordinates two SIP legs. The backend and callbacks run on the engine's single dispatcher. */
+/** Coordinates the host's SIP legs on the engine's single dispatcher. */
 internal class LocalConferenceSession<T : Any>(
     private val backend: LocalConferenceBackend<T>,
     private val onPrimaryChanged: (T) -> Unit,
@@ -41,13 +49,16 @@ internal class LocalConferenceSession<T : Any>(
     private var pendingInvite = false
     private var creatingInvite = false
     private var endingAll = false
+    private val joined = mutableListOf<T>()
 
     val foregroundCall: T? get() = second?.takeIf { status.value.phase == ConferencePhase.CONSULTING } ?: first ?: second
-    val calls: List<T> get() = listOfNotNull(first, second).distinct()
+    val calls: List<T> get() = (joined + listOfNotNull(first, second)).distinct()
     val hasSession: Boolean get() = status.value.phase != ConferencePhase.NONE
 
     fun begin(primary: T, number: String) {
-        check(!hasSession) { "Конференция уже создаётся" }
+        check(!hasSession || status.value.phase == ConferencePhase.ACTIVE) { "Конференция уже создаётся" }
+        require(calls.none { backend.number(it) == number }) { "Выберите другого участника" }
+        check(calls.size < MAX_CONFERENCE_PARTICIPANTS - 1) { "Достигнут лимит участников" }
         require(number.isNotBlank() && number != backend.number(primary)) { "Выберите другого участника" }
         check(backend.state(primary) == ConferenceLegState.ACTIVE) { "Сначала дождитесь ответа собеседника" }
         first = primary
@@ -55,6 +66,19 @@ internal class LocalConferenceSession<T : Any>(
         pendingInvite = true
         endingAll = false
         mutableStatus.value = ConferenceStatus(ConferencePhase.INVITING, listOf(backend.number(primary)), number)
+        if (joined.isEmpty()) {
+            try {
+                if (backend.prepareConference(primary)) joined.add(primary)
+            } catch (error: Exception) {
+                reset(error.message.orEmpty())
+                throw error
+            }
+        }
+        if (joined.isNotEmpty()) {
+            updateParticipants()
+            startInvite()
+            return
+        }
         try { backend.pause(primary) } catch (error: Exception) {
             reset(error.message.orEmpty())
             throw error
@@ -64,9 +88,30 @@ internal class LocalConferenceSession<T : Any>(
     fun onCallState(call: T, state: ConferenceLegState): Boolean {
         if (!hasSession) return false
         if (creatingInvite && call != first && second == null) second = call
-        if (call != first && call != second) return false
+        if (call !in calls) return false
         if (state in setOf(ConferenceLegState.ENDED, ConferenceLegState.FAILED, ConferenceLegState.RELEASED)) {
+            val wasJoined = call in joined
+            joined.remove(call)
             if (call == second) second = null else first = null
+            if (joined.isNotEmpty()) {
+                first = joined.first()
+                onPrimaryChanged(checkNotNull(first))
+                if (!endingAll) {
+                    if (second == null) {
+                        mutableStatus.value = status.value.copy(phase = ConferencePhase.ACTIVE, invitedNumber = "")
+                        try { backend.resume(checkNotNull(first)) } catch (error: Exception) {
+                            mutableStatus.value = status.value.copy(message = error.message.orEmpty())
+                        }
+                    }
+                    updateParticipants()
+                }
+                return true
+            }
+            if (wasJoined && second != null && first == null) {
+                first = second
+                second = null
+                onPrimaryChanged(checkNotNull(first))
+            }
             if (endingAll) {
                 if (first == null && second == null) { reset(); onFinished() }
                 else (first ?: second)?.let(onPrimaryChanged)
@@ -113,6 +158,8 @@ internal class LocalConferenceSession<T : Any>(
             backend.merge(primary, invited)
             if (status.value.phase != ConferencePhase.MERGING || first != primary || second != invited) return
             mutableStatus.value = status.value.copy(phase = ConferencePhase.ACTIVE, message = "")
+            joined.addAll(listOf(primary, invited).filterNot { it in joined })
+            second = null
             updateParticipants()
         } catch (error: Exception) {
             if (status.value.phase == ConferencePhase.MERGING) {
@@ -177,12 +224,13 @@ internal class LocalConferenceSession<T : Any>(
     }
 
     private fun updateParticipants() {
-        mutableStatus.value = status.value.copy(participants = listOfNotNull(first, second).map(backend::number))
+        mutableStatus.value = status.value.copy(participants = (joined.ifEmpty { listOfNotNull(first) }).map(backend::number))
     }
 
     fun reset(message: String = "") {
         first = null
         second = null
+        joined.clear()
         pendingInvite = false
         creatingInvite = false
         endingAll = false

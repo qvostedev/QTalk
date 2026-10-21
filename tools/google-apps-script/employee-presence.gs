@@ -7,6 +7,9 @@ const OFFLINE_AFTER_MS = 150000;
 const ALLOWED_STATUSES = ['Доступен', 'Занят', 'Не в сети'];
 
 function doPost(event) {
+  if (event.parameter.action === 'roomSync' || event.parameter.action === 'roomClose') {
+    return roomRequest(event.parameter);
+  }
   const extension = String(event.parameter.extension || '').replace(/\D/g, '');
   const status = String(event.parameter.status || '');
   if (!extension || ALLOWED_STATUSES.indexOf(status) === -1) {
