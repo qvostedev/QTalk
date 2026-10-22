@@ -31,8 +31,6 @@ private const val SWP_NOMOVE = 0x0002
 private const val SWP_NOZORDER = 0x0004
 private const val SWP_NOACTIVATE = 0x0010
 private const val SWP_FRAMECHANGED = 0x0020
-private const val SW_HIDE = 0
-private const val SW_SHOW = 5
 
 // DWM uses COLORREF (0x00BBGGRR), not the usual RGB byte order.
 private const val QTALK_CAPTION_COLOR = 0x000D0B09
@@ -89,7 +87,6 @@ private interface User32Api : StdCallLibrary {
         flags: Int
     ): Boolean
 
-    fun ShowWindow(windowHandle: Pointer, command: Int): Boolean
 
 }
 
@@ -161,12 +158,8 @@ internal fun applyQTalkWindowsTitleBar(window: Window, light: Boolean = false): 
         )
         user32Api.refreshNonClientFrame(windowHandle)
 
-        // Windows caches the taskbar button icon when the window first appears.
-        // Recreate only that button once, after class-big has been set to QTalk.
-        if (qTalkLargeIcon.isNonNullPointer()) {
-            user32Api.ShowWindow(windowHandle, SW_HIDE)
-            user32Api.ShowWindow(windowHandle, SW_SHOW)
-        }
+        // Keep visibility under AWT control: native hide/show desynchronizes its
+        // activation state and prevents Compose text input after startup.
         user32Api.installTransparentCaptionIcon(windowHandle, transparentCaptionIcon)
 
         // Compose can reapply the AWT icon after later recompositions. The taskbar
