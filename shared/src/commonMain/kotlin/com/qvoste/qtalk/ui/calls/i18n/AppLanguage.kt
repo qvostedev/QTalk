@@ -112,6 +112,7 @@ private val english = mapOf(
     "Тема оформления" to "Appearance", "Цвет интерфейса" to "Interface colors",
     "Масштаб интерфейса" to "Interface scale", "Размер текста и элементов приложения" to "Text and interface size",
     "Светлая" to "Light", "Тёмная" to "Dark", "Автоматически" to "Automatic",
+    "Загрузить аватар" to "Upload avatar", "Загрузить рингтон" to "Upload ringtone",
     "Автоматический масштаб подстраивается под размер окна." to "Automatic scaling adapts to the window size.",
     "База данных" to "Database", "О приложении" to "About",
     "Версия, лицензия, правовая информация" to "Version, license and legal information",

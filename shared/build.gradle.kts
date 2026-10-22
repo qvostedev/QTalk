@@ -49,6 +49,7 @@ kotlin {
 
     sourceSets {
         jvmMain.dependencies {
+            implementation("com.googlecode.soundlibs:mp3spi:1.9.5.4")
             implementation(
                 "org.linphone:linphone-sdk:5.5.23:$linphoneClassifier"
             )

@@ -93,7 +93,12 @@ private fun avatarLoader(username: String, avatarUrl: String): AvatarDiskCache {
         MessageDigest.getInstance("SHA-256").digest(directUrl.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) } + ".img"
     return AvatarDiskCache(telegramAvatarCacheDirectory().resolve(cacheName), source, validate = ::validateAvatar) {
-        val image = if (directUrl.isNotBlank()) {
+        val image = if (directUrl.startsWith("file:")) {
+            val path = Path.of(URI(directUrl)).toAbsolutePath().normalize()
+            require(path.startsWith(localMediaDirectory().resolve("avatars").toAbsolutePath().normalize()))
+            require(Files.size(path) <= MAX_IMAGE_BYTES)
+            Files.readAllBytes(path)
+        } else if (directUrl.isNotBlank()) {
             download(directUrl, MAX_IMAGE_BYTES)
         } else {
             downloadTelegramAvatar(username)

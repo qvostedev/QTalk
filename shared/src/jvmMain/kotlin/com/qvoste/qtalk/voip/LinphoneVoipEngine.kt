@@ -1,4 +1,6 @@
 package com.qvoste.qtalk.voip
+import com.qvoste.qtalk.ui.calls.components.customRingtones
+import com.qvoste.qtalk.ui.calls.components.localMediaDirectory
 
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -1035,9 +1037,8 @@ class LinphoneVoipEngine : VoipEngine {
     }
 
     override suspend fun previewRingtone(ringtoneId: String) = withContext(Dispatchers.IO) {
-        val ringtone = QTalkRingtones.firstOrNull { it.id == ringtoneId } ?: return@withContext
-        val resource = javaClass.classLoader.getResourceAsStream("ringtones/${ringtone.id}.wav")
-            ?: return@withContext
+        val ringtone = (QTalkRingtones + customRingtones()).firstOrNull { it.id == ringtoneId } ?: return@withContext
+        val resource = Files.newInputStream(bundledRingtone(ringtone.id))
         val clip = AudioSystem.getClip()
         resource.use { input ->
             BufferedInputStream(input).use { buffered ->
@@ -1075,12 +1076,12 @@ class LinphoneVoipEngine : VoipEngine {
     }
 
     override suspend fun selectRingtone(ringtoneId: String) = withContext(linphoneDispatcher) {
-        val ringtone = QTalkRingtones.firstOrNull { it.id == ringtoneId } ?: return@withContext
+        val ringtone = (QTalkRingtones + customRingtones()).firstOrNull { it.id == ringtoneId } ?: return@withContext
         val volume = _audioSettings.value.ringtoneVolume.coerceIn(0f, 1f)
         audioPreferences.put("ringtoneId", ringtone.id)
         audioPreferences.flush()
         applyRingtoneVolume(volume, ringtone.id)
-        _audioSettings.value = _audioSettings.value.copy(selectedRingtoneId = ringtone.id)
+        _audioSettings.value = _audioSettings.value.copy(selectedRingtoneId = ringtone.id, ringtones = QTalkRingtones + customRingtones())
     }
 
     private fun stopRingtonePreview() {
@@ -1142,6 +1143,7 @@ class LinphoneVoipEngine : VoipEngine {
             speakerVolume = speakerVolume,
             ringtoneVolume = ringtoneVolume,
             selectedRingtoneId = ringtoneId
+            ,ringtones = QTalkRingtones + customRingtones()
         )
     }
 
@@ -1159,10 +1161,14 @@ class LinphoneVoipEngine : VoipEngine {
 
     private fun storedRingtoneId(): String = audioPreferences
         .get("ringtoneId", QTalkRingtones.first().id)
-        .takeIf { stored -> QTalkRingtones.any { it.id == stored } }
+        .takeIf { stored -> (QTalkRingtones + customRingtones()).any { it.id == stored } }
         ?: QTalkRingtones.first().id
 
     private fun bundledRingtone(ringtoneId: String): Path {
+        if (Regex("custom-[a-f0-9-]{36}").matches(ringtoneId)) {
+            val path = localMediaDirectory().resolve("ringtones").resolve(ringtoneId.removePrefix("custom-") + ".wav")
+            if (Files.isRegularFile(path)) return path
+        }
         val selected = QTalkRingtones.firstOrNull { it.id == ringtoneId } ?: QTalkRingtones.first()
         val destination = Path.of(factory.getDataDir(null), "qtalk-ringtones", "${selected.id}-original.wav")
         Files.createDirectories(destination.parent)

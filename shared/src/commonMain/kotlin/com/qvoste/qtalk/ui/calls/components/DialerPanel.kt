@@ -1,4 +1,5 @@
 package com.qvoste.qtalk.ui.calls.components
+import kotlinx.coroutines.launch
 
 import com.qvoste.qtalk.ui.calls.i18n.uiText
 
@@ -14,6 +15,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.window.Dialog
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -99,6 +103,33 @@ internal fun DialerPanel(
     var draftFavorite by remember(creatingContact, contactBeingEdited) {
         mutableStateOf(contactBeingEdited?.favorite ?: false)
     }
+    var draftAvatar by remember(creatingContact, contactBeingEdited) { mutableStateOf(contactBeingEdited?.avatarUrl.orEmpty()) }
+    var mediaError by remember { mutableStateOf<String?>(null) }
+    val mediaScope = rememberCoroutineScope()
+    var avatarPreview by remember(creatingContact, contactBeingEdited) { mutableStateOf(false) }
+    var importingAvatar by remember { mutableStateOf(false) }
+    if (avatarPreview && editing) {
+        Dialog(onDismissRequest = { avatarPreview = false }) {
+            Surface(color = ControlBackground, shape = RoundedCornerShape(24.dp)) {
+                Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    ContactAvatar(draftName.ifBlank { "?" }, draftTelegram, 240, draftAvatar)
+                    mediaError?.let { Text(it, color = Danger, fontSize = 12.sp) }
+                    Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                        TextButton(onClick = { avatarPreview = false }) { Text(uiText("Закрыть")) }
+                        TextButton(enabled = !importingAvatar, onClick = {
+                            mediaScope.launch {
+                                importingAvatar = true
+                                try { importLocalMedia(true)?.let { draftAvatar = it }; mediaError = null }
+                                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                                catch (e: Exception) { mediaError = e.message }
+                                finally { importingAvatar = false }
+                            }
+                        }) { Text(uiText("Загрузить аватар")) }
+                    }
+                }
+            }
+        }
+    }
     val canSaveContact = draftName.isNotBlank() && (!creatingContact || draftNumber.isNotBlank())
     LaunchedEffect(editing) {
         if (editing) infoTab = "Информация"
@@ -142,7 +173,11 @@ internal fun DialerPanel(
             verticalAlignment = Alignment.Top
         ) {
             val avatarContact = if (creatingContact) null else displayedContact
-            if (avatarContact != null) {
+            if (editing) {
+                Box(Modifier.size(62.dp).clip(CircleShape).clickable { avatarPreview = true }) {
+                    ContactAvatar(draftName.ifBlank { "?" }, draftTelegram, 62, draftAvatar)
+                }
+            } else if (avatarContact != null) {
                 ContactAvatarWithStatus(
                     avatarContact.name,
                     avatarContact.telegram,
@@ -215,7 +250,7 @@ internal fun DialerPanel(
             }
         }
         Spacer(Modifier.height(29.dp))
-        Box(Modifier.width(panelContentWidth).height(246.dp)) {
+        Box(Modifier.width(panelContentWidth).then(if (editing) Modifier.heightIn(min = 246.dp) else Modifier.height(246.dp))) {
             when {
                 editing -> Column(Modifier.padding(top = 8.dp)) {
                     EditableContactInfo(
@@ -272,7 +307,8 @@ internal fun DialerPanel(
                                         position = draftPosition.trim(),
                                         department = draftDepartment.trim(),
                                         company = draftCompany.trim(),
-                                        telegram = normalizeTelegramInput(draftTelegram)
+                                        telegram = normalizeTelegramInput(draftTelegram),
+                                        avatarUrl = draftAvatar
                                     )
                                 )
                         }

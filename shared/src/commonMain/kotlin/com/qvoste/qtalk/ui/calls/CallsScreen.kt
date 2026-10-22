@@ -1,4 +1,6 @@
 package com.qvoste.qtalk.ui.calls
+import com.qvoste.qtalk.ui.calls.components.customRingtones
+import com.qvoste.qtalk.ui.calls.components.importLocalMedia
 
 import com.qvoste.qtalk.ui.calls.i18n.AppLanguage
 import com.qvoste.qtalk.ui.calls.i18n.LocalAppLanguage
@@ -2004,13 +2006,16 @@ private fun RingtoneDialog(
     onDismiss: () -> Unit
 ) {
     var pendingRingtoneId by remember(selectedRingtoneId) { mutableStateOf(selectedRingtoneId) }
+    var imported by remember { mutableStateOf(customRingtones()) }
+    var importError by remember { mutableStateOf<String?>(null) }
+    val importScope = rememberCoroutineScope()
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = ControlBackground,
         title = { Text(uiText("Выберите рингтон"), color = TextPrimary) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                ringtones.forEach { ringtone ->
+                (ringtones + imported).distinctBy { it.id }.forEach { ringtone ->
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
                             .background(
@@ -2028,6 +2033,16 @@ private fun RingtoneDialog(
                         if (ringtone.id == pendingRingtoneId) Text("✓", color = Primary, fontSize = 14.sp)
                     }
                 }
+                TextButton(onClick = {
+                    importScope.launch {
+                        try {
+                            importLocalMedia(false)?.let { pendingRingtoneId = it; imported = customRingtones(); onPreview(it) }
+                            importError = null
+                        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                        catch (e: Exception) { importError = e.message }
+                    }
+                }) { Text(uiText("Загрузить рингтон"), color = Primary) }
+                importError?.let { Text(it, color = Danger, fontSize = 11.sp) }
             }
         },
         confirmButton = {
