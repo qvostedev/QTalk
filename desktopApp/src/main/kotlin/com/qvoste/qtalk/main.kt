@@ -109,6 +109,8 @@ fun main(args: Array<String>) {
         var interfaceScale by remember { mutableStateOf(themeStore.loadScale()) }
         var appLanguage by remember { mutableStateOf(themeStore.loadLanguage()) }
         val scope = rememberCoroutineScope()
+        var closingApplication by remember { mutableStateOf(false) }
+        var shutdownFailure by remember { mutableStateOf<String?>(null) }
         val screenBounds = remember {
             val config = GraphicsEnvironment.getLocalGraphicsEnvironment().defaultScreenDevice.defaultConfiguration
             val insets = Toolkit.getDefaultToolkit().getScreenInsets(config)
@@ -166,17 +168,24 @@ fun main(args: Array<String>) {
         }
 
         fun closeApplication() {
+            if (closingApplication) return
+            closingApplication = true
             scope.launch {
                 try {
+                    voipEngine.stop()
                     val extension = accountStore.load()?.username.orEmpty().filter(Char::isDigit)
                     if (extension.isNotBlank()) {
                         runCatching {
                             employeePresenceService.publish(extension, EmployeeStatus.OFFLINE)
                         }
                     }
-                    voipEngine.stop()
-                } finally {
                     exitApplication()
+                } catch (error: kotlinx.coroutines.CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    shutdownFailure = error.message ?: "Не удалось передать групповой звонок"
+                } finally {
+                    closingApplication = false
                 }
             }
         }
@@ -336,6 +345,16 @@ fun main(args: Array<String>) {
             undecorated = false,
             resizable = true
         ) {
+            shutdownFailure?.let { message ->
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { shutdownFailure = null },
+                    title = { androidx.compose.material3.Text("QTalk") },
+                    text = { androidx.compose.material3.Text(message) },
+                    confirmButton = { androidx.compose.material3.TextButton(onClick = { shutdownFailure = null }) {
+                        androidx.compose.material3.Text("OK")
+                    } }
+                )
+            }
             val callOverlayVisible = !callOverlayCollapsed &&
                 (call.state == CallState.INCOMING || call.state == CallState.ACTIVE)
             DisposableEffect(window) {

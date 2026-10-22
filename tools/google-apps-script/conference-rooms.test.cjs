@@ -43,6 +43,10 @@ assert.equal(request({action:'roomSync',extension:'102',host:'999',muted:'1'}),'
 assert.equal(request({...publish,token:'33333333-3333-3333-3333-333333333333'}),'denied');
 assert.equal(request({...publish,snapshot:snapshot.replace('\n1\n101','\n0\n101')}),'stale');
 assert.equal(request({...publish,snapshot:snapshot + '\nextra'}),'invalid');
+const lanSnapshot = snapshot + '\n192.168.100.10:18000/55555555-5555-5555-5555-555555555555';
+assert.equal(request({...publish,snapshot:lanSnapshot}),'peers\n102,1');
+assert.equal(request({action:'roomSync',extension:'102',host:'101',muted:'0'}).split('\n')[9],
+  '192.168.100.10:18000/55555555-5555-5555-5555-555555555555');
 assert.equal(request({action:'roomSync',extension:'102',host:'101',muted:'0'}).split('\n')[7],'');
 const second = snapshot.replaceAll(room, '44444444-4444-4444-4444-444444444444').replaceAll('101','201').replaceAll('102','202').replaceAll('103','203');
 assert.equal(request({...publish,snapshot:second}),'peers\n');

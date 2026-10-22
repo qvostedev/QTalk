@@ -17,6 +17,7 @@ val qTalkPackageVersion = "1.0.9"
 
 dependencies {
     implementation(project(":shared"))
+    implementation(compose.material3)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
     implementation(

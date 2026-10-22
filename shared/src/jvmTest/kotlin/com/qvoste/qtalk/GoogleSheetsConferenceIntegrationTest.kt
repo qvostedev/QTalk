@@ -17,7 +17,7 @@ class GoogleSheetsConferenceIntegrationTest {
         val id = UUID.randomUUID().toString()
         val token = UUID.randomUUID().toString()
         val snapshot = RoomMessage.Snapshot(id, 1, "99000001", listOf("99000001", "99000002", "99000003"),
-            emptyList(), emptySet(), emptySet())
+            emptyList(), emptySet(), emptySet(), "192.168.100.10:18000/" + UUID.randomUUID().toString())
         val owner = mapOf("role" to "host", "token" to token)
         try {
             assertEquals("peers\n", service.request("roomSync", owner + ("snapshot" to ConferenceRoomWire.encode(snapshot))))

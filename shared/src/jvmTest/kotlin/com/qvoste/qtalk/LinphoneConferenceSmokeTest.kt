@@ -188,7 +188,27 @@ class LinphoneConferenceSmokeTest {
             await("Removing one participant must leave the other call connected") {
                 conference.participantCount == 2 && second.state == Call.State.StreamsRunning
             }
+            assertEquals(0, third.terminate())
+            await("The mixer must retain its final participant") { conference.participantCount == 1 }
+            assertEquals(0, conference.enter())
+            await("The last pair must retain two-way audio when the UI returns to ordinary mode") {
+                second.state == Call.State.StreamsRunning && second.playVolume > -60f && secondPeer.calls.single().playVolume > -60f
+            }
             assertEquals(0, conference.terminate())
+            await("Old conference legs must be released before the successor redials") {
+                secondPeer.calls.isEmpty() && thirdPeer.calls.isEmpty()
+            }
+            autoAnswer += thirdPeer
+            val successorParams = assertNotNull(secondPeer.createCallParams(null)).apply { isVideoEnabled = false }
+            val successorCall = assertNotNull(secondPeer.inviteAddressWithParams(factory.createAddress(thirdPeer.primaryContact)!!, successorParams))
+            await("The two remaining participants must establish an ordinary call on the successor") {
+                successorCall.state == Call.State.StreamsRunning && thirdPeer.calls.singleOrNull()?.state == Call.State.StreamsRunning
+            }
+            assertNull(successorCall.conference)
+            await("Audio must work in both directions after successor redial") {
+                successorCall.playVolume > -60f && thirdPeer.calls.single().playVolume > -60f
+            }
+            assertEquals(0, successorCall.terminate())
         } finally {
             cores.reversed().forEach { it.stop() }
             Files.deleteIfExists(tone)

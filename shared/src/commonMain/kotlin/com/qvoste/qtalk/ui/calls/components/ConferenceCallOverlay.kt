@@ -58,12 +58,12 @@ internal fun ConferenceCallOverlay(
                             val contact = contactForNumber(number)
                             if (contact != null) ContactAvatar(contact.name, contact.telegram, 124, contact.avatarUrl)
                             else Avatar("?", number, 124)
-                            if (muted) Box(Modifier.align(Alignment.BottomEnd).offset(x = (-8).dp, y = (-8).dp)
-                                .size(28.dp).background(Danger, CircleShape),
+                            if (muted) Box(Modifier.align(Alignment.BottomEnd).offset(x = (-10).dp, y = (-10).dp)
+                                .size(26.dp).border(2.dp, Color(0xFF090B0D), CircleShape).background(Danger, CircleShape),
                                 contentAlignment = Alignment.Center) {
-                                Image(painterResource(Res.drawable.icon_call_microphone), uiText("Микрофон выключен"), Modifier.size(13.dp, 19.dp))
-                                Canvas(Modifier.size(24.dp)) {
-                                    drawLine(Color.White, Offset(3.dp.toPx(), 3.dp.toPx()), Offset(21.dp.toPx(), 21.dp.toPx()),
+                                Image(painterResource(Res.drawable.icon_call_microphone), uiText("Микрофон выключен"), Modifier.size(11.dp, 17.dp))
+                                Canvas(Modifier.size(20.dp)) {
+                                    drawLine(Color.White, Offset(3.dp.toPx(), 3.dp.toPx()), Offset(17.dp.toPx(), 17.dp.toPx()),
                                         strokeWidth = 1.7.dp.toPx(), cap = StrokeCap.Round)
                                 }
                             }
@@ -77,7 +77,7 @@ internal fun ConferenceCallOverlay(
             Spacer(Modifier.height(25.dp))
             Text(uiText("Групповой звонок"), color = TextPrimary, fontSize = 32.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(9.dp))
-            Text(uiText("Выход организатора завершит звонок"), color = TextSecondary, fontSize = 16.sp, textAlign = TextAlign.Center)
+            Text(uiText("Организатор передаст звонок при выходе"), color = TextSecondary, fontSize = 16.sp, textAlign = TextAlign.Center)
             Spacer(Modifier.height(20.dp))
             Text(formatDuration(seconds), color = TextSecondary, fontSize = 18.sp)
             error?.let {

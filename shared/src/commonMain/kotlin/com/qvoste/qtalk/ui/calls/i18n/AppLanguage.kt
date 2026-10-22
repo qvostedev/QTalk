@@ -40,6 +40,7 @@ private val english = mapOf(
     "Создать конференцию" to "Create group call", "Добавить участников" to "Add participants",
     "Пригласить" to "Invite", "Групповой звонок" to "Group call", "Приглашаем участников…" to "Inviting participants…",
     "Выход организатора завершит звонок" to "The call ends when the host leaves",
+    "Организатор передаст звонок при выходе" to "The host will hand over the call when leaving",
     "Отменить приглашение" to "Cancel invitation", "Выйти" to "Leave",
     "При выходе организатора групповой звонок завершится." to "The group call ends when the host leaves.",
     "Приглашение в групповой звонок" to "Group call invitation",

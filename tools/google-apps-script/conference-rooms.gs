@@ -30,9 +30,10 @@ function roomSnapshot(body) {
   if (typeof body !== 'string' || body.length > 4096) return null;
   const p = body.split('\n');
   const number = /^\+?[0-9]{1,20}$/;
-  if (p.length !== 9 || p[0] !== 'QTALK/1' || p[1] !== 'snapshot' ||
+  if (![9,10].includes(p.length) || p[0] !== 'QTALK/1' || p[1] !== 'snapshot' ||
       !/^[a-fA-F0-9-]{36}$/.test(p[2]) || !/^\d{1,15}$/.test(p[3]) || !number.test(p[4])) return null;
-  const lists = p.slice(5).map(line => line ? line.split(',') : []);
+  if (p.length === 10 && !/^[0-9.]{7,15}:[0-9]{1,5}\/[a-f0-9-]{36}$/.test(p[9])) return null;
+  const lists = p.slice(5,9).map(line => line ? line.split(',') : []);
   const members = lists[0], pending = lists[1];
   if (!members.includes(p[4]) || new Set(members).size !== members.length ||
       new Set(members.concat(pending)).size > 8 || lists.flat().some(n => !number.test(n)) ||
