@@ -6,11 +6,15 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -172,11 +176,13 @@ private fun NavItem(
     showBadge: Boolean = false
 ) {
     val active = section == selected
-    val itemColor = if (active) TextPrimary else TextSecondary
+    val interactions = remember { MutableInteractionSource() }
+    val hovered by interactions.collectIsHoveredAsState()
+    val itemColor = (if (active) TextPrimary else TextSecondary).onHover(hovered)
     BoxWithConstraints(Modifier.fillMaxWidth().height(44.dp)) {
         Row(
             Modifier.offset(x = (-8).dp).requiredWidth(maxWidth + 16.dp).fillMaxHeight()
-                .clip(RoundedCornerShape(10.dp)).clickable { onSelect(section) }
+                .clip(RoundedCornerShape(10.dp)).clickable(interactionSource = interactions, indication = null) { onSelect(section) }
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

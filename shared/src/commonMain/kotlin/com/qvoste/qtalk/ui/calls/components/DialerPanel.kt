@@ -6,6 +6,8 @@ import com.qvoste.qtalk.ui.calls.i18n.uiText
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
@@ -104,27 +106,43 @@ internal fun DialerPanel(
         mutableStateOf(contactBeingEdited?.favorite ?: false)
     }
     var draftAvatar by remember(creatingContact, contactBeingEdited) { mutableStateOf(contactBeingEdited?.avatarUrl.orEmpty()) }
+    var originalAvatar by remember(creatingContact, contactBeingEdited) {
+        mutableStateOf(contactBeingEdited?.let { it.originalAvatarUrl.ifBlank { it.avatarUrl.takeUnless { url -> url.startsWith("file:") }.orEmpty() } }.orEmpty())
+    }
     var mediaError by remember { mutableStateOf<String?>(null) }
     val mediaScope = rememberCoroutineScope()
     var avatarPreview by remember(creatingContact, contactBeingEdited) { mutableStateOf(false) }
     var importingAvatar by remember { mutableStateOf(false) }
-    if (avatarPreview && editing) {
+    if (avatarPreview && (editing || displayedContact != null)) {
+        val previewAvatar = if (editing) draftAvatar else displayedContact?.avatarUrl.orEmpty()
+        val previewName = if (editing) draftName else displayedContact?.name.orEmpty()
+        val previewTelegram = if (editing) draftTelegram else displayedContact?.telegram.orEmpty()
+        fun changeAvatar(url: String) {
+            if (editing) draftAvatar = url else displayedContact?.let { source ->
+                onSaveContact(source.copy(avatarUrl = url,
+                    originalAvatarUrl = source.originalAvatarUrl.ifBlank { source.avatarUrl.takeUnless { it.startsWith("file:") }.orEmpty() }))
+            }
+        }
         Dialog(onDismissRequest = { avatarPreview = false }) {
             Surface(color = ControlBackground, shape = RoundedCornerShape(24.dp)) {
                 Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    ContactAvatar(draftName.ifBlank { "?" }, draftTelegram, 240, draftAvatar)
+                    ContactAvatar(previewName.ifBlank { "?" }, previewTelegram, 240, previewAvatar)
                     mediaError?.let { Text(it, color = Danger, fontSize = 12.sp) }
-                    Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                        TextButton(onClick = { avatarPreview = false }) { Text(uiText("Закрыть")) }
-                        TextButton(enabled = !importingAvatar, onClick = {
+                    Column(Modifier.padding(top = 16.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        ContactTextAction("Закрыть окно", TextPrimary) { avatarPreview = false }
+                        ContactTextAction("Загрузить свою аватарку", TextPrimary, enabled = !importingAvatar, onClick = {
                             mediaScope.launch {
                                 importingAvatar = true
-                                try { importLocalMedia(true)?.let { draftAvatar = it }; mediaError = null }
+                                try { importLocalMedia(true)?.let { changeAvatar(it) }; mediaError = null }
                                 catch (e: kotlinx.coroutines.CancellationException) { throw e }
                                 catch (e: Exception) { mediaError = e.message }
                                 finally { importingAvatar = false }
                             }
-                        }) { Text(uiText("Загрузить аватар")) }
+                        })
+                        ContactTextAction("Вернуть исходную аватарку", TextPrimary,
+                            enabled = previewAvatar.startsWith("file:") && !importingAvatar) {
+                            changeAvatar(if (editing) originalAvatar else displayedContact?.originalAvatarUrl.orEmpty())
+                        }
                     }
                 }
             }
@@ -178,6 +196,7 @@ internal fun DialerPanel(
                     ContactAvatar(draftName.ifBlank { "?" }, draftTelegram, 62, draftAvatar)
                 }
             } else if (avatarContact != null) {
+                Box(Modifier.size(62.dp).clickable { avatarPreview = true }) {
                 ContactAvatarWithStatus(
                     avatarContact.name,
                     avatarContact.telegram,
@@ -185,6 +204,7 @@ internal fun DialerPanel(
                     avatarContact.status.color,
                     avatarContact.avatarUrl
                 )
+                }
             } else {
                 val avatarSeed = draftName.takeIf(String::isNotBlank)
                     ?: (if (creatingContact) draftNumber else shownNumber).takeIf(String::isNotBlank)
@@ -252,7 +272,7 @@ internal fun DialerPanel(
         Spacer(Modifier.height(29.dp))
         Box(Modifier.width(panelContentWidth).then(if (editing) Modifier.heightIn(min = 246.dp) else Modifier.height(246.dp))) {
             when {
-                editing -> Column(Modifier.padding(top = 8.dp)) {
+                editing -> Column(Modifier.fillMaxWidth().height(246.dp).padding(top = 8.dp)) {
                     EditableContactInfo(
                         Res.drawable.icon_position,
                         "Должность",
@@ -280,7 +300,7 @@ internal fun DialerPanel(
                         draftTelegram,
                         { draftTelegram = it }
                     )
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.weight(1f))
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End,
@@ -292,7 +312,7 @@ internal fun DialerPanel(
                             color = TextSecondary,
                             onClick = onCancelContactEdit
                         )
-                        Spacer(Modifier.width(24.dp))
+                        Spacer(Modifier.width(14.dp))
                         ContactTextAction(
                             text = "Сохранить",
                             color = Primary,
@@ -308,7 +328,8 @@ internal fun DialerPanel(
                                         department = draftDepartment.trim(),
                                         company = draftCompany.trim(),
                                         telegram = normalizeTelegramInput(draftTelegram),
-                                        avatarUrl = draftAvatar
+                                        avatarUrl = draftAvatar,
+                                        originalAvatarUrl = originalAvatar
                                     )
                                 )
                         }
@@ -613,12 +634,14 @@ private fun ContactTextAction(
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
+    val interactions = remember { MutableInteractionSource() }
+    val hovered by interactions.collectIsHoveredAsState()
     Text(
         text = uiText(text),
-        color = if (enabled) color else color.copy(alpha = 0.35f),
+        color = if (enabled) color.onHover(hovered) else color.copy(alpha = color.alpha * 0.35f),
         fontSize = 11.sp,
         fontWeight = FontWeight.Medium,
-        modifier = Modifier.clickable(enabled = enabled, onClick = onClick).padding(vertical = 6.dp)
+        modifier = Modifier.clickable(interactionSource = interactions, indication = null, enabled = enabled, onClick = onClick).padding(vertical = 6.dp)
     )
 }
 

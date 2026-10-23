@@ -8,6 +8,7 @@ import org.linphone.core.CoreListenerStub
 import org.linphone.core.InfoMessage
 import com.qvoste.qtalk.voip.ConferenceRoomWire
 import com.qvoste.qtalk.voip.RoomMessage
+import com.qvoste.qtalk.voip.isSpeechLevel
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.ByteBuffer
@@ -152,6 +153,13 @@ class LinphoneConferenceSmokeTest {
                 listOf(first, second, third).all { it.state == Call.State.StreamsRunning }
             }
             assertEquals(3, conference.participantCount)
+            firstPeer.isMicEnabled = false
+            repeat(120) { cores.forEach(Core::iterate); Thread.sleep(10) }
+            assertTrue(!isSpeechLevel(first.playVolume), "Muted participant/comfort noise must not be shown as speech: ${first.playVolume}")
+            assertTrue(isSpeechLevel(second.playVolume), "Second participant must remain active")
+            assertTrue(isSpeechLevel(third.playVolume), "Third participant must remain active")
+            firstPeer.isMicEnabled = true
+            await("Speech must resume after unmuting") { isSpeechLevel(first.playVolume) }
             assertEquals(0, conference.leave())
             repeat(100) {
                 cores.forEach(Core::iterate)

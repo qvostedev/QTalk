@@ -838,17 +838,15 @@ class LinphoneVoipEngine : VoipEngine {
         lastConferenceAudioAt = now
         val conference = localConference?.takeIf { conferenceSession.hasSession }
         val participants = conference?.participantList.orEmpty()
-        val nativeSpeaking = participants.filter { participant -> participant.devices.any { it.getIsSpeaking() } }
-            .mapNotNull { it.address?.username }.toSet()
-        conferenceSession.calls.filter { it.state == Call.State.StreamsRunning && it.playVolume > -45f }
+        conferenceSession.calls.filter { it.state == Call.State.StreamsRunning && isSpeechLevel(it.playVolume) }
             .mapNotNull { it.remoteAddress?.username }.forEach { remoteSpeechUntil[it] = now + 300_000_000L }
         remoteSpeechUntil.entries.removeAll { it.value <= now }
-        val speaking = nativeSpeaking + remoteSpeechUntil.keys
+        val speaking = remoteSpeechUntil.keys.toSet()
         val muted = participants.filter { participant ->
             participant.devices.isNotEmpty() && participant.devices.all { it.getIsMuted() }
         }.mapNotNull { it.address?.username }.toSet()
-        val hasLocalSpeech = conference?.me?.devices?.any { it.getIsSpeaking() } == true ||
-            (currentCall?.state == Call.State.StreamsRunning && (currentCall?.recordVolume ?: -120f) > -45f)
+        val hasLocalSpeech = currentCall?.state == Call.State.StreamsRunning &&
+            isSpeechLevel(conference?.inputVolume ?: currentCall?.recordVolume ?: -120f)
         if (hasLocalSpeech && !microphoneMuted && !conferenceHeld) localSpeechUntil = now + 300_000_000L
         val localSpeaking = !microphoneMuted && !conferenceHeld && now < localSpeechUntil
         conferenceSession.updateAudioState(microphoneMuted, speakerMuted, speaking, muted, localSpeaking)

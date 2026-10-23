@@ -11,7 +11,7 @@ a direct LAN connection is established. The host advertises a temporary private
 IPv4 address, random TCP port and per-room capability in the room snapshot.
 Guest mute states then update over bounded TCP messages about every 120 ms,
 independently of Google requests. Speech is detected from the host's separate
-incoming audio levels (threshold -45 dB, 300 ms release) and shared with guests,
+incoming audio levels (threshold -35 dBm0, 300 ms release) and shared with guests,
 whose received audio is already mixed. Each client updates its own mute/speech
 indicator locally; silence is never interpreted as a muted microphone.
 Only numbers, room state and a

@@ -4,6 +4,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.IndicationNodeFactory
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.graphics.painter.Painter
 import org.jetbrains.compose.resources.painterResource
 import qtalk.shared.generated.resources.Res
@@ -38,9 +43,16 @@ private val lightPalette = CallsPalette(
 )
 private val LocalCallsPalette = staticCompositionLocalOf { darkPalette }
 
+private object PlainIndication : IndicationNodeFactory {
+    override fun create(interactionSource: InteractionSource): DelegatableNode = object : Modifier.Node() {}
+    override fun equals(other: Any?): Boolean = other === this
+    override fun hashCode(): Int = 1
+}
+
 @Composable
 fun CallsTheme(mode: ThemeMode, content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalCallsPalette provides if (mode == ThemeMode.LIGHT) lightPalette else darkPalette) {
+    CompositionLocalProvider(LocalCallsPalette provides if (mode == ThemeMode.LIGHT) lightPalette else darkPalette,
+        LocalIndication provides PlainIndication) {
         content()
     }
 }
@@ -57,6 +69,9 @@ internal val Danger: Color @Composable get() = LocalCallsPalette.current.danger
 internal val Online: Color @Composable get() = LocalCallsPalette.current.online
 internal val Busy: Color @Composable get() = LocalCallsPalette.current.busy
 internal val IsLightTheme: Boolean @Composable get() = LocalCallsPalette.current === lightPalette
+
+internal fun Color.onHover(hovered: Boolean): Color = if (!hovered) this else
+    copy(red = red * 0.7f, green = green * 0.7f, blue = blue * 0.7f)
 
 internal val EmployeeStatus.color: Color
     @Composable get() = when (this) {

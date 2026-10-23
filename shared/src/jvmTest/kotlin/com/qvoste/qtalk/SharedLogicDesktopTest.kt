@@ -356,6 +356,23 @@ class SharedLogicDesktopTest {
     }
 
     @Test
+    fun customAvatarRetainsLatestDirectoryOriginalAndSurvivesReload() {
+        val node = Preferences.userRoot().node("com/qvoste/qtalk/test/${UUID.randomUUID()}")
+        try {
+            val custom = Contact("Contact", "101", false, avatarUrl = "file:///local/avatar.png")
+            val remote = custom.copy(avatarUrl = "https://example.invalid/new-avatar.png")
+            val merged = mergeDownloadedContacts(listOf(custom), listOf(remote)).single()
+            assertEquals(custom.avatarUrl, merged.avatarUrl)
+            assertEquals(remote.avatarUrl, merged.originalAvatarUrl)
+            val store = PreferencesContactStore(node)
+            store.save(listOf(merged))
+            assertEquals(remote.avatarUrl, store.load().single().originalAvatarUrl)
+            val restored = merged.copy(avatarUrl = merged.originalAvatarUrl)
+            assertEquals(remote.avatarUrl, mergeDownloadedContacts(listOf(restored), listOf(remote)).single().avatarUrl)
+        } finally { node.removeNode() }
+    }
+
+    @Test
     fun contactSyncKeepsFavoriteAfterUniqueContactRename() {
         val local = Contact("Иванов Иван", "216", favorite = true)
         val downloaded = Contact("Иванов Иван Иванович", "216", favorite = false)

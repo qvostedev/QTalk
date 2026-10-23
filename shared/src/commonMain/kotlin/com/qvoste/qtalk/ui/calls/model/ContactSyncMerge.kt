@@ -39,6 +39,7 @@ internal fun mergeDownloadedContacts(
             .orEmpty()
 
         downloaded.copy(
+            originalAvatarUrl = downloaded.avatarUrl,
             avatarUrl = (exactMatches + uniqueNumberMatch).firstOrNull { it.avatarUrl.startsWith("file:") }?.avatarUrl ?: downloaded.avatarUrl,
             source = if (exactMatches.any { it.source == ContactSource.LOCAL }) {
                 ContactSource.LOCAL

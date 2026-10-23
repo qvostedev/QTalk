@@ -31,7 +31,8 @@ data class Contact(
     val status: EmployeeStatus = EmployeeStatus.OFFLINE,
     val avatarUrl: String = "",
     // Derived from the signed-in user's organization, not persisted in the directory.
-    val isEmployee: Boolean = false
+    val isEmployee: Boolean = false,
+    val originalAvatarUrl: String = ""
 )
 
 internal fun List<Contact>.classifyForAccount(accountNumber: String): List<Contact> {

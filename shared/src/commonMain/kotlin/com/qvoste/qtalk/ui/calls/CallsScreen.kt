@@ -21,6 +21,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.focusable
@@ -1840,11 +1842,13 @@ private fun SettingsActionRow(
     titleColor: Color = TextPrimary,
     onClick: () -> Unit
 ) {
+    val interactions = remember { MutableInteractionSource() }
+    val hovered by interactions.collectIsHoveredAsState()
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val maxValueWidth = minOf(260.dp, maxWidth * 0.4f)
         Row(
             Modifier.fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick)
+                .clip(RoundedCornerShape(12.dp)).clickable(interactionSource = interactions, indication = null, onClick = onClick)
                 .padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1861,8 +1865,8 @@ private fun SettingsActionRow(
             }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Text(uiText(title), color = titleColor, fontSize = 12.sp, lineHeight = 12.sp, fontWeight = FontWeight.Medium)
-                subtitle?.let { Text(uiText(it), color = TextSecondary, fontSize = 10.sp, lineHeight = 10.sp) }
+                Text(uiText(title), color = titleColor.onHover(hovered), fontSize = 12.sp, lineHeight = 12.sp, fontWeight = FontWeight.Medium)
+                subtitle?.let { Text(uiText(it), color = TextSecondary.onHover(hovered), fontSize = 10.sp, lineHeight = 10.sp) }
             }
             value?.let {
                 Text(
