@@ -43,7 +43,7 @@ internal fun ConferenceCallOverlay(
     val pending = (conference.pendingNumbers + conference.invitedNumber.takeIf { conference.phase != ConferencePhase.ACTIVE }.orEmpty())
         .filter { it.isNotBlank() && it !in conference.participants && it != ownNumber }.distinct()
     val members = (listOf(ownNumber) + conference.participants + pending).filter(String::isNotBlank).distinct()
-    Box(Modifier.fillMaxSize().background(Color(0xD9090B0D)), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().background(CallOverlayTint), contentAlignment = Alignment.Center) {
         Column(Modifier.widthIn(max = 850.dp).fillMaxWidth().verticalScroll(rememberScrollState())
             .padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterHorizontally),
@@ -89,8 +89,7 @@ internal fun ConferenceCallOverlay(
                     "123456789*0#".toList().chunked(3).forEach { digits ->
                         Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                             digits.forEach { digit ->
-                                Box(Modifier.size(42.dp).clip(CircleShape).background(ControlBackground).clickable { onDtmf(digit) },
-                                    contentAlignment = Alignment.Center) { Text(digit.toString(), color = TextPrimary, fontSize = 19.sp) }
+                                CallKeypadKey(digit, 42) { onDtmf(digit) }
                             }
                         }
                     }

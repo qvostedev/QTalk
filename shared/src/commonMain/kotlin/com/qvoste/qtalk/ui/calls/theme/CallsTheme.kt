@@ -42,6 +42,7 @@ private val lightPalette = CallsPalette(
     Color(0xFFFF383C), Color(0xFF34C759), Color(0xFFFFB020)
 )
 private val LocalCallsPalette = staticCompositionLocalOf { darkPalette }
+internal val LocalCallLightControls = staticCompositionLocalOf { false }
 
 private object PlainIndication : IndicationNodeFactory {
     override fun create(interactionSource: InteractionSource): DelegatableNode = object : Modifier.Node() {}

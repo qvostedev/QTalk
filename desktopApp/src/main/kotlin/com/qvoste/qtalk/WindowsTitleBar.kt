@@ -267,20 +267,28 @@ internal fun applyQTalkWindowsTitleBar(window: Window, light: Boolean = false): 
 
 internal fun qTalkNativeWindowTitle(): String = if (isWindows) "" else "QTalk"
 
-internal fun updateQTalkWindowsCaptionColors(window: Window, light: Boolean) {
+internal fun updateQTalkWindowsCaptionColors(window: Window, light: Boolean, dimmed: Boolean = false, callOverlay: Boolean = false) {
     if (!isWindows) return
     runCatching {
         val dwmApi = Native.load("dwmapi", DwmApi::class.java)
         val user32Api = Native.load("user32", User32Api::class.java)
         val componentHandle = Native.getComponentPointer(window)
         val windowHandle = user32Api.GetAncestor(componentHandle, GA_ROOT) ?: componentHandle
+        val base = if (light) intArrayOf(255, 255, 255) else intArrayOf(9, 11, 13)
+        val overlay = intArrayOf(9, 11, 13)
+        val rgb = base.mapIndexed { index, value ->
+            val mixed = if (callOverlay) value * 0.15f + overlay[index] * 0.85f else value.toFloat()
+            (mixed * if (dimmed) 0.4f else 1f).toInt()
+        }
+        val captionColor = rgb[0] or (rgb[1] shl 8) or (rgb[2] shl 16)
+        val lightCaption = light && !dimmed && !callOverlay
         val captionResult = dwmApi.setIntAttribute(
             windowHandle, DWMWA_CAPTION_COLOR,
-            if (light) WHITE_CAPTION_COLOR else QTALK_CAPTION_COLOR
+            captionColor
         )
         val textResult = dwmApi.setIntAttribute(
             windowHandle, DWMWA_TEXT_COLOR,
-            if (light) DARK_TEXT_COLOR else LIGHT_TEXT_COLOR
+            if (lightCaption) DARK_TEXT_COLOR else LIGHT_TEXT_COLOR
         )
         if (captionResult != 0 || textResult != 0) {
             val modernResult = dwmApi.setIntAttribute(

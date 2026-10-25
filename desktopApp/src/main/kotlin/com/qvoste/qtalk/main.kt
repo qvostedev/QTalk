@@ -345,6 +345,10 @@ fun main(args: Array<String>) {
             undecorated = false,
             resizable = true
         ) {
+            var modalDepth by remember { mutableStateOf(0) }
+            val modalVisibility = remember { { delta: Int -> modalDepth = (modalDepth + delta).coerceAtLeast(0) } }
+            var callBackdropDepth by remember { mutableStateOf(0) }
+            val callBackdropVisibility = remember { { delta: Int -> callBackdropDepth = (callBackdropDepth + delta).coerceAtLeast(0) } }
             shutdownFailure?.let { message ->
                 androidx.compose.material3.AlertDialog(
                     onDismissRequest = { shutdownFailure = null },
@@ -365,8 +369,9 @@ fun main(args: Array<String>) {
                 val restoreWindowsTitleBar = applyQTalkWindowsTitleBar(window, themeMode == ThemeMode.LIGHT)
                 onDispose(restoreWindowsTitleBar)
             }
-            LaunchedEffect(window, themeMode, callOverlayVisible) {
-                updateQTalkWindowsCaptionColors(window, themeMode == ThemeMode.LIGHT && !callOverlayVisible)
+            LaunchedEffect(window, themeMode, callOverlayVisible, modalDepth, callBackdropDepth) {
+                updateQTalkWindowsCaptionColors(window, themeMode == ThemeMode.LIGHT, modalDepth > 0,
+                    (callOverlayVisible || callBackdropDepth > 0) && modalDepth == 0)
             }
             LaunchedEffect(mainWindowVisible, windowActivationRequest) {
                 if (mainWindowVisible) {
@@ -381,6 +386,8 @@ fun main(args: Array<String>) {
                     minOf(1f, maxWidth.value / 1100f, maxHeight.value / 960f).coerceAtLeast(0.65f)
                 } else interfaceScale
                 CompositionLocalProvider(
+                    com.qvoste.qtalk.ui.calls.components.LocalModalVisibility provides modalVisibility,
+                    com.qvoste.qtalk.ui.calls.components.LocalCallBackdropVisibility provides callBackdropVisibility,
                     LocalAppLanguage provides LanguageSettings(appLanguage) {
                         themeStore.saveLanguage(it)
                         appLanguage = it

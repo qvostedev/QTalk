@@ -7,6 +7,7 @@ import com.qvoste.qtalk.ui.calls.i18n.LocalAppLanguage
 import com.qvoste.qtalk.ui.calls.i18n.uiText
 import com.qvoste.qtalk.ui.calls.i18n.releaseNotesForLanguage
 import qtalk.shared.generated.resources.icon_settings_language
+import qtalk.shared.generated.resources.icon_notification_delete
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -49,7 +50,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.AlertDialog
+import com.qvoste.qtalk.ui.calls.components.QTalkAlertDialog as AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -166,6 +167,8 @@ import com.qvoste.qtalk.ui.calls.components.EmptyMessage
 import com.qvoste.qtalk.ui.calls.components.DialerPanel
 import com.qvoste.qtalk.ui.calls.components.IncomingCallOverlay
 import com.qvoste.qtalk.ui.calls.components.ActiveCallOverlay
+import com.qvoste.qtalk.ui.calls.components.CallOverlayDialog
+import com.qvoste.qtalk.ui.calls.components.CallOverlayBlur
 
 
 @Composable
@@ -479,6 +482,20 @@ private fun CallsContent(
     onDisconnectContactDatabase: () -> Unit
 ) {
     var section by rememberSaveable { mutableStateOf(AppSection.CALLS) }
+    var sidebarAccountOpen by remember { mutableStateOf(false) }
+    if (sidebarAccountOpen) {
+        AlertDialog(onDismissRequest = { sidebarAccountOpen = false },
+            title = { Text(uiText("Настройка аккаунта"), color = TextPrimary) },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SettingsDetail("SIP-логин", account?.username.orEmpty())
+                SettingsDetail("SIP-сервер", account?.domain.orEmpty())
+                SettingsDetail("Порт", account?.port?.toString().orEmpty())
+                SettingsDetail("Транспорт", account?.transport?.name.orEmpty())
+                SettingsDetail("Realm", account?.realm ?: "—")
+            } },
+            confirmButton = { TextButton(onClick = onLogout) { Text(uiText("Сменить аккаунт"), color = Danger) } },
+            dismissButton = { TextButton(onClick = { sidebarAccountOpen = false }) { Text(uiText("Закрыть"), color = TextPrimary) } })
+    }
     var number by rememberSaveable { mutableStateOf("") }
     var selectedContact by remember { mutableStateOf<Contact?>(null) }
     var showAddContact by rememberSaveable { mutableStateOf(false) }
@@ -487,10 +504,27 @@ private fun CallsContent(
     var creatingRoom by remember { mutableStateOf(false) }
     var searchFocused by remember { mutableStateOf(false) }
     var dialerTextInputFocused by remember { mutableStateOf(false) }
-    var seenUpdateVersion by rememberSaveable { mutableStateOf<String?>(null) }
+    val notificationStore = remember { notificationHistoryStore() }
+    var notifications by remember { mutableStateOf(notificationStore.load()) }
+    var notificationOutageActive by remember { mutableStateOf(false) }
+    LaunchedEffect(notifications) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { notificationStore.save(notifications) } }
+    LaunchedEffect(availableUpdateVersion, availableUpdateDescription) {
+        availableUpdateVersion?.let { notifications = notifications.withUpdate(it, availableUpdateDescription.orEmpty(), Clock.System.now().toEpochMilliseconds()) }
+    }
+    LaunchedEffect(connection) {
+        if (connection == TelephonyConnection.CONNECTED || connection == TelephonyConnection.DISCONNECTED) notificationOutageActive = false
+        if (connection.retryable && !notificationOutageActive) {
+            notificationOutageActive = true
+            val now = Clock.System.now().toEpochMilliseconds()
+            if (notifications.firstOrNull { it.category == NotificationCategory.SYSTEM }?.let { now - it.timestamp > 60_000 } != false) {
+                notifications = (listOf(SavedNotification("connection:$now", now, NotificationCategory.SYSTEM,
+                    "Нет связи с телефонией", "Проверьте подключение к сети. QTalk автоматически повторит подключение.")) + notifications).take(200)
+            }
+        }
+    }
     val keyboardDialFocus = remember { FocusRequester() }
     val searchFocusRequester = remember { FocusRequester() }
-    val hasUnreadUpdate = availableUpdateVersion != null && availableUpdateVersion != seenUpdateVersion
+    val hasUnreadUpdate = notifications.any { !it.read && !it.deleted }
     val showCallOverlay = (call.state == CallState.INCOMING && !callOverlayCollapsed) ||
         (call.state == CallState.ACTIVE && !callOverlayCollapsed)
     LaunchedEffect(call.state) {
@@ -501,9 +535,9 @@ private fun CallsContent(
     LaunchedEffect(contacts) {
         selectedContact = selectedContact?.latestFrom(contacts)
     }
-    LaunchedEffect(section, availableUpdateVersion) {
+    LaunchedEffect(section, notifications) {
         if (section == AppSection.NOTIFICATIONS) {
-            seenUpdateVersion = availableUpdateVersion
+            if (notifications.any { !it.read }) notifications = notifications.map { it.copy(read = true) }
         }
     }
     LaunchedEffect(externalDialRequest?.id) {
@@ -573,7 +607,7 @@ private fun CallsContent(
         val appliedScale = scaledDensity.density / unscaledDensity.density
         // При любом звонке основной интерфейс остаётся виден через размытие.
         Row(Modifier.fillMaxSize().padding(top = if (connection.showWarning) 60.dp else 0.dp)
-            .then(if (showCallOverlay) Modifier.blur(8.dp) else Modifier)) {
+            .then(if (showCallOverlay || showConferencePicker) Modifier.blur(CallOverlayBlur) else Modifier)) {
             CompositionLocalProvider(LocalDensity provides unscaledDensity) {
               Sidebar(
                 selected = section,
@@ -581,6 +615,7 @@ private fun CallsContent(
                 compact = compact,
                 accountContact = contacts.firstOrNull { it.number == accountNumber },
                 hasNotifications = hasUnreadUpdate,
+                onAccountClick = { sidebarAccountOpen = true },
                 onSelect = {
                     searchFocused = false
                     section = it
@@ -696,6 +731,8 @@ private fun CallsContent(
                     searchFocusRequester = searchFocusRequester
                 )
                 AppSection.NOTIFICATIONS -> NotificationsSection(
+                    notifications = notifications,
+                    onDeleteNotifications = { ids -> notifications = notifications.map { if (it.id in ids) it.copy(deleted = true, read = true, title = "", description = "", version = "") else it } },
                     modifier = Modifier.weight(1f),
                     compact = compact,
                     contacts = contacts,
@@ -794,8 +831,9 @@ private fun CallsContent(
             }
         }
 
-        if (call.state == CallState.INCOMING && !callOverlayCollapsed) {
+        if (call.state == CallState.INCOMING && !callOverlayCollapsed && !showConferencePicker) {
             val caller = contacts.firstOrNull { it.matchesCallNumber(call.number) }
+            CompositionLocalProvider(LocalCallLightControls provides (themeMode == ThemeMode.LIGHT)) {
             CallsTheme(ThemeMode.DARK) {
                 IncomingCallOverlay(
                     roomParticipants = if (conference.roomId.isBlank()) emptyList() else conference.participants.map { participant ->
@@ -808,11 +846,13 @@ private fun CallsContent(
                     onDecline = onDecline
                 )
             }
+            }
         }
 
 
-        if (call.state == CallState.ACTIVE && !callOverlayCollapsed) {
+        if (call.state == CallState.ACTIVE && !callOverlayCollapsed && !showConferencePicker) {
             val activeContact = contacts.firstOrNull { it.matchesCallNumber(call.number) }
+            CompositionLocalProvider(LocalCallLightControls provides (themeMode == ThemeMode.LIGHT)) {
             CallsTheme(ThemeMode.DARK) {
                 ActiveCallOverlay(
                     conference = conference,
@@ -835,6 +875,7 @@ private fun CallsContent(
                     onConferenceHeldChange = onConferenceHeldChange,
                     onSpeakerMutedChange = onSpeakerMutedChange
                 )
+            }
             }
         }
 
@@ -863,10 +904,10 @@ private fun ConferenceParticipantDialog(
     var selected by remember { mutableStateOf(setOf<String>()) }
     val excluded = (existingNumbers + ownNumber + currentNumber).map { it.normalizedContactNumber() }.filter(String::isNotBlank).toSet()
     val capacity = com.qvoste.qtalk.voip.MAX_CONFERENCE_PARTICIPANTS - excluded.size
-    AlertDialog(
+    CallOverlayDialog(
         onDismissRequest = onDismiss,
         containerColor = ControlBackground,
-        title = { Text(uiText(if (creatingRoom) "Создать конференцию" else "Добавить участников"), color = TextPrimary) },
+        title = { Text(uiText(if (creatingRoom) "Создать конференцию" else "Добавить участников"), color = TextPrimary, fontSize = 24.sp) },
         text = {
             Column(Modifier.widthIn(min = 280.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(search, { search = it }, label = { Text(uiText("Имя или номер")) },
@@ -928,7 +969,9 @@ private fun TelephonyConnectionBanner(
 }
 
 @Composable
-private fun NotificationsSection(
+internal fun NotificationsSection(
+    notifications: List<SavedNotification>,
+    onDeleteNotifications: (Set<String>) -> Unit,
     modifier: Modifier,
     compact: Boolean,
     contacts: List<Contact>,
@@ -944,7 +987,18 @@ private fun NotificationsSection(
     onOpenUpdate: () -> Unit
 ) {
     var search by rememberSaveable { mutableStateOf("") }
-    var updateExpanded by rememberSaveable(availableUpdateVersion) { mutableStateOf(false) }
+    var expandedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var notificationFilter by rememberSaveable { mutableStateOf(0) }
+    var deletingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val visible = notifications.filter { !it.deleted &&
+        (notificationFilter == 0 || it.category == if (notificationFilter == 1) NotificationCategory.UPDATE else NotificationCategory.SYSTEM) &&
+        (search.isBlank() || (it.title + it.description + it.version).contains(search, ignoreCase = true)) }.sortedByDescending { it.timestamp }
+    if (deletingIds.isNotEmpty()) {
+        AlertDialog(onDismissRequest = { deletingIds = emptySet() },
+            title = { Text(uiText("Удалить уведомления?"), color = TextPrimary) },
+            confirmButton = { TextButton(onClick = { onDeleteNotifications(deletingIds); deletingIds = emptySet() }) { Text(uiText("Да"), color = Danger) } },
+            dismissButton = { TextButton(onClick = { deletingIds = emptySet() }) { Text(uiText("Нет"), color = TextPrimary) } })
+    }
 
     Column(
         modifier.fillMaxHeight().padding(
@@ -967,19 +1021,41 @@ private fun NotificationsSection(
             onTransferEmployee = onTransferEmployee
         )
         Spacer(Modifier.height(if (compact) 28.dp else 32.dp))
-        Text(uiText("Уведомления"), color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SegmentedBar(options = listOf("Все", "Обновления", "Система"), selectedIndex = notificationFilter,
+                onSelect = { notificationFilter = it }, fillWidth = false)
+            Spacer(Modifier.width(10.dp))
+            Box(Modifier.size(40.dp).background(ControlBackground, CircleShape).clickable {
+                deletingIds = visible.map { it.id }.toSet()
+            }, contentAlignment = Alignment.Center) {
+                Image(painterResource(Res.drawable.icon_notification_delete), uiText("Удалить"), Modifier.size(20.dp), colorFilter = ColorFilter.tint(TextSecondary))
+            }
+        }
         Spacer(Modifier.height(14.dp))
-        if (availableUpdateVersion == null) {
+        if (visible.isEmpty()) {
             EmptyMessage("Новых уведомлений нет")
         } else {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            val now = Clock.System.now().toEpochMilliseconds()
+            var previousHeading = ""
+            visible.forEach { item ->
+            val heading = historyDateHeading(item.timestamp, now)
+            if (heading != previousHeading) {
+                Text(uiText(heading), color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(vertical = 8.dp))
+                previousHeading = heading
+            }
+            val updateExpanded = expandedId == item.id
+            val version = item.version
             Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
                     .background(ControlBackground)
+                    .transferOnRightClick(true) { deletingIds = setOf(item.id) }
                     .animateContentSize()
             ) {
                 Row(
                     Modifier.fillMaxWidth()
-                        .clickable { updateExpanded = !updateExpanded }
+                        .clickable { expandedId = if (updateExpanded) null else item.id }
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -996,8 +1072,8 @@ private fun NotificationsSection(
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(uiText("Доступно обновление"), color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text(uiText("QTalk $availableUpdateVersion готов к установке"), color = TextSecondary, fontSize = 11.sp)
+                        Text(uiText(item.title), color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(if (item.category == NotificationCategory.UPDATE) uiText("QTalk $version готов к установке") else uiText("Система"), color = TextSecondary, fontSize = 11.sp)
                     }
                     Text(
                         uiText(if (updateExpanded) "Свернуть  ⌃" else "Подробнее  ⌄"),
@@ -1011,12 +1087,11 @@ private fun NotificationsSection(
                             .background(TextSecondary.copy(alpha = 0.14f))
                     )
                     Column(Modifier.fillMaxWidth().padding(horizontal = 66.dp, vertical = 14.dp)) {
-                        Text(uiText("Что нового"), color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text(uiText(if (item.category == NotificationCategory.UPDATE) "Что нового" else "Система"), color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(7.dp))
                         Text(
-                            availableUpdateDescription?.let {
-                                releaseNotesForLanguage(it, LocalAppLanguage.current.language)
-                            }?.takeIf(String::isNotBlank)
+                            (if (item.category == NotificationCategory.SYSTEM) uiText(item.description) else
+                                releaseNotesForLanguage(item.description, LocalAppLanguage.current.language)).takeIf(String::isNotBlank)
                                 ?: uiText("Описание этого релиза пока не добавлено."),
                             color = TextSecondary,
                             fontSize = 11.sp,
@@ -1025,11 +1100,13 @@ private fun NotificationsSection(
                             overflow = TextOverflow.Ellipsis
                         )
                         Spacer(Modifier.height(10.dp))
-                        TextButton(onClick = onOpenUpdate) {
+                        if (item.category == NotificationCategory.UPDATE && version == availableUpdateVersion) TextButton(onClick = onOpenUpdate) {
                             Text(uiText("Перейти к обновлению  ›"), color = Primary, fontSize = 11.sp)
                         }
                     }
                 }
+            }
+            }
             }
         }
     }

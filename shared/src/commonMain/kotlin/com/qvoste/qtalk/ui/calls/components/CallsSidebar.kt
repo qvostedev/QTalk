@@ -44,8 +44,10 @@ internal fun Sidebar(
     compact: Boolean,
     accountContact: Contact?,
     hasNotifications: Boolean = false,
+    onAccountClick: () -> Unit = {},
     onSelect: (AppSection) -> Unit
 ) {
+    val accountInteractions = remember { MutableInteractionSource() }
     Column(
         Modifier.width(if (compact) 80.dp else 214.dp).fillMaxHeight().padding(
             start = if (compact) 21.dp else 39.dp,
@@ -95,10 +97,12 @@ internal fun Sidebar(
         }
 
         if (compact) {
+            Box(Modifier.clickable(interactionSource = accountInteractions, indication = null, onClick = onAccountClick)) {
             AccountAvatar(contact = null, registration = registration)
+            }
         } else {
             Row(
-                Modifier.requiredWidth(177.dp).height(46.dp),
+                Modifier.requiredWidth(177.dp).height(46.dp).clickable(interactionSource = accountInteractions, indication = null, onClick = onAccountClick),
                 verticalAlignment = Alignment.Top
             ) {
                 AccountAvatar(contact = accountContact, registration = registration)
@@ -178,7 +182,7 @@ private fun NavItem(
     val active = section == selected
     val interactions = remember { MutableInteractionSource() }
     val hovered by interactions.collectIsHoveredAsState()
-    val itemColor = (if (active) TextPrimary else TextSecondary).onHover(hovered)
+    val itemColor = (if (active) TextPrimary else TextSecondary).onHover(hovered && !active)
     BoxWithConstraints(Modifier.fillMaxWidth().height(44.dp)) {
         Row(
             Modifier.offset(x = (-8).dp).requiredWidth(maxWidth + 16.dp).fillMaxHeight()

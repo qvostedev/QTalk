@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
@@ -49,7 +50,7 @@ internal fun IncomingCallOverlay(
     roomParticipants: List<String> = emptyList()
 ) {
     Box(
-        Modifier.fillMaxSize().background(Color(0xD9090B0D)),
+        Modifier.fillMaxSize().background(CallOverlayTint),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -137,7 +138,7 @@ internal fun ActiveCallOverlay(
             onSpeakerMutedChange, onCollapse, onHangUp, onAddParticipant, onDtmf, onConferenceHeldChange)
         return
     }
-    Box(Modifier.fillMaxSize().background(Color(0xD9090B0D)), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().background(CallOverlayTint), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             if (callerName == null) {
                 Avatar("?", number, 124)
@@ -183,13 +184,7 @@ internal fun ActiveCallOverlay(
                     ).forEach { row ->
                         Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                             row.forEach { digit ->
-                                Box(
-                                    Modifier.size(48.dp).clip(CircleShape).background(ControlBackground)
-                                        .clickable { enterDtmf(digit) },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(digit.toString(), color = TextPrimary, fontSize = 19.sp)
-                                }
+                                CallKeypadKey(digit, 48) { enterDtmf(digit) }
                             }
                         }
                     }
@@ -267,23 +262,25 @@ internal fun CallControl(
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
+    val lightControls = IsLightTheme || LocalCallLightControls.current
     Column(Modifier.width(columnWidth.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.size(buttonSize.dp).clip(CircleShape)
                 .alpha(if (enabled) 1f else 0.35f)
-                .background(overrideColor ?: if (active) Primary else ControlBackground)
+                .background(overrideColor ?: if (active) Primary else if (lightControls) Color.White else ControlBackground)
                 .clickable(enabled = enabled, onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
             Image(
                 painter = painterResource(icon),
                 contentDescription = label,
-                modifier = Modifier.size(iconWidth.dp, iconHeight.dp)
+                modifier = Modifier.size(iconWidth.dp, iconHeight.dp),
+                colorFilter = ColorFilter.tint(if (lightControls && !active && overrideColor == null) Color.Black else Color.White)
             )
             if (crossedOut) {
                 Canvas(Modifier.size(26.dp)) {
                     drawLine(
-                        color = Color.White,
+                        color = if (lightControls && !active && overrideColor == null) Color.Black else Color.White,
                         start = Offset(3.dp.toPx(), 3.dp.toPx()),
                         end = Offset(23.dp.toPx(), 23.dp.toPx()),
                         strokeWidth = 1.7.dp.toPx(),
@@ -299,15 +296,26 @@ internal fun CallControl(
 
 @Composable
 private fun TextCallControl(symbol: String, label: String, buttonSize: Int = 42, columnWidth: Int = 56, onClick: () -> Unit) {
+    val lightControls = IsLightTheme || LocalCallLightControls.current
     Column(Modifier.width(columnWidth.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
-            Modifier.size(buttonSize.dp).clip(CircleShape).background(ControlBackground).clickable(onClick = onClick),
+            Modifier.size(buttonSize.dp).clip(CircleShape).background(if (lightControls) Color.White else ControlBackground).clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
-            Text(symbol, color = TextPrimary, fontSize = 25.sp)
+            Text(symbol, color = if (lightControls) Color.Black else TextPrimary, fontSize = 25.sp)
         }
         Spacer(Modifier.height(6.dp))
         Text(uiText(label), color = TextSecondary, fontSize = 8.sp, maxLines = 1)
+    }
+}
+
+@Composable
+internal fun CallKeypadKey(digit: Char, size: Int = 48, onClick: () -> Unit) {
+    val lightControls = IsLightTheme || LocalCallLightControls.current
+    Box(Modifier.size(size.dp).clip(CircleShape)
+        .background(if (lightControls) Color.White else ControlBackground).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center) {
+        Text(digit.toString(), color = if (lightControls) Color.Black else TextPrimary, fontSize = 19.sp)
     }
 }
 

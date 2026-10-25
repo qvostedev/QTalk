@@ -124,13 +124,16 @@ internal fun DialerPanel(
             }
         }
         Dialog(onDismissRequest = { avatarPreview = false }) {
+            ModalPresence()
             Surface(color = ControlBackground, shape = RoundedCornerShape(24.dp)) {
-                Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.padding(24.dp)) {
+                Text("×", color = TextPrimary, fontSize = 24.sp,
+                    modifier = Modifier.align(Alignment.TopEnd).clickable { avatarPreview = false }.padding(4.dp))
+                Column(Modifier.padding(top = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     ContactAvatar(previewName.ifBlank { "?" }, previewTelegram, 240, previewAvatar)
                     mediaError?.let { Text(it, color = Danger, fontSize = 12.sp) }
                     Column(Modifier.padding(top = 16.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                        ContactTextAction("Закрыть окно", TextPrimary) { avatarPreview = false }
-                        ContactTextAction("Загрузить свою аватарку", TextPrimary, enabled = !importingAvatar, onClick = {
+                        ContactTextAction("Изменить", TextPrimary, enabled = !importingAvatar, onClick = {
                             mediaScope.launch {
                                 importingAvatar = true
                                 try { importLocalMedia(true)?.let { changeAvatar(it) }; mediaError = null }
@@ -139,11 +142,12 @@ internal fun DialerPanel(
                                 finally { importingAvatar = false }
                             }
                         })
-                        ContactTextAction("Вернуть исходную аватарку", TextPrimary,
+                        ContactTextAction("Вернуть", TextPrimary,
                             enabled = previewAvatar.startsWith("file:") && !importingAvatar) {
                             changeAvatar(if (editing) originalAvatar else displayedContact?.originalAvatarUrl.orEmpty())
                         }
                     }
+                }
                 }
             }
         }
