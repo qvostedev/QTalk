@@ -13,7 +13,7 @@ val targetOs = providers.gradleProperty("qtalk.targetOs")
     .get()
     .lowercase()
 
-val qTalkPackageVersion = "1.0.9"
+val qTalkPackageVersion = "1.1.0"
 
 dependencies {
     implementation(project(":shared"))
