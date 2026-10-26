@@ -1,5 +1,11 @@
 package com.qvoste.qtalk.ui.calls.components
 import kotlinx.coroutines.launch
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 
 import com.qvoste.qtalk.ui.calls.i18n.uiText
 
@@ -268,9 +274,28 @@ internal fun DialerPanel(
         }
 
         Spacer(Modifier.height(18.dp))
-        Row(Modifier.width(panelContentWidth), horizontalArrangement = Arrangement.SpaceBetween) {
-            listOf("Информация", "История", "Заметки").forEach { tab ->
-                InfoTab(tab, infoTab == tab) { infoTab = tab }
+        val tabs = listOf("Информация", "История", "Заметки")
+        val tabCenters = remember { mutableStateMapOf<String, Float>() }
+        val indicatorCenter by animateFloatAsState(
+            tabCenters[infoTab] ?: 0f, tween(260), label = "infoTabIndicator"
+        )
+        val indicatorColor = Primary
+        Box(Modifier.width(panelContentWidth)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                tabs.forEach { tab ->
+                    InfoTab(tab, infoTab == tab, Modifier.onGloballyPositioned {
+                        tabCenters[tab] = it.positionInParent().x + it.size.width / 2f
+                    }) { infoTab = tab }
+                }
+            }
+            Canvas(Modifier.matchParentSize()) {
+                if (tabCenters.containsKey(infoTab)) {
+                    val halfWidth = 29.dp.toPx()
+                    drawLine(indicatorColor,
+                        Offset(indicatorCenter - halfWidth, size.height - 0.5.dp.toPx()),
+                        Offset(indicatorCenter + halfWidth, size.height - 0.5.dp.toPx()),
+                        strokeWidth = 1.dp.toPx())
+                }
             }
         }
         Spacer(Modifier.height(29.dp))
@@ -650,11 +675,11 @@ private fun ContactTextAction(
 }
 
 @Composable
-private fun InfoTab(text: String, selected: Boolean, onClick: () -> Unit) {
-    Column(Modifier.clickable(onClick = onClick).padding(horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+private fun InfoTab(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(modifier.clickable(onClick = onClick).padding(horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(uiText(text), color = if (selected) Primary else TextSecondary, fontSize = 11.sp)
         Spacer(Modifier.height(7.dp))
-        Box(Modifier.width(58.dp).height(1.dp).background(if (selected) Primary else Color.Transparent))
+        Box(Modifier.width(58.dp).height(1.dp).background(Color.Transparent))
     }
 }
 

@@ -11,6 +11,7 @@ import com.qvoste.qtalk.domain.calls.ConnectSipUseCase
 import com.qvoste.qtalk.ui.calls.CallsScreen
 import com.qvoste.qtalk.ui.calls.CallsViewModel
 import com.qvoste.qtalk.ui.calls.ExternalDialRequest
+import com.qvoste.qtalk.ui.calls.theme.CircularThemeReveal
 import com.qvoste.qtalk.ui.calls.theme.CallsTheme
 import com.qvoste.qtalk.ui.calls.theme.ThemeMode
 import com.qvoste.qtalk.ui.calls.model.ContactStore
@@ -83,16 +84,18 @@ fun App(
         onDispose { callsViewModel.close() }
     }
 
-    CallsTheme(themeMode) {
-        MaterialTheme(colorScheme = if (themeMode == ThemeMode.LIGHT) {
-            lightColorScheme()
-        } else darkColorScheme()) {
-            CallsScreen(
-                callsViewModel, themeMode, onThemeModeChange,
-                appVersion, availableUpdateVersion, availableUpdateDescription, onCheckForUpdates,
-                callOverlayCollapsed, onCollapseCall,
-                externalDialRequest, onExternalDialRequestConsumed
-            )
+    CircularThemeReveal(themeMode, onThemeModeChange) { changeTheme ->
+        CallsTheme(themeMode) {
+            MaterialTheme(colorScheme = if (themeMode == ThemeMode.LIGHT) {
+                lightColorScheme()
+            } else darkColorScheme()) {
+                CallsScreen(
+                    callsViewModel, themeMode, changeTheme,
+                    appVersion, availableUpdateVersion, availableUpdateDescription, onCheckForUpdates,
+                    callOverlayCollapsed, onCollapseCall,
+                    externalDialRequest, onExternalDialRequestConsumed
+                )
+            }
         }
     }
 }

@@ -7,7 +7,12 @@ import com.qvoste.qtalk.ui.calls.i18n.LocalAppLanguage
 import com.qvoste.qtalk.ui.calls.i18n.uiText
 import qtalk.shared.generated.resources.icon_settings_language
 
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
@@ -1003,7 +1008,7 @@ private fun CallsHome(
     searchFocusRequester: FocusRequester
 ) {
     var search by rememberSaveable { mutableStateOf("") }
-    var filter by rememberSaveable { mutableStateOf(CallFilter.ALL) }
+    var filter by remember { mutableStateOf(CallFilter.ALL) }
     val unreadMissedCount = history.count { it.missed && !it.missedAcknowledged }
     LaunchedEffect(filter, unreadMissedCount) {
         if (filter == CallFilter.MISSED && unreadMissedCount > 0) {
@@ -2042,7 +2047,7 @@ private fun ContactsSection(
     searchFocusRequester: FocusRequester
 ) {
     var search by rememberSaveable { mutableStateOf("") }
-    var filter by rememberSaveable { mutableStateOf(ContactFilter.ALL) }
+    var filter by remember { mutableStateOf(ContactFilter.ALL) }
     val visibleContacts = contacts.filter {
         val matchesSearch = search.isBlank() || it.matchesSearch(search)
         val matchesType = when (filter) {
@@ -2163,38 +2168,54 @@ internal fun SegmentedBar(
     fillWidth: Boolean = false,
     indicatorIndex: Int? = null
 ) {
-    Row(
+    // Measure the actual cells: labels and translated text have different widths.
+    val bounds = remember(options.size) { mutableStateMapOf<Int, Pair<Float, Float>>() }
+    val target = bounds[selectedIndex]
+    val primary = Primary
+    Box(
         Modifier.then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
-            .background(ControlBackground, RoundedCornerShape(22.dp)).padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+            .background(ControlBackground, RoundedCornerShape(22.dp)).padding(3.dp)
     ) {
-        options.forEachIndexed { index, title ->
-            val selected = selectedIndex == index
-            val segmentColor by animateColorAsState(
-                if (selected) Primary else Color.Transparent,
-                tween(160)
-            )
-            Box(
-                Modifier.then(if (fillWidth) Modifier.weight(1f) else Modifier)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(segmentColor)
-                    .clickable { onSelect(index) }
-                    .padding(horizontal = if (fillWidth) 5.dp else 22.dp, vertical = 9.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (indicatorIndex == index) {
-                        Box(Modifier.size(5.dp).background(Danger, CircleShape))
-                        Spacer(Modifier.width(5.dp))
+        // Start at the first measured bounds, so entering a section never animates
+        // from a zero-width pill. Subsequent selections keep the same animation state.
+        if (target != null) {
+            val left by animateFloatAsState(target.first, tween(260), label = "filterLeft")
+            val width by animateFloatAsState(target.second, tween(260), label = "filterWidth")
+            Canvas(Modifier.matchParentSize()) {
+                drawRoundRect(
+                    primary, topLeft = Offset(left, 0f), size = Size(width, size.height),
+                    cornerRadius = CornerRadius(18.dp.toPx())
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            options.forEachIndexed { index, title ->
+                val selected = selectedIndex == index
+                val interactions = remember { MutableInteractionSource() }
+                Box(
+                    Modifier.then(if (fillWidth) Modifier.weight(1f) else Modifier)
+                        .onGloballyPositioned {
+                            bounds[index] = it.positionInParent().x to it.size.width.toFloat()
+                        }
+                        .clip(RoundedCornerShape(18.dp))
+                        .clickable(interactionSource = interactions, indication = null) { onSelect(index) }
+                        .padding(horizontal = if (fillWidth) 5.dp else 22.dp, vertical = 9.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (indicatorIndex == index) {
+                            Box(Modifier.size(5.dp).background(Danger, CircleShape))
+                            Spacer(Modifier.width(5.dp))
+                        }
+                        Text(
+                            uiText(title),
+                            color = if (selected) OnPrimary else TextSecondary,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
-                    Text(
-                        uiText(title),
-                        color = if (selected) OnPrimary else TextSecondary,
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
             }
         }

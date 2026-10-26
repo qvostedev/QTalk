@@ -55,7 +55,7 @@ internal fun NotificationsSection(
 ) {
     var search by rememberSaveable { mutableStateOf("") }
     var expandedId by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedFilter by rememberSaveable { mutableStateOf(0) }
+    var selectedFilter by remember { mutableStateOf(0) }
     var deletingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val category = when (selectedFilter) {
         1 -> NotificationCategory.UPDATE

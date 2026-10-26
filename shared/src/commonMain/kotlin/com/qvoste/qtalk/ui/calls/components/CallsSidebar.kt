@@ -2,6 +2,15 @@ package com.qvoste.qtalk.ui.calls.components
 
 import com.qvoste.qtalk.ui.calls.i18n.uiText
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -48,6 +57,11 @@ internal fun Sidebar(
     onSelect: (AppSection) -> Unit
 ) {
     val accountInteractions = remember { MutableInteractionSource() }
+    val navCenters = remember(compact) { mutableStateMapOf<AppSection, Float>() }
+    val primary = Primary
+    fun navPosition(section: AppSection) = Modifier.onGloballyPositioned {
+        navCenters[section] = it.positionInParent().y + it.size.height / 2f
+    }
     Column(
         Modifier.width(if (compact) 80.dp else 214.dp).fillMaxHeight().padding(
             start = if (compact) 21.dp else 39.dp,
@@ -57,43 +71,54 @@ internal fun Sidebar(
         ),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Column {
-            Row(verticalAlignment = Alignment.Bottom) {
-                if (compact) {
-                    Box(Modifier.width(46.dp).height(41.dp), contentAlignment = Alignment.Center) {
+        Box {
+            Column {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    if (compact) {
+                        Box(Modifier.width(46.dp).height(41.dp), contentAlignment = Alignment.Center) {
+                            Image(
+                                painterResource(if (IsLightTheme) Res.drawable.logo_light_transparent else Res.drawable.logo_white_transparent),
+                                "QTalk",
+                                Modifier.size(39.dp)
+                            )
+                        }
+                    } else {
                         Image(
                             painterResource(if (IsLightTheme) Res.drawable.logo_light_transparent else Res.drawable.logo_white_transparent),
                             "QTalk",
-                            Modifier.size(39.dp)
+                            Modifier.size(41.dp)
                         )
                     }
-                } else {
-                    Image(
-                        painterResource(if (IsLightTheme) Res.drawable.logo_light_transparent else Res.drawable.logo_white_transparent),
-                        "QTalk",
-                        Modifier.size(41.dp)
-                    )
+                    if (!compact) {
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "QTalk",
+                            color = TextPrimary,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 2.dp)
+                        )
+                    }
                 }
-                if (!compact) {
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        "QTalk",
-                        color = TextPrimary,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 2.dp)
-                    )
+
+                Spacer(Modifier.height(if (compact) 18.dp else 38.dp))
+                if (!compact) SectionLabel("ОСНОВНОЕ")
+                NavItem(AppSection.CALLS, selected, compact, onSelect, modifier = navPosition(AppSection.CALLS))
+                NavItem(AppSection.CONTACTS, selected, compact, onSelect, modifier = navPosition(AppSection.CONTACTS))
+                Spacer(Modifier.height(if (compact) 8.dp else 22.dp))
+                if (!compact) SectionLabel("СИСТЕМА")
+                NavItem(AppSection.SETTINGS, selected, compact, onSelect, modifier = navPosition(AppSection.SETTINGS))
+                NavItem(AppSection.NOTIFICATIONS, selected, compact, onSelect, hasNotifications, navPosition(AppSection.NOTIFICATIONS))
+            }
+            navCenters[selected]?.let { target ->
+                val center by animateFloatAsState(target, tween(260), label = "sidebarIndicator")
+                Canvas(Modifier.matchParentSize()) {
+                    drawRoundRect(primary,
+                        topLeft = Offset(size.width - 3.dp.toPx(), center - 14.dp.toPx()),
+                        size = Size(3.dp.toPx(), 28.dp.toPx()),
+                        cornerRadius = CornerRadius(2.dp.toPx()))
                 }
             }
-
-            Spacer(Modifier.height(if (compact) 18.dp else 38.dp))
-            if (!compact) SectionLabel("ОСНОВНОЕ")
-            NavItem(AppSection.CALLS, selected, compact, onSelect)
-            NavItem(AppSection.CONTACTS, selected, compact, onSelect)
-            Spacer(Modifier.height(if (compact) 8.dp else 22.dp))
-            if (!compact) SectionLabel("СИСТЕМА")
-            NavItem(AppSection.SETTINGS, selected, compact, onSelect)
-            NavItem(AppSection.NOTIFICATIONS, selected, compact, onSelect, hasNotifications)
         }
 
         if (compact) {
@@ -177,13 +202,21 @@ private fun NavItem(
     selected: AppSection,
     compact: Boolean,
     onSelect: (AppSection) -> Unit,
-    showBadge: Boolean = false
+    showBadge: Boolean = false,
+    modifier: Modifier = Modifier
 ) {
     val active = section == selected
     val interactions = remember { MutableInteractionSource() }
     val hovered by interactions.collectIsHoveredAsState()
-    val itemColor = (if (active) TextPrimary else TextSecondary).onHover(hovered && !active)
-    BoxWithConstraints(Modifier.fillMaxWidth().height(44.dp)) {
+    val baseColor = if (active) TextPrimary else TextSecondary
+    val itemColor by animateColorAsState(
+        if (hovered && !active) lerp(baseColor, TextPrimary, 0.12f) else baseColor,
+        tween(260), label = "sidebarItemColor"
+    )
+    val weight by animateFloatAsState(
+        if (active) 600f else 400f, tween(260), label = "sidebarItemWeight"
+    )
+    BoxWithConstraints(modifier.fillMaxWidth().height(44.dp)) {
         Row(
             Modifier.offset(x = (-8).dp).requiredWidth(maxWidth + 16.dp).fillMaxHeight()
                 .clip(RoundedCornerShape(10.dp)).clickable(interactionSource = interactions, indication = null) { onSelect(section) }
@@ -213,7 +246,7 @@ private fun NavItem(
                     uiText(section.title),
                     color = itemColor,
                     fontSize = 14.sp,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal
+                    fontWeight = FontWeight(weight.toInt())
                 )
             }
             if (showBadge) {
@@ -221,7 +254,6 @@ private fun NavItem(
                 Box(Modifier.size(7.dp).background(Danger, CircleShape))
             }
             Spacer(Modifier.weight(1f))
-            if (active) Box(Modifier.width(3.dp).height(28.dp).background(Primary, RoundedCornerShape(2.dp)))
         }
     }
 }
