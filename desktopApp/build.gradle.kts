@@ -13,7 +13,7 @@ val targetOs = providers.gradleProperty("qtalk.targetOs")
     .get()
     .lowercase()
 
-val qTalkPackageVersion = "1.1.0"
+val qTalkPackageVersion = "1.1.1"
 
 // XWayland tiling compositors do not reparent AWT windows. Without this hint,
 // the Compose surface can retain its initial size after the window is resized.
