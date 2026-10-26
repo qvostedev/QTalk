@@ -16,6 +16,15 @@ class LanConferenceChannelTest {
             val room = RoomMessage.Snapshot("11111111-1111-1111-1111-111111111111", 1, "101", listOf("101", "102", "103"),
                 emptyList(), emptySet(), setOf("101"), server.endpoint)
             server.snapshot = room
+            val endpoint = checkNotNull(LanConferenceChannel.parseEndpoint(server.endpoint)).first
+            java.net.Socket().use { socket ->
+                socket.connect(endpoint, 1000)
+                socket.soTimeout = 1000
+                val output = java.io.DataOutputStream(socket.getOutputStream())
+                output.writeInt(1025)
+                output.flush()
+                assertFails { java.io.DataInputStream(socket.getInputStream()).readInt() }
+            }
             val first = LanConferenceChannel.exchange(server.endpoint, room.roomId, "102", true, false, "")
             assertEquals(setOf("102"), first.snapshot.muted)
             assertEquals(setOf("101"), first.snapshot.speaking)

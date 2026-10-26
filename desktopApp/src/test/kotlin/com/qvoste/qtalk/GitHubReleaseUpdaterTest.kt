@@ -7,8 +7,28 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.test.assertFailsWith
 
 class GitHubReleaseUpdaterTest {
+    @Test
+    fun verifiesPayloadSizeWhileCopyingAndReportsDigest() {
+        val bytes = "installer".toByteArray()
+        val output = java.io.ByteArrayOutputStream()
+        val digest = copyInstallerPayload(bytes.inputStream(), output, bytes.size.toLong()) { _, _ -> }
+        assertTrue(bytes.contentEquals(output.toByteArray()))
+        val expected = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
+            .joinToString("") { "%02x".format(it) }
+        assertEquals(expected, digest)
+        val oversized = java.io.ByteArrayOutputStream()
+        assertFailsWith<IllegalStateException> {
+            copyInstallerPayload(bytes.inputStream(), oversized, 3) { _, _ -> }
+        }
+        assertTrue(oversized.size() <= 3)
+        assertFailsWith<IllegalStateException> {
+            copyInstallerPayload(bytes.inputStream(), java.io.ByteArrayOutputStream(), bytes.size.toLong() + 1) { _, _ -> }
+        }
+    }
+
     @Test
     fun comparesNumericVersions() {
         assertTrue(isNewerVersion("1.10.0", "1.9.9"))

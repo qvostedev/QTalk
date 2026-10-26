@@ -188,7 +188,7 @@ internal fun DialerPanel(
         ) {
         Row(
             Modifier.width(panelContentWidth).height(62.dp)
-                .transferOnRightClick(
+                .onSecondaryClick(
                     !editing && call.state == CallState.ACTIVE &&
                         displayedContact?.let(::transferCodeFor) != null
                 ) { displayedContact?.let(onTransferEmployee) },

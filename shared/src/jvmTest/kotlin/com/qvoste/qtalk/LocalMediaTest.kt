@@ -9,6 +9,19 @@ import javax.imageio.ImageIO
 import kotlin.test.*
 
 class LocalMediaTest {
+    @Test fun rejectsOverlongRingtoneWithoutKeepingPartialFiles(): Unit = runBlocking {
+        val directory = Files.createTempDirectory("qtalk-long-ringtone-")
+        val source = directory.resolve("long.wav")
+        val storage = directory.resolve("stored")
+        val format = javax.sound.sampled.AudioFormat(16000f, 16, 1, true, false)
+        val samples = ByteArray(16000 * 2 * 61)
+        javax.sound.sampled.AudioInputStream(samples.inputStream(), format, samples.size.toLong() / 2).use {
+            javax.sound.sampled.AudioSystem.write(it, javax.sound.sampled.AudioFileFormat.Type.WAVE, source.toFile())
+        }
+        assertFails { importLocalMediaFile(source, false, storage) }
+        assertEquals(0L, Files.list(storage.resolve("ringtones")).use { it.count() })
+    }
+
     @Test fun decodesMp3FramesToManagedWav(): Unit = runBlocking {
         val directory = Files.createTempDirectory("qtalk-mp3-test-")
         val source = directory.resolve("silence.mp3")

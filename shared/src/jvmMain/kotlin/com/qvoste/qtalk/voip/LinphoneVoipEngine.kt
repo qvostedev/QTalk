@@ -54,6 +54,7 @@ private fun conferenceLegState(state: Call.State): ConferenceLegState? = when (s
 }
 
 class LinphoneVoipEngine : VoipEngine {
+    private val logger = java.util.logging.Logger.getLogger(LinphoneVoipEngine::class.java.name)
     private val linphoneResources = LinphoneResourceInstaller.install()
     private val factory = Factory.instance().apply {
         topResourcesDir = linphoneResources.share.toString()
@@ -292,7 +293,7 @@ class LinphoneVoipEngine : VoipEngine {
 
             if (state == Call.State.OutgoingInit && currentCall == null) currentCall = call
             if (call != currentCall) return
-            println("QTALK: call = $state, $message")
+            logger.fine("Call state: $state")
             val next = when (state) {
                 Call.State.OutgoingInit, Call.State.OutgoingProgress -> CallState.DIALING
                 Call.State.OutgoingRinging, Call.State.OutgoingEarlyMedia -> CallState.RINGING
@@ -325,8 +326,7 @@ class LinphoneVoipEngine : VoipEngine {
             message: String
         ) {
             if (account != currentAccount) return
-            println("QTALK: registration = $state")
-            println("QTALK: registration message = $message")
+            logger.fine("Registration state: $state")
 
             val errorPhrase = account.errorInfo?.phrase.orEmpty()
             _registrationMessage.value = if (errorPhrase.isNotBlank()) {
@@ -392,7 +392,6 @@ class LinphoneVoipEngine : VoipEngine {
             return@withContext
         }
 
-        println("QTALK: starting Linphone Core")
 
         if (!coreStarted) {
             core.addListener(coreListener)
@@ -429,12 +428,8 @@ class LinphoneVoipEngine : VoipEngine {
             }
         }
         refreshAudioDevicesInternal()
-        println("QTALK: audio input = ${core.defaultInputAudioDevice?.id}")
-        println("QTALK: audio output = ${core.defaultOutputAudioDevice?.id}")
-        println("QTALK: Linphone Core started")
 
         iterateJob = scope.launch {
-            println("QTALK: iterate loop started")
 
             while (isActive) {
                 core.iterate()
@@ -454,12 +449,8 @@ class LinphoneVoipEngine : VoipEngine {
             require(account.domain.isNotBlank()) { "Введите адрес SIP-сервера" }
             require(account.port in 1..65535) { "Порт должен быть от 1 до 65535" }
             require(account.registrationExpires >= 60) { "Срок регистрации должен быть не меньше 60 секунд" }
-            println("QTALK: register() called")
-            println("QTALK: username = ${account.username}")
-            println("QTALK: domain = ${account.domain}")
 
             currentAccount?.let {
-                println("QTALK: removing previous account")
                 core.removeAccount(it)
                 currentAccount = null
             }
@@ -489,10 +480,8 @@ class LinphoneVoipEngine : VoipEngine {
             )
 
             core.addAuthInfo(authInfo)
-            println("QTALK: AuthInfo added")
 
 
-            // SIP-адрес для пользователя 100: sip:100@127.0.0.1
             val identity = factory.createAddress(
                 "sip:${account.username}@${account.domain}"
             ) ?: error("Unable to create SIP identity")
@@ -502,13 +491,7 @@ class LinphoneVoipEngine : VoipEngine {
                 "sip:${account.domain}:${account.port};transport=${account.transport.uriValue}"
             ) ?: error("Unable to create SIP server address")
 
-            println(
-                "QTALK: identity = ${identity.asStringUriOnly()}"
-            )
 
-            println(
-                "QTALK: server = ${serverAddress.asStringUriOnly()}"
-            )
 
             val params = core.createAccountParams()
             params.identityAddress = identity
@@ -522,7 +505,6 @@ class LinphoneVoipEngine : VoipEngine {
             core.addAccount(linphoneAccount)
             core.defaultAccount = linphoneAccount
 
-            println("QTALK: Linphone account added")
         }
 
 
@@ -1104,7 +1086,6 @@ class LinphoneVoipEngine : VoipEngine {
 
     override suspend fun unregister() =
         withContext(linphoneDispatcher) {
-            println("QTALK: unregister()")
 
             val account = currentAccount ?: return@withContext
             val params = account.params.clone()
@@ -1132,7 +1113,6 @@ class LinphoneVoipEngine : VoipEngine {
         iterateJob = null
 
         withContext(linphoneDispatcher) {
-            println("QTALK: stopping Linphone Core")
             clearRoom()
 
             currentAccount?.let { account ->
@@ -1161,7 +1141,6 @@ class LinphoneVoipEngine : VoipEngine {
             registrationStartedAt = 0L
             _registrationMessage.value = ""
 
-            println("QTALK: Linphone Core stopped")
         }
     }
 

@@ -6,6 +6,23 @@ import java.util.prefs.Preferences
 import kotlin.test.*
 
 class NotificationHistoryTest {
+    @Test fun removesObsoletePreferenceFieldsAndSkipsMalformedRecords() {
+        val node = Preferences.userRoot().node("com/qvoste/qtalk/test/${UUID.randomUUID()}")
+        try {
+            val store = PreferencesNotificationHistoryStore(node)
+            val items = emptyList<SavedNotification>().withUpdate("1.0.0", "Old description", 1)
+                .withUpdate("1.0.1", "Описание 😀".repeat(500), 2)
+            store.save(items)
+            assertEquals(items, store.load())
+            store.save(items.take(1))
+            assertFalse(node.keys().any { it.startsWith("1.") })
+            node.put("0.category", "invalid")
+            assertTrue(store.load().isEmpty())
+        } finally {
+            node.removeNode()
+        }
+    }
+
     @Test fun persistsDescriptionsDatesReadAndDeletedVersionsWithoutDuplicates() {
         val node = Preferences.userRoot().node("com/qvoste/qtalk/test/${UUID.randomUUID()}")
         try {

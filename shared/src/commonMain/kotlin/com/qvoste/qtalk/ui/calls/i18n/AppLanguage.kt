@@ -119,6 +119,8 @@ private val english = mapOf(
     "Вернуть исходную аватарку" to "Restore original avatar",
     "Вернуть" to "Restore", "Обновления" to "Updates",
     "Удалить уведомления?" to "Delete notifications?", "Да" to "Yes", "Нет" to "No",
+    "Не удалось загрузить историю уведомлений" to "Could not load notification history",
+    "Не удалось сохранить историю уведомлений" to "Could not save notification history",
     "Нет связи с телефонией" to "Telephony connection lost",
     "Проверьте подключение к сети. QTalk автоматически повторит подключение." to "Check your network connection. QTalk will reconnect automatically.",
     "Автоматический масштаб подстраивается под размер окна." to "Automatic scaling adapts to the window size.",

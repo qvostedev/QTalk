@@ -8,7 +8,7 @@ internal sealed interface RoomMessage {
     data class Microphone(override val roomId: String, val muted: Boolean) : RoomMessage
 }
 
-/** Bounded, versioned room state. No URLs, contact profiles or SIP credentials. */
+/** Room messages shared over SIP INFO, Google Sheets and LAN. */
 internal object ConferenceRoomWire {
     const val subtype = "vnd.qtalk.room"
     private val number = Regex("\\+?[0-9]{1,20}")

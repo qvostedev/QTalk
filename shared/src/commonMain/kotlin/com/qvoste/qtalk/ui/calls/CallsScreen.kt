@@ -5,12 +5,9 @@ import com.qvoste.qtalk.ui.calls.components.importLocalMedia
 import com.qvoste.qtalk.ui.calls.i18n.AppLanguage
 import com.qvoste.qtalk.ui.calls.i18n.LocalAppLanguage
 import com.qvoste.qtalk.ui.calls.i18n.uiText
-import com.qvoste.qtalk.ui.calls.i18n.releaseNotesForLanguage
 import qtalk.shared.generated.resources.icon_settings_language
-import qtalk.shared.generated.resources.icon_notification_delete
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
@@ -154,7 +151,7 @@ import qtalk.shared.generated.resources.logo_white_transparent
 import qtalk.shared.generated.resources.logo_light_transparent
 import qtalk.shared.generated.resources.logo_black
 import com.qvoste.qtalk.ui.calls.model.*
-import com.qvoste.qtalk.ui.calls.components.transferOnRightClick
+import com.qvoste.qtalk.ui.calls.components.onSecondaryClick
 import com.qvoste.qtalk.ui.calls.theme.*
 import com.qvoste.qtalk.ui.calls.components.Sidebar
 import com.qvoste.qtalk.ui.calls.components.Avatar
@@ -484,17 +481,7 @@ private fun CallsContent(
     var section by rememberSaveable { mutableStateOf(AppSection.CALLS) }
     var sidebarAccountOpen by remember { mutableStateOf(false) }
     if (sidebarAccountOpen) {
-        AlertDialog(onDismissRequest = { sidebarAccountOpen = false },
-            title = { Text(uiText("Настройка аккаунта"), color = TextPrimary) },
-            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SettingsDetail("SIP-логин", account?.username.orEmpty())
-                SettingsDetail("SIP-сервер", account?.domain.orEmpty())
-                SettingsDetail("Порт", account?.port?.toString().orEmpty())
-                SettingsDetail("Транспорт", account?.transport?.name.orEmpty())
-                SettingsDetail("Realm", account?.realm ?: "—")
-            } },
-            confirmButton = { TextButton(onClick = onLogout) { Text(uiText("Сменить аккаунт"), color = Danger) } },
-            dismissButton = { TextButton(onClick = { sidebarAccountOpen = false }) { Text(uiText("Закрыть"), color = TextPrimary) } })
+        AccountSettingsDialog(account, onLogout, onDismiss = { sidebarAccountOpen = false })
     }
     var number by rememberSaveable { mutableStateOf("") }
     var selectedContact by remember { mutableStateOf<Contact?>(null) }
@@ -504,15 +491,37 @@ private fun CallsContent(
     var creatingRoom by remember { mutableStateOf(false) }
     var searchFocused by remember { mutableStateOf(false) }
     var dialerTextInputFocused by remember { mutableStateOf(false) }
-    val notificationStore = remember { notificationHistoryStore() }
-    var notifications by remember { mutableStateOf(notificationStore.load()) }
+    val notificationStore = remember { runCatching { notificationHistoryStore() } }
+    val loadedNotifications = remember { notificationStore.mapCatching { it.load() } }
+    var notifications by remember { mutableStateOf(loadedNotifications.getOrDefault(emptyList())) }
+    var notificationStorageError by remember {
+        mutableStateOf(if (loadedNotifications.isFailure) "Не удалось загрузить историю уведомлений" else null)
+    }
     var notificationOutageActive by remember { mutableStateOf(false) }
-    LaunchedEffect(notifications) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { notificationStore.save(notifications) } }
+    LaunchedEffect(notifications) {
+        if (loadedNotifications.isFailure) return@LaunchedEffect
+        try {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                notificationStore.getOrThrow().save(notifications)
+            }
+            notificationStorageError = null
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            notificationStorageError = "Не удалось сохранить историю уведомлений"
+        }
+    }
     LaunchedEffect(availableUpdateVersion, availableUpdateDescription) {
-        availableUpdateVersion?.let { notifications = notifications.withUpdate(it, availableUpdateDescription.orEmpty(), Clock.System.now().toEpochMilliseconds()) }
+        availableUpdateVersion?.let { version ->
+            notifications = notifications.withUpdate(
+                version, availableUpdateDescription.orEmpty(), Clock.System.now().toEpochMilliseconds()
+            )
+        }
     }
     LaunchedEffect(connection) {
-        if (connection == TelephonyConnection.CONNECTED || connection == TelephonyConnection.DISCONNECTED) notificationOutageActive = false
+        if (connection == TelephonyConnection.CONNECTED || connection == TelephonyConnection.DISCONNECTED) {
+            notificationOutageActive = false
+        }
         if (connection.retryable && !notificationOutageActive) {
             notificationOutageActive = true
             val now = Clock.System.now().toEpochMilliseconds()
@@ -605,7 +614,6 @@ private fun CallsContent(
         val unscaledDensity = LocalUnscaledDensity.current ?: LocalDensity.current
         val scaledDensity = LocalDensity.current
         val appliedScale = scaledDensity.density / unscaledDensity.density
-        // При любом звонке основной интерфейс остаётся виден через размытие.
         Row(Modifier.fillMaxSize().padding(top = if (connection.showWarning) 60.dp else 0.dp)
             .then(if (showCallOverlay || showConferencePicker) Modifier.blur(CallOverlayBlur) else Modifier)) {
             CompositionLocalProvider(LocalDensity provides unscaledDensity) {
@@ -623,7 +631,6 @@ private fun CallsContent(
               )
             }
 
-            // Центральная часть зависит от выбранного раздела.
             when (section) {
                 AppSection.CALLS -> CallsHome(
                     onCreateConference = if (registration == RegistrationState.REGISTERED && !call.state.isInProgress)
@@ -732,7 +739,15 @@ private fun CallsContent(
                 )
                 AppSection.NOTIFICATIONS -> NotificationsSection(
                     notifications = notifications,
-                    onDeleteNotifications = { ids -> notifications = notifications.map { if (it.id in ids) it.copy(deleted = true, read = true, title = "", description = "", version = "") else it } },
+                    onDeleteNotifications = { ids ->
+                        notifications = notifications.map { notification ->
+                            if (notification.id in ids) {
+                                notification.copy(deleted = true, read = true, title = "", description = "", version = "")
+                            } else {
+                                notification
+                            }
+                        }
+                    },
                     modifier = Modifier.weight(1f),
                     compact = compact,
                     contacts = contacts,
@@ -751,8 +766,8 @@ private fun CallsContent(
                     onSearchFocusChange = { searchFocused = it },
                     searchFocusRequester = searchFocusRequester,
                     availableUpdateVersion = availableUpdateVersion,
-                    availableUpdateDescription = availableUpdateDescription,
-                    onOpenUpdate = { section = AppSection.SETTINGS }
+                    onOpenUpdate = { section = AppSection.SETTINGS },
+                    storageError = notificationStorageError
                 )
             }
 
@@ -968,149 +983,6 @@ private fun TelephonyConnectionBanner(
     }
 }
 
-@Composable
-internal fun NotificationsSection(
-    notifications: List<SavedNotification>,
-    onDeleteNotifications: (Set<String>) -> Unit,
-    modifier: Modifier,
-    compact: Boolean,
-    contacts: List<Contact>,
-    onAddContact: () -> Unit,
-    onShowAllContacts: () -> Unit,
-    onSelectContact: (Contact) -> Unit,
-    canTransfer: Boolean,
-    onTransferEmployee: (Contact) -> Unit,
-    onSearchFocusChange: (Boolean) -> Unit,
-    searchFocusRequester: FocusRequester,
-    availableUpdateVersion: String?,
-    availableUpdateDescription: String?,
-    onOpenUpdate: () -> Unit
-) {
-    var search by rememberSaveable { mutableStateOf("") }
-    var expandedId by rememberSaveable { mutableStateOf<String?>(null) }
-    var notificationFilter by rememberSaveable { mutableStateOf(0) }
-    var deletingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    val visible = notifications.filter { !it.deleted &&
-        (notificationFilter == 0 || it.category == if (notificationFilter == 1) NotificationCategory.UPDATE else NotificationCategory.SYSTEM) &&
-        (search.isBlank() || (it.title + it.description + it.version).contains(search, ignoreCase = true)) }.sortedByDescending { it.timestamp }
-    if (deletingIds.isNotEmpty()) {
-        AlertDialog(onDismissRequest = { deletingIds = emptySet() },
-            title = { Text(uiText("Удалить уведомления?"), color = TextPrimary) },
-            confirmButton = { TextButton(onClick = { onDeleteNotifications(deletingIds); deletingIds = emptySet() }) { Text(uiText("Да"), color = Danger) } },
-            dismissButton = { TextButton(onClick = { deletingIds = emptySet() }) { Text(uiText("Нет"), color = TextPrimary) } })
-    }
-
-    Column(
-        modifier.fillMaxHeight().padding(
-            start = if (compact) 40.dp else 38.dp,
-            top = 16.dp,
-            end = if (compact) 13.dp else 18.dp,
-            bottom = 20.dp
-        )
-    ) {
-        SearchAndAddBar(search, { search = it }, onAddContact, onSearchFocusChange, searchFocusRequester)
-        Spacer(Modifier.height(35.dp))
-        FavoritesSection(
-            contacts = contacts,
-            compact = compact,
-            trailingText = "Все  ›",
-            onTrailingClick = onShowAllContacts,
-            onSelectContact = onSelectContact,
-            onAddContact = onAddContact,
-            canTransfer = canTransfer,
-            onTransferEmployee = onTransferEmployee
-        )
-        Spacer(Modifier.height(if (compact) 28.dp else 32.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            SegmentedBar(options = listOf("Все", "Обновления", "Система"), selectedIndex = notificationFilter,
-                onSelect = { notificationFilter = it }, fillWidth = false)
-            Spacer(Modifier.width(10.dp))
-            Box(Modifier.size(40.dp).background(ControlBackground, CircleShape).clickable {
-                deletingIds = visible.map { it.id }.toSet()
-            }, contentAlignment = Alignment.Center) {
-                Image(painterResource(Res.drawable.icon_notification_delete), uiText("Удалить"), Modifier.size(20.dp), colorFilter = ColorFilter.tint(TextSecondary))
-            }
-        }
-        Spacer(Modifier.height(14.dp))
-        if (visible.isEmpty()) {
-            EmptyMessage("Новых уведомлений нет")
-        } else {
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            val now = Clock.System.now().toEpochMilliseconds()
-            var previousHeading = ""
-            visible.forEach { item ->
-            val heading = historyDateHeading(item.timestamp, now)
-            if (heading != previousHeading) {
-                Text(uiText(heading), color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(vertical = 8.dp))
-                previousHeading = heading
-            }
-            val updateExpanded = expandedId == item.id
-            val version = item.version
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                    .background(ControlBackground)
-                    .transferOnRightClick(true) { deletingIds = setOf(item.id) }
-                    .animateContentSize()
-            ) {
-                Row(
-                    Modifier.fillMaxWidth()
-                        .clickable { expandedId = if (updateExpanded) null else item.id }
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        Modifier.size(38.dp).background(Primary.copy(alpha = 0.16f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Image(
-                            painterResource(Res.drawable.icon_notifications),
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            colorFilter = ColorFilter.tint(Primary)
-                        )
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(uiText(item.title), color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text(if (item.category == NotificationCategory.UPDATE) uiText("QTalk $version готов к установке") else uiText("Система"), color = TextSecondary, fontSize = 11.sp)
-                    }
-                    Text(
-                        uiText(if (updateExpanded) "Свернуть  ⌃" else "Подробнее  ⌄"),
-                        color = Primary,
-                        fontSize = 11.sp
-                    )
-                }
-                if (updateExpanded) {
-                    Box(
-                        Modifier.fillMaxWidth().height(1.dp)
-                            .background(TextSecondary.copy(alpha = 0.14f))
-                    )
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 66.dp, vertical = 14.dp)) {
-                        Text(uiText(if (item.category == NotificationCategory.UPDATE) "Что нового" else "Система"), color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(7.dp))
-                        Text(
-                            (if (item.category == NotificationCategory.SYSTEM) uiText(item.description) else
-                                releaseNotesForLanguage(item.description, LocalAppLanguage.current.language)).takeIf(String::isNotBlank)
-                                ?: uiText("Описание этого релиза пока не добавлено."),
-                            color = TextSecondary,
-                            fontSize = 11.sp,
-                            lineHeight = 16.sp,
-                            maxLines = 12,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        if (item.category == NotificationCategory.UPDATE && version == availableUpdateVersion) TextButton(onClick = onOpenUpdate) {
-                            Text(uiText("Перейти к обновлению  ›"), color = Primary, fontSize = 11.sp)
-                        }
-                    }
-                }
-            }
-            }
-            }
-        }
-    }
-}
 
 @Composable
 private fun CallsHome(
@@ -1256,7 +1128,7 @@ private fun SearchField(
 }
 
 @Composable
-private fun SearchAndAddBar(
+internal fun SearchAndAddBar(
     search: String,
     onSearchChange: (String) -> Unit,
     onAddContact: () -> Unit,
@@ -1284,7 +1156,7 @@ private fun FavoriteItem(
     Column(
         modifier = Modifier.width(104.dp)
             .clip(RoundedCornerShape(12.dp))
-            .transferOnRightClick(canTransfer && transferCodeFor(contact) != null) { onTransferEmployee(contact) }
+            .onSecondaryClick(canTransfer && transferCodeFor(contact) != null) { onTransferEmployee(contact) }
             .clickable(onClick = onClick)
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -1310,7 +1182,7 @@ private fun FavoriteItem(
 }
 
 @Composable
-private fun FavoritesSection(
+internal fun FavoritesSection(
     contacts: List<Contact>,
     compact: Boolean,
     trailingText: String,
@@ -1708,26 +1580,7 @@ private fun SipSettings(
         )
     }
     if (showAccount) {
-        AlertDialog(
-            onDismissRequest = { showAccount = false },
-            containerColor = ControlBackground,
-            title = { Text(uiText("Настройка аккаунта"), color = TextPrimary) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsDetail("SIP-логин", account?.username.orEmpty())
-                    SettingsDetail("SIP-сервер", account?.domain.orEmpty())
-                    SettingsDetail("Порт", account?.port?.toString().orEmpty())
-                    SettingsDetail("Транспорт", account?.transport?.name.orEmpty())
-                    SettingsDetail("Realm", account?.realm ?: "—")
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = onLogout) { Text(uiText("Сменить аккаунт"), color = Danger) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAccount = false }) { Text(uiText("Закрыть"), color = TextPrimary) }
-            }
-        )
+        AccountSettingsDialog(account, onLogout, onDismiss = { showAccount = false })
     }
     if (showInputDevices) {
         AudioDeviceDialog(
@@ -2034,6 +1887,25 @@ private fun SettingsSliderRow(
 }
 
 @Composable
+private fun AccountSettingsDialog(account: SipAccount?, onLogout: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(uiText("Настройка аккаунта"), color = TextPrimary) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SettingsDetail("SIP-логин", account?.username.orEmpty())
+                SettingsDetail("SIP-сервер", account?.domain.orEmpty())
+                SettingsDetail("Порт", account?.port?.toString().orEmpty())
+                SettingsDetail("Транспорт", account?.transport?.name.orEmpty())
+                SettingsDetail("Realm", account?.realm ?: "—")
+            }
+        },
+        confirmButton = { TextButton(onClick = onLogout) { Text(uiText("Сменить аккаунт"), color = Danger) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(uiText("Закрыть"), color = TextPrimary) } }
+    )
+}
+
+@Composable
 private fun SettingsDetail(label: String, value: String) {
     Row(Modifier.fillMaxWidth()) {
         Text(uiText(label), color = TextSecondary, fontSize = 11.sp, modifier = Modifier.weight(1f))
@@ -2284,7 +2156,7 @@ private fun ContactFilterBar(
 }
 
 @Composable
-private fun SegmentedBar(
+internal fun SegmentedBar(
     options: List<String>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
@@ -2342,7 +2214,7 @@ private fun ContactRow(
         Row(
             Modifier.requiredWidth(maxWidth + 16.dp).fillMaxHeight()
                 .clip(RoundedCornerShape(12.dp))
-                .transferOnRightClick(canTransfer && transferCodeFor(contact) != null) { onTransferEmployee(contact) }
+                .onSecondaryClick(canTransfer && transferCodeFor(contact) != null) { onTransferEmployee(contact) }
                 .clickable { onSelect(contact) }.padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

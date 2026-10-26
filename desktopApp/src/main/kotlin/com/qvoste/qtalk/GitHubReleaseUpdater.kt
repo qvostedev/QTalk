@@ -1,6 +1,8 @@
 package com.qvoste.qtalk
 
 import java.net.URI
+import java.io.InputStream
+import java.io.OutputStream
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
@@ -60,6 +62,29 @@ internal fun selectQTalkAsset(release: QTalkRelease, windows: Boolean): ReleaseA
         if (windows) it.name == "QTalk-Setup-${release.version}.exe"
         else it.name.startsWith("QTalk_") && it.name.contains(release.version) && it.name.endsWith(".deb")
     }
+
+internal fun copyInstallerPayload(
+    input: InputStream,
+    output: OutputStream,
+    expectedSize: Long,
+    onProgress: (Long, Long) -> Unit
+): String {
+    require(expectedSize in 1..maximumInstallerSize) { "Некорректный размер установщика" }
+    val digest = MessageDigest.getInstance("SHA-256")
+    val buffer = ByteArray(64 * 1024)
+    var downloaded = 0L
+    while (true) {
+        val count = input.read(buffer)
+        if (count < 0) break
+        check(count.toLong() <= expectedSize - downloaded) { "Размер загруженного установщика превышает ожидаемый" }
+        output.write(buffer, 0, count)
+        digest.update(buffer, 0, count)
+        downloaded += count
+        onProgress(downloaded, expectedSize)
+    }
+    check(downloaded == expectedSize) { "Размер загруженного установщика не совпадает" }
+    return digest.digest().joinToString("") { "%02x".format(it) }
+}
 
 internal fun windowsUpdateScript(
     installer: Path,
@@ -206,30 +231,18 @@ internal class GitHubReleaseUpdater(private val installedVersion: String) {
                     .GET().build(),
                 HttpResponse.BodyHandlers.ofInputStream()
             )
-            check(response.statusCode() == 200) { "Не удалось скачать установщик: ${response.statusCode()}" }
-            val digest = MessageDigest.getInstance("SHA-256")
-            var downloaded = 0L
-            response.body().use { input ->
+            val actualDigest = response.body().use { input ->
+                check(response.statusCode() == 200) { "Не удалось скачать установщик: ${response.statusCode()}" }
                 Files.newOutputStream(file).use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        output.write(buffer, 0, count)
-                        digest.update(buffer, 0, count)
-                        downloaded += count
-                        onProgress(downloaded, asset.size)
-                    }
+                    copyInstallerPayload(input, output, asset.size, onProgress)
                 }
             }
-            check(downloaded == asset.size) { "Размер загруженного установщика не совпадает" }
-            val actualDigest = digest.digest().joinToString("") { "%02x".format(it) }
             check(actualDigest.equals(expectedDigest, ignoreCase = true)) {
                 "Контрольная сумма установщика не совпадает"
             }
             return file
         } catch (error: Exception) {
-            Files.deleteIfExists(file)
+            runCatching { Files.deleteIfExists(file) }
             throw error
         }
     }

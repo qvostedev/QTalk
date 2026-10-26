@@ -92,11 +92,7 @@ private interface User32Api : StdCallLibrary {
 
 private val isWindows = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
 
-/**
- * Applies QTalk colors to the native Windows caption without replacing the system frame.
- *
- * The OS check happens before DwmApi is loaded, so this file remains safe on Linux.
- */
+/** Keeps the native Windows frame and applies QTalk caption colors. */
 internal fun applyQTalkWindowsTitleBar(window: Window, light: Boolean = false): () -> Unit {
     if (!isWindows) return {}
 
@@ -126,9 +122,7 @@ internal fun applyQTalkWindowsTitleBar(window: Window, light: Boolean = false): 
             "Windows failed to create a transparent caption icon"
         }
 
-        // Windows falls back from the small caption slot to the class' large icon.
-        // A real transparent HICON prevents that fallback while the large QTalk icon
-        // remains available to the taskbar.
+        // A transparent caption icon prevents Windows falling back to the taskbar icon.
         val previousCaptionIcon = user32Api.SendMessageW(
             windowHandle,
             WM_SETICON,
@@ -158,13 +152,10 @@ internal fun applyQTalkWindowsTitleBar(window: Window, light: Boolean = false): 
         )
         user32Api.refreshNonClientFrame(windowHandle)
 
-        // Keep visibility under AWT control: native hide/show desynchronizes its
-        // activation state and prevents Compose text input after startup.
+        // Native hide/show breaks AWT keyboard focus; leave visibility to AWT.
         user32Api.installTransparentCaptionIcon(windowHandle, transparentCaptionIcon)
 
-        // Compose can reapply the AWT icon after later recompositions. The taskbar
-        // has already cached the QTalk icon supplied when the window was created;
-        // guard only the two small caption fallbacks from being restored.
+        // Compose can restore caption icons after recomposition; keep both small slots transparent.
         val captionIconGuard = Timer(250) {
             val windowSmallIcon = user32Api.SendMessageW(
                 windowHandle,
