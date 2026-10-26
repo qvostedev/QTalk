@@ -93,8 +93,8 @@ class LinphoneVoipEngine : VoipEngine {
     private var microphoneMuted = false
     private var speakerMuted = false
     private var conferenceHeld = false
-    private var localSpeechUntil = 0L
-    private val remoteSpeechUntil = mutableMapOf<String, Long>()
+    private val localSpeechDetector = SpeechActivityDetector()
+    private val remoteSpeechDetectors = mutableMapOf<String, SpeechActivityDetector>()
     private var lastConferenceAudioAt = 0L
     private var roomId = ""
     private var roomRevision = 0L
@@ -793,8 +793,8 @@ class LinphoneVoipEngine : VoipEngine {
         lastLanReceivedAt = 0L
         lanAcknowledgement = ""
         conferenceHeld = false
-        localSpeechUntil = 0L
-        remoteSpeechUntil.clear()
+        localSpeechDetector.reset()
+        remoteSpeechDetectors.clear()
         val closingId = roomId
         val closingToken = roomOwnerToken
         val service = roomService
@@ -816,21 +816,29 @@ class LinphoneVoipEngine : VoipEngine {
 
     private fun refreshConferenceAudio() {
         val now = System.nanoTime()
-        if (now - lastConferenceAudioAt < 150_000_000L) return
+        if (now - lastConferenceAudioAt < 50_000_000L) return
         lastConferenceAudioAt = now
         val conference = localConference?.takeIf { conferenceSession.hasSession }
         val participants = conference?.participantList.orEmpty()
-        conferenceSession.calls.filter { it.state == Call.State.StreamsRunning && isSpeechLevel(it.playVolume) }
-            .mapNotNull { it.remoteAddress?.username }.forEach { remoteSpeechUntil[it] = now + 300_000_000L }
-        remoteSpeechUntil.entries.removeAll { it.value <= now }
-        val speaking = remoteSpeechUntil.keys.toSet()
         val muted = participants.filter { participant ->
             participant.devices.isNotEmpty() && participant.devices.all { it.getIsMuted() }
-        }.mapNotNull { it.address?.username }.toSet()
-        val hasLocalSpeech = currentCall?.state == Call.State.StreamsRunning &&
-            isSpeechLevel(conference?.inputVolume ?: currentCall?.recordVolume ?: -120f)
-        if (hasLocalSpeech && !microphoneMuted && !conferenceHeld) localSpeechUntil = now + 300_000_000L
-        val localSpeaking = !microphoneMuted && !conferenceHeld && now < localSpeechUntil
+        }.mapNotNull { it.address?.username }.toSet() +
+            reportedMutes.filterValues { it }.keys.mapNotNull { it.remoteAddress?.username }
+        val callsByNumber = conferenceSession.calls.mapNotNull { call ->
+            call.remoteAddress?.username?.let { it to call }
+        }.toMap()
+        remoteSpeechDetectors.keys.retainAll(callsByNumber.keys)
+        val speaking = callsByNumber.filter { (number, call) ->
+            remoteSpeechDetectors.getOrPut(number) { SpeechActivityDetector() }.update(
+                call.playVolume, now, call.state == Call.State.StreamsRunning && number !in muted
+            )
+        }.keys.toSet()
+        // In a host conference, recordVolume on a call may contain the outgoing mix.
+        // The conference input is the host's microphone, never another participant.
+        val localSpeaking = localSpeechDetector.update(
+            conference?.inputVolume ?: currentCall?.recordVolume ?: -120f, now,
+            currentCall?.state == Call.State.StreamsRunning && !microphoneMuted && !conferenceHeld
+        )
         conferenceSession.updateAudioState(microphoneMuted, speakerMuted, speaking, muted, localSpeaking)
         val own = currentAccount?.params?.identityAddress?.username.orEmpty()
         if (roomId.isNotBlank() && roomService.enabled && lanRoom == null) {

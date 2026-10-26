@@ -495,6 +495,7 @@ private fun CallsContent(
     var showConferencePicker by remember { mutableStateOf(false) }
     var creatingRoom by remember { mutableStateOf(false) }
     var searchFocused by remember { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     var dialerTextInputFocused by remember { mutableStateOf(false) }
     val notificationStore = remember { runCatching { notificationHistoryStore() } }
     val loadedNotifications = remember { notificationStore.mapCatching { it.load() } }
@@ -673,6 +674,8 @@ private fun CallsContent(
                     canTransfer = call.state == CallState.ACTIVE && conference.phase == ConferencePhase.NONE,
                     onTransferEmployee = onTransferEmployee,
                     onSearchFocusChange = { searchFocused = it },
+                    search = searchQuery,
+                    onSearchChange = { searchQuery = it },
                     searchFocusRequester = searchFocusRequester
                 )
                 AppSection.CONTACTS -> ContactsSection(
@@ -701,6 +704,8 @@ private fun CallsContent(
                     canTransfer = call.state == CallState.ACTIVE && conference.phase == ConferencePhase.NONE,
                     onTransferEmployee = onTransferEmployee,
                     onSearchFocusChange = { searchFocused = it },
+                    search = searchQuery,
+                    onSearchChange = { searchQuery = it },
                     searchFocusRequester = searchFocusRequester
                 )
                 AppSection.SETTINGS -> SipSettings(
@@ -740,6 +745,8 @@ private fun CallsContent(
                     canTransfer = call.state == CallState.ACTIVE && conference.phase == ConferencePhase.NONE,
                     onTransferEmployee = onTransferEmployee,
                     onSearchFocusChange = { searchFocused = it },
+                    search = searchQuery,
+                    onSearchChange = { searchQuery = it },
                     searchFocusRequester = searchFocusRequester
                 )
                 AppSection.NOTIFICATIONS -> NotificationsSection(
@@ -769,6 +776,8 @@ private fun CallsContent(
                     canTransfer = call.state == CallState.ACTIVE && conference.phase == ConferencePhase.NONE,
                     onTransferEmployee = onTransferEmployee,
                     onSearchFocusChange = { searchFocused = it },
+                    search = searchQuery,
+                    onSearchChange = { searchQuery = it },
                     searchFocusRequester = searchFocusRequester,
                     availableUpdateVersion = availableUpdateVersion,
                     onOpenUpdate = { section = AppSection.SETTINGS },
@@ -1005,9 +1014,10 @@ private fun CallsHome(
     canTransfer: Boolean,
     onTransferEmployee: (Contact) -> Unit,
     onSearchFocusChange: (Boolean) -> Unit,
+    search: String,
+    onSearchChange: (String) -> Unit,
     searchFocusRequester: FocusRequester
 ) {
-    var search by rememberSaveable { mutableStateOf("") }
     var filter by remember { mutableStateOf(CallFilter.ALL) }
     val unreadMissedCount = history.count { it.missed && !it.missedAcknowledged }
     LaunchedEffect(filter, unreadMissedCount) {
@@ -1034,7 +1044,7 @@ private fun CallsHome(
             bottom = 20.dp
         )
     ) {
-        SearchAndAddBar(search, { search = it }, onAddContact, onSearchFocusChange, searchFocusRequester)
+        SearchAndAddBar(search, onSearchChange, onAddContact, onSearchFocusChange, searchFocusRequester)
         Spacer(Modifier.height(35.dp))
         FavoritesSection(
             contacts = contacts,
@@ -1339,6 +1349,8 @@ private fun SipSettings(
     canTransfer: Boolean,
     onTransferEmployee: (Contact) -> Unit,
     onSearchFocusChange: (Boolean) -> Unit,
+    search: String,
+    onSearchChange: (String) -> Unit,
     searchFocusRequester: FocusRequester
 ) {
     var showAccount by remember { mutableStateOf(false) }
@@ -1355,7 +1367,6 @@ private fun SipSettings(
     var updateProgress by remember { mutableStateOf<Float?>(null) }
     var updating by remember { mutableStateOf(false) }
     val updateScope = rememberCoroutineScope()
-    var search by rememberSaveable { mutableStateOf("") }
     var databaseUrl by remember(contactDatabaseState.sourceUrl) {
         mutableStateOf(contactDatabaseState.sourceUrl)
     }
@@ -1395,7 +1406,7 @@ private fun SipSettings(
             bottom = 20.dp
         )
     ) {
-        SearchAndAddBar(search, { search = it }, onAddContact, onSearchFocusChange, searchFocusRequester)
+        SearchAndAddBar(search, onSearchChange, onAddContact, onSearchFocusChange, searchFocusRequester)
         Spacer(Modifier.height(35.dp))
         FavoritesSection(
             contacts = contacts,
@@ -2044,9 +2055,10 @@ private fun ContactsSection(
     canTransfer: Boolean,
     onTransferEmployee: (Contact) -> Unit,
     onSearchFocusChange: (Boolean) -> Unit,
+    search: String,
+    onSearchChange: (String) -> Unit,
     searchFocusRequester: FocusRequester
 ) {
-    var search by rememberSaveable { mutableStateOf("") }
     var filter by remember { mutableStateOf(ContactFilter.ALL) }
     val visibleContacts = contacts.filter {
         val matchesSearch = search.isBlank() || it.matchesSearch(search)
@@ -2067,7 +2079,7 @@ private fun ContactsSection(
             bottom = 20.dp
         )
     ) {
-        SearchAndAddBar(search, { search = it }, onAddContact, onSearchFocusChange, searchFocusRequester)
+        SearchAndAddBar(search, onSearchChange, onAddContact, onSearchFocusChange, searchFocusRequester)
 
         Spacer(Modifier.height(35.dp))
         FavoritesSection(

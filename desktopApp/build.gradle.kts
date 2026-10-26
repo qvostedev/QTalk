@@ -15,6 +15,17 @@ val targetOs = providers.gradleProperty("qtalk.targetOs")
 
 val qTalkPackageVersion = "1.1.0"
 
+// XWayland tiling compositors do not reparent AWT windows. Without this hint,
+// the Compose surface can retain its initial size after the window is resized.
+tasks.withType<JavaExec>().configureEach {
+    if (System.getProperty("os.name").contains("linux", ignoreCase = true) &&
+        !System.getenv("WAYLAND_DISPLAY").isNullOrBlank()
+    ) {
+        environment("_JAVA_AWT_WM_NONREPARENTING",
+            System.getenv("_JAVA_AWT_WM_NONREPARENTING") ?: "1")
+    }
+}
+
 dependencies {
     implementation(project(":shared"))
     implementation(compose.material3)

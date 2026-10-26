@@ -28,7 +28,7 @@ class NotificationsLayoutTest {
                 CallsTheme(mode) {
                     Box(Modifier.fillMaxSize().background(AppBackground)) {
                     NotificationsSection(notifications, {}, Modifier, false, emptyList(), {}, {}, {}, false, {}, {},
-                        FocusRequester(), "2.0.0", {})
+                        "", {}, FocusRequester(), "2.0.0", {})
                     }
                 }
             }

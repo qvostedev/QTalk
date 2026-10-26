@@ -48,12 +48,13 @@ internal fun NotificationsSection(
     canTransfer: Boolean,
     onTransferEmployee: (Contact) -> Unit,
     onSearchFocusChange: (Boolean) -> Unit,
+    search: String,
+    onSearchChange: (String) -> Unit,
     searchFocusRequester: FocusRequester,
     availableUpdateVersion: String?,
     onOpenUpdate: () -> Unit,
     storageError: String? = null
 ) {
-    var search by rememberSaveable { mutableStateOf("") }
     var expandedId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedFilter by remember { mutableStateOf(0) }
     var deletingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -93,7 +94,7 @@ internal fun NotificationsSection(
             bottom = 20.dp
         )
     ) {
-        SearchAndAddBar(search, { search = it }, onAddContact, onSearchFocusChange, searchFocusRequester)
+        SearchAndAddBar(search, onSearchChange, onAddContact, onSearchFocusChange, searchFocusRequester)
         Spacer(Modifier.height(35.dp))
         FavoritesSection(
             contacts, compact, "Все  ›", onShowAllContacts, onSelectContact,
