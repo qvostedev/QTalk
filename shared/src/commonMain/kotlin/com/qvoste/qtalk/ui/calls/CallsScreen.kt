@@ -499,6 +499,7 @@ private fun CallsContent(
     var number by rememberSaveable { mutableStateOf("") }
     var selectedContact by remember { mutableStateOf<Contact?>(null) }
     var showAddContact by rememberSaveable { mutableStateOf(false) }
+    var newContactInitialNumber by remember { mutableStateOf("") }
     var editingContact by remember { mutableStateOf<Contact?>(null) }
     var showConferencePicker by remember { mutableStateOf(false) }
     var creatingRoom by remember { mutableStateOf(false) }
@@ -657,6 +658,7 @@ private fun CallsContent(
                     onFilterChange = { callsFilter = it },
                     onAddContact = {
                         editingContact = null
+                        newContactInitialNumber = ""
                         showAddContact = true
                     },
                     onShowAllContacts = { section = AppSection.CONTACTS },
@@ -696,6 +698,7 @@ private fun CallsContent(
                     contacts = contacts,
                     onAddContact = {
                         editingContact = null
+                        newContactInitialNumber = ""
                         showAddContact = true
                     },
                     onSelectContact = {
@@ -747,6 +750,7 @@ private fun CallsContent(
                     onAddContact = {
                         section = AppSection.CONTACTS
                         editingContact = null
+                        newContactInitialNumber = ""
                         showAddContact = true
                     },
                     onShowAllContacts = { section = AppSection.CONTACTS },
@@ -778,6 +782,7 @@ private fun CallsContent(
                     onAddContact = {
                         section = AppSection.CONTACTS
                         editingContact = null
+                        newContactInitialNumber = ""
                         showAddContact = true
                     },
                     onShowAllContacts = { section = AppSection.CONTACTS },
@@ -808,6 +813,12 @@ private fun CallsContent(
                     contact = selectedContact?.latestFrom(contacts),
                     contactBeingEdited = contactBeingEdited,
                     creatingContact = showAddContact,
+                    initialContactNumber = newContactInitialNumber,
+                    onCreateContact = { initial ->
+                        newContactInitialNumber = initial
+                        editingContact = null
+                        showAddContact = true
+                    },
                     accountNumber = accountNumber,
                     registration = registration,
                     call = call,
@@ -817,7 +828,8 @@ private fun CallsContent(
                         history.filter { item ->
                             item.number.normalizedContactNumber() == selected.number.normalizedContactNumber()
                         }
-                    }.orEmpty(),
+                    } ?: history.filter { it.number.normalizedContactNumber() ==
+                        (if (call.state.isInProgress) call.number else number).normalizedContactNumber() },
                     contactNotes = selectedContact?.let { selected ->
                         contactNotes.filter { it.belongsTo(selected) }
                             .sortedByDescending { it.id.toLongOrNull() ?: 0L }
@@ -844,10 +856,16 @@ private fun CallsContent(
                         editingContact = null
                     },
                     onSaveContact = { updated ->
-                        if (contactBeingEdited == null) onAddContact(updated)
-                        else onUpdateContact(contactBeingEdited, updated)
-                        selectedContact = updated
-                        number = formatPhoneNumber(updated.number)
+                        val duplicate = contacts.firstOrNull {
+                            it.number.normalizedContactNumber() == updated.number.normalizedContactNumber()
+                        }
+                        if (contactBeingEdited == null) {
+                            if (duplicate == null) onAddContact(updated)
+                        } else onUpdateContact(contactBeingEdited, updated)
+                        val saved = if (contactBeingEdited == null) duplicate ?: updated.copy(source = ContactSource.LOCAL) else updated
+                        val selection = contactSelectionAfterSave(saved, contacts, number, call)
+                        selectedContact = selection.contact
+                        number = selection.dialNumber
                         showAddContact = false
                         editingContact = null
                     },

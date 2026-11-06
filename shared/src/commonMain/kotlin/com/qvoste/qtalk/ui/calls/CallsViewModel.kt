@@ -300,6 +300,8 @@ class CallsViewModel(
         voipEngine.selectRingtone(ringtoneId)
     }
     fun addContact(contact: Contact) {
+        val normalized = contact.number.normalizedContactNumber()
+        if (normalized.isNotBlank() && _contacts.value.any { it.number.normalizedContactNumber() == normalized }) return
         val updated = _contacts.value + contact.copy(source = ContactSource.LOCAL)
         contactStore.save(updated)
         _contacts.value = updated.classifyForAccount(_accountNumber.value)

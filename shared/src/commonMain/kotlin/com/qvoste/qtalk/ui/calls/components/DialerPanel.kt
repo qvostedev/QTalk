@@ -78,7 +78,9 @@ internal fun DialerPanel(
     onTextInputFocusChange: (Boolean) -> Unit,
     onCall: () -> Unit,
     onHangUp: () -> Unit,
-    onTransferEmployee: (Contact) -> Unit
+    onTransferEmployee: (Contact) -> Unit,
+    initialContactNumber: String = number,
+    onCreateContact: (String) -> Unit = { onEditContact(Contact("", it, false)) }
 ) {
     var infoTab by rememberSaveable { mutableStateOf("Информация") }
     val uriHandler = LocalUriHandler.current
@@ -94,7 +96,7 @@ internal fun DialerPanel(
         mutableStateOf(contactBeingEdited?.name.orEmpty())
     }
     var draftNumber by remember(creatingContact, contactBeingEdited) {
-        mutableStateOf(contactBeingEdited?.number.orEmpty())
+        mutableStateOf(contactBeingEdited?.number ?: if (creatingContact) initialContactNumber else "")
     }
     var draftPosition by remember(creatingContact, contactBeingEdited) {
         mutableStateOf(contactBeingEdited?.position.orEmpty())
@@ -237,7 +239,7 @@ internal fun DialerPanel(
                     )
                 } else {
                     Text(
-                        displayedContact?.name ?: uiText("Контакт не выбран"),
+                        displayedContact?.name ?: uiText("Неизвестный номер"),
                         color = TextPrimary,
                         fontSize = 14.sp,
                         lineHeight = 14.sp,
@@ -263,7 +265,7 @@ internal fun DialerPanel(
                         displayedContact?.let {
                             uiText("Номер  •  ") + formatPhoneNumber(it.number.ifBlank { it.phone }).ifBlank { "—" }
                         }
-                            ?: uiText("Здесь появится информация"),
+                            ?: formatPhoneNumber(shownNumber).ifBlank { uiText("Контакт не выбран") },
                         color = TextSecondary,
                         fontSize = 10.sp,
                         lineHeight = 10.sp,
@@ -364,27 +366,26 @@ internal fun DialerPanel(
                         }
                     }
                 }
-                displayedContact == null -> EmptyMessage("Выберите контакт или наберите номер")
                 infoTab == "Информация" -> Box(Modifier.fillMaxSize()) {
                     Column(Modifier.padding(top = 8.dp)) {
-                        ContactInfo(Res.drawable.icon_position, "Должность", displayedContact.position.ifBlank { uiText("Не указана") })
+                        ContactInfo(Res.drawable.icon_position, "Должность", displayedContact?.position.orEmpty().ifBlank { uiText("Не указана") })
                         Spacer(Modifier.height(14.dp))
-                        ContactInfo(Res.drawable.icon_department, "Отдел", displayedContact.department.ifBlank { uiText("Не указан") })
+                        ContactInfo(Res.drawable.icon_department, "Отдел", displayedContact?.department.orEmpty().ifBlank { uiText("Не указан") })
                         Spacer(Modifier.height(14.dp))
                         ContactInfo(
                             Res.drawable.icon_company,
                             "Компания",
-                            listOf(displayedContact.company, displayedContact.office).filter(String::isNotBlank)
+                            listOfNotNull(displayedContact?.company, displayedContact?.office).filter(String::isNotBlank)
                                 .joinToString(" • ").ifBlank { uiText("Не указана") }
                         )
                         Spacer(Modifier.height(14.dp))
                         ContactInfo(
                             Res.drawable.icon_telegram,
                             "Telegram",
-                            displayedContact.telegram.ifBlank { uiText("Не указан") },
-                            displayedContact.telegram.isNotBlank()
+                            displayedContact?.telegram.orEmpty().ifBlank { uiText("Не указан") },
+                            !displayedContact?.telegram.isNullOrBlank()
                         ) {
-                            val username = displayedContact.telegram.removePrefix("@").trim()
+                            val username = displayedContact?.telegram.orEmpty().removePrefix("@").trim()
                             if (username.isNotBlank()) uriHandler.openUri("https://t.me/$username")
                         }
                     }
@@ -396,15 +397,18 @@ internal fun DialerPanel(
                             ContactTextAction("Удалить", Danger, onClick = deleteContact)
                         }
                         Spacer(Modifier.weight(1f))
-                        ContactTextAction(
-                            if (displayedContact.favorite) "Открепить" else "Закрепить",
-                            TextPrimary
-                        ) { onToggleFavorite(displayedContact) }
-                        Spacer(Modifier.width(14.dp))
-                        ContactTextAction("Изменить", TextPrimary) { onEditContact(displayedContact) }
+                        if (displayedContact != null) {
+                            ContactTextAction(
+                                if (displayedContact.favorite) "Открепить" else "Закрепить",
+                                TextPrimary
+                            ) { onToggleFavorite(displayedContact) }
+                            Spacer(Modifier.width(14.dp))
+                            ContactTextAction("Изменить", TextPrimary) { onEditContact(displayedContact) }
+                        } else ContactTextAction("Добавить контакт", Primary) { onCreateContact(shownNumber) }
                     }
                 }
                 infoTab == "История" -> ContactHistoryList(contactHistory)
+                infoTab == "Заметки" && displayedContact == null -> EmptyMessage("Выберите контакт или наберите номер")
                 infoTab == "Заметки" -> ContactNotes(
                     notes = contactNotes,
                     selectedNote = selectedNote,
