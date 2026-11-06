@@ -6,6 +6,7 @@ import java.net.NetworkInterface
 import java.net.Socket
 import java.io.DataInputStream
 import java.io.DataOutputStream
+import java.nio.file.Files
 import kotlinx.coroutines.runBlocking
 import kotlin.test.*
 
@@ -89,4 +90,17 @@ class Lan2ProtocolTest {
         assertTrue(LanHandoffSip.ready(listOf(call(20, 20)), 1, null, false))
     }
 
+    @Test fun diagnosticsRotateHashCorrelationsAndSurviveUnavailableDirectory() {
+        val dir = Files.createTempDirectory("qtalk-diagnostics-")
+        HandoffDiagnostics(dir, limit = 600, count = 3).use { log ->
+            repeat(40) { log.event("native_call", "102", id, "CONNECTING", "103", "StreamsRunning",
+                "reason\nAuthorization: secret") }
+        }
+        val logs = Files.list(dir).use { paths -> paths.filter { it.toString().endsWith(".log") }.toList() }
+        assertTrue(logs.size in 1..3)
+        val text = logs.joinToString("\n") { Files.readString(it) }
+        assertTrue(text.contains("LAN2") && text.contains("tx=") && text.contains("ext=102"))
+        assertFalse(text.contains(id)); assertFalse(text.contains("Authorization")); assertFalse(text.contains("secret"))
+        HandoffDiagnostics(Files.createTempFile("qtalk-unwritable-", ".tmp")).use { it.event("test") }
+    }
 }

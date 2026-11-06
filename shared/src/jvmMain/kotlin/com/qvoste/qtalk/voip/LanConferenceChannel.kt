@@ -18,7 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** Exchanges room state with clients on a trusted LAN. */
-internal class LanConferenceChannel(address: InetAddress) : AutoCloseable {
+internal class LanConferenceChannel(address: InetAddress, private val rejected: (String) -> Unit = {}) : AutoCloseable {
     data class Peer(
         val muted: Boolean,
         val speaking: Boolean,
@@ -78,20 +78,20 @@ internal class LanConferenceChannel(address: InetAddress) : AutoCloseable {
 
     private fun handle(socket: Socket) = socket.use {
         try {
-            if (!socket.inetAddress.isSiteLocalAddress) { return@use }
+            if (!socket.inetAddress.isSiteLocalAddress) { rejected("public_source"); return@use }
             socket.soTimeout = ConferenceHandoffTiming.CONTROL_REQUEST_TIMEOUT_MILLIS
             val input = DataInputStream(socket.getInputStream())
             val request = readFrame(input, MAX_REQUEST_BYTES).split('\n')
             val state = snapshot ?: return@use
-            if (!isValidRequest(request, state)) { return@use }
+            if (!isValidRequest(request, state)) { rejected("capability_room_or_frame"); return@use }
             val capability = request.getOrElse(6) { "" }
             val advertised = request.getOrElse(7) { "" }
             val sipEndpoint = if (advertised.isEmpty()) null else LanSipEndpoint.parse(advertised)
             // An endpoint is authoritative only when its host matches this authenticated
             // room-capability connection's observed source. No arbitrary third-party targets.
-            if (advertised.isNotEmpty() && (sipEndpoint == null || sipEndpoint.host != socket.inetAddress.hostAddress)) { return@use }
+            if (advertised.isNotEmpty() && (sipEndpoint == null || sipEndpoint.host != socket.inetAddress.hostAddress)) { rejected("endpoint_source_mismatch"); return@use }
             val previous = peers[request[2]]
-            if (previous?.sipEndpoint != null && previous.sipEndpoint != sipEndpoint && handoffEndpoints.isNotEmpty()) { return@use }
+            if (previous?.sipEndpoint != null && previous.sipEndpoint != sipEndpoint && handoffEndpoints.isNotEmpty()) { rejected("endpoint_changed"); return@use }
 
             val now = System.nanoTime()
             peers.keys.retainAll(state.members.toSet())
@@ -112,6 +112,7 @@ internal class LanConferenceChannel(address: InetAddress) : AutoCloseable {
                 else "\nLAN/1\n" // Legacy peers receive room state, never handoff commands.
             writeFrame(DataOutputStream(socket.getOutputStream()), response)
         } catch (_: IOException) {
+            rejected("frame_or_timeout")
         }
     }
 

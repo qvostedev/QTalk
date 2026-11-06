@@ -1,4 +1,6 @@
 package com.qvoste.qtalk.voip
+
+import com.qvoste.qtalk.QTalkBuildInfo
 import com.qvoste.qtalk.ui.calls.components.customRingtones
 import com.qvoste.qtalk.ui.calls.components.localMediaDirectory
 
@@ -79,11 +81,18 @@ class LinphoneVoipEngine : VoipEngine {
     private var iterateJob: Job? = null
     private var coreStarted = false
     private var currentAccount: Account? = null
+    @Volatile private var diagnosticExtension = ""
     private val lanSip by lazy { LanHandoffSip(core, factory) }
     private var advertisedSip: LanSipEndpoint? = null
     private val consumedTransfers = mutableSetOf<String>()
     private var consumedRoom = ""
+    private var lastLanErrorAt = 0L
+    private fun diagnostic(code: String, transfer: String? = handoff?.id ?: hostTransfer?.id,
+        phase: String = "", peer: String = "", state: String = "", reason: String = "", protocol: Int = 0,
+        target: LanSipEndpoint? = null) = Lan2Diagnostics.event(code,
+        diagnosticExtension, transfer, phase, peer, state, reason, protocol, target)
     private fun acknowledge(value: String) {
+        if (value != lanAcknowledgement) diagnostic("guest_ack", phase = value.substringBefore(':'))
         lanAcknowledgement = value
     }
     private fun rememberTransfer(id: String) { consumedTransfers.add(id) }
@@ -275,6 +284,8 @@ class LinphoneVoipEngine : VoipEngine {
             }
         }
         override fun onCallStateChanged(core: Core, call: Call, state: Call.State, message: String) {
+            diagnostic("native_call", peer = call.remoteAddress?.username.orEmpty(), state = state.toString(),
+                reason = call.reason.toString(), protocol = call.errorInfo?.protocolCode ?: 0)
             val staging = handoff
             if (staging != null && !staging.committed && !staging.aborting) {
                 if (call in staging.staged) return
@@ -289,9 +300,11 @@ class LinphoneVoipEngine : VoipEngine {
                         staging.endpoints[staging.host])) {
                     staging.connecting = true
                     staging.staged += call
+                    diagnostic("admission_accept", peer = staging.host, target = staging.endpoints[staging.host])
                     val params = lanSip.params(staging.account, call)
                     call.setMicrophoneMuted(true); call.setSpeakerMuted(true)
                     if (call.acceptWithParams(params) != 0) {
+                        diagnostic("admission_error", reason = "native_accept_failed")
                         // Keep the admission consumed for this transaction even on native error.
                         call.decline(Reason.NotAcceptable)
                     }
@@ -302,6 +315,7 @@ class LinphoneVoipEngine : VoipEngine {
             if (conferenceState != null && conferenceSession.onCallState(call, conferenceState)) return
             if (state == Call.State.IncomingReceived) {
                 if (call.remoteParams?.getCustomHeader("X-QTalk-Handoff") != null || staging != null) {
+                    diagnostic("admission_deny", peer = call.remoteAddress?.username.orEmpty(), reason = "permit_or_endpoint_mismatch")
                     call.decline(Reason.NotAcceptable)
                     return
                 }
@@ -429,6 +443,7 @@ class LinphoneVoipEngine : VoipEngine {
 
         if (!coreStarted) {
             core.addListener(coreListener)
+            diagnostic("build_start", reason = QTalkBuildInfo.VERSION)
             val initialTransports = core.transports
             initialTransports.udpPort = 0
             initialTransports.tcpPort = 0
@@ -484,6 +499,7 @@ class LinphoneVoipEngine : VoipEngine {
             require(account.port in 1..65535) { "Порт должен быть от 1 до 65535" }
             require(account.registrationExpires >= 60) { "Срок регистрации должен быть не меньше 60 секунд" }
 
+            diagnosticExtension = account.username
             currentAccount?.let {
                 core.removeAccount(it)
                 currentAccount = null
@@ -901,7 +917,7 @@ class LinphoneVoipEngine : VoipEngine {
             }.getOrNull()?.takeIf { it is java.net.Inet4Address && it.isSiteLocalAddress && !it.isLoopbackAddress }
             val address = routedAddress ?: NetworkInterface.getNetworkInterfaces().toList().filter { it.isUp && !it.isLoopback }
                 .flatMap { it.inetAddresses.toList() }.firstOrNull { it is java.net.Inet4Address && it.isSiteLocalAddress }
-            if (address != null) lanRoom = runCatching { LanConferenceChannel(address) }.getOrNull()
+            if (address != null) lanRoom = runCatching { LanConferenceChannel(address) { code -> diagnostic("control_reject", reason = code) } }.onFailure { diagnostic("control_bind_error", reason = it.javaClass.simpleName) }.getOrNull()
         }
         lanRoom?.peers?.filterValues { now - it.seenAt < ConferenceHandoffTiming.PEER_LIFETIME_NANOS }?.let { peers ->
             conferenceSession.calls.forEach { leg -> peers[leg.remoteAddress?.username]?.let { reportedMutes[leg] = it.muted } }
@@ -971,6 +987,7 @@ class LinphoneVoipEngine : VoipEngine {
         if (instruction.isBlank()) return
         val parts = instruction.removePrefix("LAN2|").split('|')
         if (!instruction.startsWith("LAN2|")) {
+            diagnostic("instruction_deny", reason = "update_all_required")
             return
         }
         if (parts.size == 2 && parts[0] == "direct" && parts[1] == room.roomId && handoff == null) {
@@ -980,17 +997,17 @@ class LinphoneVoipEngine : VoipEngine {
         }
         if (parts.size != 4 || parts[0] !in setOf("prepare", "connect", "commit", "abort") ||
             !Regex("[a-f0-9-]{36}").matches(parts[1]) || parts[2] !in room.members || parts[2] == room.host) {
-            return
+            diagnostic("instruction_deny", reason = "invalid_command"); return
         }
         val members = parts[3].split(',')
         if (members.size !in 2..7 || members.distinct().size != members.size || parts[2] !in members ||
             members.toSet() != (room.members - room.host).toSet() || room.pending.isNotEmpty()) {
-            return
+            diagnostic("instruction_deny", reason = "membership_or_pending"); return
         }
         val own = currentAccount?.params?.identityAddress?.username.orEmpty()
-        val original = currentCall ?: return
+        val original = currentCall ?: run { diagnostic("instruction_deny", reason = "no_original"); return }
         if (own !in members || original.remoteAddress?.username != room.host) {
-            return
+            diagnostic("instruction_deny", reason = "original_host_mismatch"); return
         }
         val existing = handoff
         if (parts[0] == "abort" && existing == null) {
@@ -1001,10 +1018,12 @@ class LinphoneVoipEngine : VoipEngine {
             if (consumedRoom != room.roomId) { consumedTransfers.clear(); consumedRoom = room.roomId }
             if (parts[1] in consumedTransfers || consumedTransfers.size >= ConferenceHandoffLimits.MAX_REMEMBERED_TRANSFERS_PER_ROOM || endpoints.keys != members.toSet() ||
                 endpoints[own] != advertisedSip || guestRoom?.roomId != room.roomId) {
+                diagnostic("prepare_deny", transfer = parts[1], reason = "endpoint_room_or_replay")
                 return
             }
             val account = try { lanSip.account(own, checkNotNull(advertisedSip)) }
                 catch (e: Exception) {
+                    diagnostic("prepare_error", transfer = parts[1], reason = e.javaClass.simpleName)
                     return
                 }
             rememberTransfer(parts[1])
@@ -1027,6 +1046,7 @@ class LinphoneVoipEngine : VoipEngine {
                             // Keep the original SIP leg outside the replacement mixer until commit.
                             for (target in existing.members.filterNot { it == own }) {
                                 val endpoint = checkNotNull(existing.endpoints[target])
+                                diagnostic("direct_invite", peer = target, target = endpoint)
                                 val leg = lanSip.invite(mixer, existing.account, target, endpoint, existing.id)
                                 existing.staged += leg
                                 leg.setMicrophoneMuted(true); leg.setSpeakerMuted(true)
@@ -1043,6 +1063,7 @@ class LinphoneVoipEngine : VoipEngine {
                             mixer.microphoneMuted = true
                         } catch (e: CancellationException) { throw e }
                         catch (e: Exception) {
+                            diagnostic("staging_error", reason = e.javaClass.simpleName)
                             transferMessage = "Не удалось подготовить прямое LAN-соединение. Исходный звонок сохранён"
                         }
                     }
@@ -1073,6 +1094,7 @@ class LinphoneVoipEngine : VoipEngine {
             transferMessage = "Организатор отключился. Автоматическое восстановление звонка недоступно"
             return
         }
+        diagnostic("rollback_start", transfer = transition.id)
         acknowledge("aborting:" + transition.id)
         roomTransitionJob = scope.launch {
             val original = transition.originalCall
@@ -1091,10 +1113,12 @@ class LinphoneVoipEngine : VoipEngine {
                 } == true
                 check(restored) { "Восстановление исходного звонка ещё не завершено" }
                 acknowledge("aborted:" + transition.id)
+                diagnostic("rollback_result", transfer = transition.id, reason = "original_restored")
                 transferMessage = "Передача отменена. Исходные соединения сохранены"
                 if (handoff === transition) handoff = null
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
+                diagnostic("rollback_error", transfer = transition.id, reason = e.javaClass.simpleName)
                 transferMessage = "Восстановление исходного звонка ещё не завершено"
             }
             finally { transition.aborting = false }
@@ -1102,6 +1126,7 @@ class LinphoneVoipEngine : VoipEngine {
     }
 
     private fun commitGuestHandoff(transition: Handoff) {
+        diagnostic("commit_apply", transfer = transition.id)
         val own = currentAccount?.params?.identityAddress?.username.orEmpty()
         val oldRoom = transition.room
         val wasHeld = conferenceHeld
@@ -1131,13 +1156,22 @@ class LinphoneVoipEngine : VoipEngine {
         refreshConferenceAudio()
         commitOriginal = transition.originalCall
         roomTransitionJob = scope.launch {
+            var reported = false
             try {
                 while (isActive && awaitingHostCommitCompletion()) {
                     try {
                         LanConferenceChannel.exchange(oldRoom.endpoint, oldRoom.roomId, own,
                             microphoneMuted, false, "committed:" + transition.id, transition.endpoints[own])
+                        if (!reported) {
+                            diagnostic("commit_ack_result", transfer = transition.id, reason = "delivered")
+                            reported = true
+                        }
                     } catch (e: CancellationException) { throw e }
                     catch (e: Exception) {
+                        if (System.nanoTime() - lastLanErrorAt > ConferenceHandoffTiming.DIAGNOSTIC_THROTTLE_NANOS) {
+                            lastLanErrorAt = System.nanoTime()
+                            diagnostic("commit_ack_error", transfer = transition.id, reason = e.javaClass.simpleName)
+                        }
                     }
                     delay(ConferenceHandoffTiming.COMMIT_ACK_RETRY_MILLIS)
                 }
@@ -1153,11 +1187,13 @@ class LinphoneVoipEngine : VoipEngine {
             "Дождитесь завершения приглашения перед передачей организатора"
         }
         val channel = checkNotNull(lanRoom) {
+            diagnostic("handoff_deny", reason = "control_unavailable")
             "Нет прямого соединения для передачи организатора. Звонок сохранён"
         }
         val members = conferenceSession.calls.mapNotNull { it.remoteAddress?.username }.distinct()
         val now = System.nanoTime()
         check(members.all { channel.peers[it]?.let { peer -> now - peer.seenAt < ConferenceHandoffTiming.PEER_LIFETIME_NANOS } == true }) {
+            diagnostic("handoff_deny", reason = "peer_missing_or_old_build")
             "Обновите QTalk у всех участников и проверьте прямое LAN-соединение. Звонок сохранён"
         }
         hostTransfer?.takeIf { it.phase == ConferenceHandoff.Phase.ABORTED }?.let { aborted ->
@@ -1170,6 +1206,7 @@ class LinphoneVoipEngine : VoipEngine {
         if (hostTransfer == null) {
             check(members.all { channel.peers[it]?.capability == LanConferenceChannel.CAPABILITY &&
                 channel.peers[it]?.sipEndpoint != null }) {
+                diagnostic("handoff_deny", reason = "update_all_required")
                 "Обновите QTalk у всех участников. Исходный звонок сохранён"
             }
             channel.handoffEndpoints = members.associateWith { checkNotNull(channel.peers[it]?.sipEndpoint) }
@@ -1181,25 +1218,33 @@ class LinphoneVoipEngine : VoipEngine {
             plan.transfer(object : ConferenceHandoff.Transport {
                 override fun instruct(instruction: String) {
                     channel.instruction = "LAN2|$instruction"
+                    diagnostic("host_phase", transfer = plan.id, phase = instruction.substringBefore('|'))
                 }
                 override suspend fun awaitAcknowledgements(ack: String, timeoutMillis: Long): Boolean {
+                    val observed = mutableSetOf<String>()
                     fun missing(): List<String> = plan.members.filter { member ->
                         val peer = channel.peers[member]
                         val matches = peer != null && peer.acknowledgement == ack &&
                             peer.capability == LanConferenceChannel.CAPABILITY &&
                             peer.sipEndpoint == channel.handoffEndpoints[member] &&
                             System.nanoTime() - peer.seenAt < ConferenceHandoffTiming.PEER_LIFETIME_NANOS
+                        if (matches && observed.add(member)) diagnostic("peer_ack", transfer = plan.id,
+                            phase = ack.substringBefore(':'), peer = member)
                         !matches
                     }
                     val result = withTimeoutOrNull(timeoutMillis) {
                         while (missing().isNotEmpty()) delay(ConferenceHandoffTiming.ACK_POLL_MILLIS)
                         true
                     } == true
+                    missing().forEach { diagnostic("missing_peer", transfer = plan.id, phase = ack.substringBefore(':'), peer = it) }
+                    diagnostic("barrier_result", transfer = plan.id, phase = ack.substringBefore(':'), reason = if (result) "all_ack" else "timeout")
                     return result
                 }
             })
+            diagnostic("handoff_result", transfer = plan.id, reason = "all_committed")
             transferMessage = "Передача звонка подтверждена"
         } catch (e: Exception) {
+            diagnostic("handoff_error", transfer = plan.id, phase = plan.phase.toString(), reason = e.javaClass.simpleName)
             transferMessage = e.message.orEmpty()
             if (plan.phase == ConferenceHandoff.Phase.ABORTED && plan.rollbackAcknowledged) {
                 hostTransfer = null
@@ -1260,6 +1305,10 @@ class LinphoneVoipEngine : VoipEngine {
                         }
                     } catch (e: CancellationException) { throw e }
                     catch (e: Exception) {
+                        if (System.nanoTime() - lastLanErrorAt > ConferenceHandoffTiming.DIAGNOSTIC_THROTTLE_NANOS) {
+                            lastLanErrorAt = System.nanoTime()
+                            diagnostic("control_exchange_error", reason = e.javaClass.simpleName)
+                        }
                         if (guestRoom?.roomId == guest.roomId && System.nanoTime() - lastLanReceivedAt > 800_000_000L) {
                             guestRoom = guestRoom?.copy(speaking = emptySet())
                         }
