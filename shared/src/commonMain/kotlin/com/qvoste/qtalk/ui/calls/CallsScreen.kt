@@ -1,4 +1,6 @@
 package com.qvoste.qtalk.ui.calls
+
+import com.qvoste.qtalk.QTalkBuildInfo
 import com.qvoste.qtalk.ui.calls.components.customRingtones
 import com.qvoste.qtalk.ui.calls.components.importLocalMedia
 
@@ -182,7 +184,7 @@ fun CallsScreen(
     viewModel: CallsViewModel,
     themeMode: ThemeMode = ThemeMode.DARK,
     onThemeModeChange: (ThemeMode) -> Unit = {},
-    appVersion: String = "1.1.1",
+    appVersion: String = QTalkBuildInfo.VERSION,
     availableUpdateVersion: String? = null,
     availableUpdateDescription: String? = null,
     onCheckForUpdates: suspend ((String, Float?) -> Unit) -> Unit = { it("Проверка обновлений недоступна", null) },

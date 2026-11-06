@@ -1,5 +1,7 @@
 package com.qvoste.qtalk.app
 
+import com.qvoste.qtalk.QTalkBuildInfo
+
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -39,7 +41,7 @@ fun App(
     employeePresenceService: EmployeePresenceService = DisabledEmployeePresenceService,
     themeMode: ThemeMode = ThemeMode.DARK,
     onThemeModeChange: (ThemeMode) -> Unit = {},
-    appVersion: String = "1.1.1",
+    appVersion: String = QTalkBuildInfo.VERSION,
     availableUpdateVersion: String? = null,
     availableUpdateDescription: String? = null,
     onCheckForUpdates: suspend ((String, Float?) -> Unit) -> Unit = {

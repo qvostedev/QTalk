@@ -13,7 +13,8 @@ val targetOs = providers.gradleProperty("qtalk.targetOs")
     .get()
     .lowercase()
 
-val qTalkPackageVersion = "1.1.1"
+val qTalkDisplayVersion = providers.gradleProperty("qtalkVersion").get()
+val qTalkPackageVersion = qTalkDisplayVersion.substringBefore('-')
 
 // XWayland tiling compositors do not reparent AWT windows. Without this hint,
 // the Compose surface can retain its initial size after the window is resized.
@@ -44,7 +45,8 @@ dependencies {
 }
 
 tasks.jar {
-    manifest.attributes["Implementation-Version"] = qTalkPackageVersion
+    manifest.attributes["Implementation-Version"] = qTalkDisplayVersion
+    manifest.attributes["QTalk-Build"] = "RELEASE-$qTalkDisplayVersion"
 }
 
 val prepareWindowsJpackageInput by tasks.registering(Copy::class) {
@@ -114,7 +116,7 @@ tasks.register<Exec>("packageQTalkInstaller") {
     dependsOn("createDistributable", prepareQTalkInstallerArtwork)
 
     val installerFile = layout.buildDirectory.file(
-        "compose/binaries/main/exe/QTalk-Setup-$qTalkPackageVersion.exe"
+        "compose/binaries/main/exe/QTalk-Setup-$qTalkDisplayVersion.exe"
     )
     val applicationImage = layout.buildDirectory.dir("compose/binaries/main/app/QTalk")
     inputs.file(windowsInstallerDirectory.file("QTalk.iss"))
@@ -150,7 +152,8 @@ tasks.register<Exec>("packageQTalkInstaller") {
         args(
             "/DSourceDir=${appDirectory.absolutePath}",
             "/DOutputDir=${outputDirectory.absolutePath}",
-            "/DAppVersion=$qTalkPackageVersion",
+            "/DAppVersion=$qTalkDisplayVersion",
+            "/DAppNumericVersion=$qTalkPackageVersion",
             windowsInstallerDirectory.file("QTalk.iss").asFile.absolutePath
         )
     }

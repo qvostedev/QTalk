@@ -35,9 +35,35 @@ fun translateUiText(source: String, language: AppLanguage): String {
 }
 
 private val english = mapOf(
+    "Передача отменена. Повторите выход" to "Handoff cancelled. Retry leaving",
+    "Нет активного звонка" to "No active call",
+    "Новые аудиосоединения не готовы" to "Replacement audio connections are not ready",
+    "Не удалось подготовить новый микшер" to "Could not prepare the replacement mixer",
+    "Не удалось подготовить прямое LAN-соединение. Исходный звонок сохранён" to "Could not prepare the direct LAN connection. Original call retained",
+    "Организатор отключился. Автоматическое восстановление звонка недоступно" to "The host disconnected. Automatic call recovery is unavailable",
+    "Восстановление исходного звонка ещё не завершено" to "Restoring the original call is not complete yet",
+    "Не удалось восстановить исходный звонок" to "Could not restore the original call",
+    "Обновите QTalk у всех участников и проверьте прямое LAN-соединение. Звонок сохранён" to "Update QTalk for all participants and check direct LAN connectivity. Call retained",
+    "Восстановление исходного звонка ещё не завершено. Оставьте QTalk открытым" to "Restoring the original call is not complete yet. Keep QTalk open",
+    "Обновите QTalk у всех участников. Исходный звонок сохранён" to "Update QTalk for all participants. Original call retained",
+
     "Не все участники подтвердили общий экран. Проверьте подключение к сервису конференций и версию QTalk у участников." to "Some participants have not confirmed the shared view. Check the conference service connection and participants' QTalk versions.",
     "Выберите участников для группового звонка" to "Select participants for the group call",
     "Создать конференцию" to "Create group call", "Добавить участников" to "Add participants",
+    "Удалить участника?" to "Remove participant?", "Участник покинет групповой звонок." to "The participant will leave the group call.",
+    "Подготовка передачи звонка…" to "Preparing call handoff…",
+    "Подключение нового организатора…" to "Connecting the new audio host…",
+    "Передача звонка новому организатору…" to "Handing the call over to the new audio host…",
+    "Передача звонка подтверждена" to "Call handoff confirmed",
+    "Передача отменена. Исходные соединения сохранены" to "Handoff cancelled. Original connections retained",
+    "Участники не подтвердили подготовку. Исходный звонок сохранён" to "Participants did not confirm preparation. Original call retained",
+    "Новые аудиосоединения не готовы. Передача отменена, исходные соединения сохранены" to "Replacement audio is not ready. Handoff cancelled; original connections retained",
+    "Передача завершается. Оставьте QTalk открытым и повторите выход для подтверждения" to "Handoff is completing. Keep QTalk open and retry leaving to confirm",
+    "Нет прямого соединения для передачи организатора. Звонок сохранён" to "No direct connection for handoff. Call retained",
+    "Не все участники подключены напрямую. Звонок сохранён, повторите выход после подключения" to "Some participants are not directly connected. Call retained; reconnect and retry leaving",
+    "Дождитесь завершения передачи звонка" to "Wait for the call handoff to finish",
+    "Дождитесь завершения приглашения перед передачей организатора" to "Wait for invitations to finish before handing over the call",
+    "Удалять подключённых участников может только создатель на устройстве организатора" to "Only the original creator on the audio host can remove joined participants",
     "Пригласить" to "Invite", "Групповой звонок" to "Group call", "Приглашаем участников…" to "Inviting participants…",
     "Выход организатора завершит звонок" to "The call ends when the host leaves",
     "Организатор передаст звонок при выходе" to "The host will hand over the call when leaving",
@@ -225,7 +251,7 @@ private val countedLabels = listOf("Все", "Клиенты", "Сотрудни
 
 fun releaseNotesForLanguage(body: String, language: AppLanguage): String {
     if (body.isBlank()) return ""
-    val headings = Regex("(?m)^#{1,2}\\s+(English|Русский|Russian)\\s*\\r?$").findAll(body).toList()
+    val headings = Regex("""(?m)^#{1,2}\s+(English|Русский|Russian)\s*$""").findAll(body).toList()
     if (headings.isNotEmpty()) {
         val index = headings.indexOfFirst {
             if (language == AppLanguage.ENGLISH) it.groupValues[1] == "English"

@@ -7,7 +7,11 @@
 #endif
 
 #ifndef AppVersion
-  #define AppVersion "1.1.1"
+  #error AppVersion must be supplied by the Gradle build
+#endif
+
+#ifndef AppNumericVersion
+  #error AppNumericVersion must be supplied by the Gradle build
 #endif
 
 #define AppName "QTalk"
@@ -44,11 +48,12 @@ CloseApplications=force
 CloseApplicationsFilter=QTalk.exe
 RestartApplications=no
 ChangesAssociations=yes
-VersionInfoVersion={#AppVersion}.0
+VersionInfoVersion={#AppNumericVersion}.0
 VersionInfoCompany={#AppPublisher}
 VersionInfoDescription={#AppName} desktop installer
 VersionInfoProductName={#AppName}
-VersionInfoProductVersion={#AppVersion}
+VersionInfoProductVersion={#AppNumericVersion}.0
+VersionInfoProductTextVersion={#AppVersion}
 
 [Languages]
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"

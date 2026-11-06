@@ -4,7 +4,7 @@ internal sealed interface RoomMessage {
     val roomId: String
     data class Snapshot(override val roomId: String, val revision: Long, val host: String,
         val members: List<String>, val pending: List<String>, val muted: Set<String>, val speaking: Set<String>,
-        val endpoint: String = "") : RoomMessage
+        val endpoint: String = "", val creator: String = host) : RoomMessage
     data class Microphone(override val roomId: String, val muted: Boolean) : RoomMessage
 }
 
@@ -18,7 +18,11 @@ internal object ConferenceRoomWire {
         is RoomMessage.Snapshot -> listOf("QTALK/1", "snapshot", message.roomId, message.revision.toString(),
             message.host, message.members.joinToString(","), message.pending.joinToString(","),
             message.muted.joinToString(","), message.speaking.joinToString(",")).let {
-                (if (message.endpoint.isNotBlank()) it + message.endpoint else it).joinToString("\n")
+                when {
+                    message.creator != message.host -> (it + message.endpoint + message.creator).joinToString("\n")
+                    message.endpoint.isNotBlank() -> (it + message.endpoint).joinToString("\n")
+                    else -> it.joinToString("\n")
+                }
             }
         is RoomMessage.Microphone -> listOf("QTALK/1", "microphone", message.roomId,
             if (message.muted) "1" else "0").joinToString("\n")
@@ -31,7 +35,7 @@ internal object ConferenceRoomWire {
         if (parts[1] == "microphone" && parts.size == 4 && parts[3] in setOf("0", "1")) {
             return RoomMessage.Microphone(parts[2], parts[3] == "1")
         }
-        if (parts[1] != "snapshot" || parts.size !in 9..10) return null
+        if (parts[1] != "snapshot" || parts.size !in 9..11 || parts.size == 10 && parts[9].isBlank()) return null
         val endpoint = parts.getOrElse(9) { "" }
         if (endpoint.isNotEmpty() && !Regex("[0-9.]{7,15}:[0-9]{1,5}/[a-f0-9-]{36}").matches(endpoint)) return null
         val revision = parts[3].toLongOrNull()?.takeIf { it >= 0 } ?: return null
@@ -41,6 +45,8 @@ internal object ConferenceRoomWire {
             (members + pending).distinct().size > MAX_CONFERENCE_PARTICIPANTS || members.distinct().size != members.size ||
             (members + pending + muted + speaking).any { !number.matches(it) } || parts[4] !in members ||
             muted.any { it !in members } || speaking.any { it !in members }) return null
-        return RoomMessage.Snapshot(parts[2], revision, parts[4], members, pending, muted.toSet(), speaking.toSet(), endpoint)
+        val creator = if (parts.size == 11) parts[10] else parts[4]
+        if (!number.matches(creator)) return null
+        return RoomMessage.Snapshot(parts[2], revision, parts[4], members, pending, muted.toSet(), speaking.toSet(), endpoint, creator)
     }
 }

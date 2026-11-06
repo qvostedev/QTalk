@@ -79,6 +79,19 @@ class LinphoneVoipEngine : VoipEngine {
     private var iterateJob: Job? = null
     private var coreStarted = false
     private var currentAccount: Account? = null
+    private val lanSip by lazy { LanHandoffSip(core, factory) }
+    private var advertisedSip: LanSipEndpoint? = null
+    private val consumedTransfers = mutableSetOf<String>()
+    private var consumedRoom = ""
+    private fun acknowledge(value: String) {
+        lanAcknowledgement = value
+    }
+    private fun rememberTransfer(id: String) { consumedTransfers.add(id) }
+    private fun localSipEndpoint(controlEndpoint: String): LanSipEndpoint {
+        val address = checkNotNull(LanConferenceChannel.parseEndpoint(controlEndpoint)).first
+        val host = java.net.DatagramSocket().use { socket -> socket.connect(address); socket.localAddress.hostAddress }
+        return lanSip.endpoint(host).also { advertisedSip = it }
+    }
     private var currentCall: Call? = null
     private val _connectionStatus = MutableStateFlow(TelephonyConnection.DISCONNECTED)
     override val connectionStatus = _connectionStatus.asStateFlow()
@@ -97,6 +110,9 @@ class LinphoneVoipEngine : VoipEngine {
     private val remoteSpeechDetectors = mutableMapOf<String, SpeechActivityDetector>()
     private var lastConferenceAudioAt = 0L
     private var roomId = ""
+    private var roomCreator = ""
+    private var transferMessage = ""
+    private var hostTransfer: ConferenceHandoff? = null
     private var roomRevision = 0L
     private var guestRoom: RoomMessage.Snapshot? = null
     private var roomLastSentAt = 0L
@@ -119,9 +135,16 @@ class LinphoneVoipEngine : VoipEngine {
     private var roomMaintenanceJob: Job? = null
     private var roomTransitionJob: Job? = null
     private var ignoredGuestRoom = ""
-    private data class Handoff(val id: String, val host: String, val members: List<String>, val expiresAt: Long,
-        val microphoneMuted: Boolean, val speakerMuted: Boolean, val committed: Boolean = false)
+    private class Handoff(val id: String, val host: String, val members: List<String>, val expiresAt: Long,
+        val microphoneMuted: Boolean, val speakerMuted: Boolean, val room: RoomMessage.Snapshot, val originalCall: Call,
+        var connecting: Boolean = false, var committed: Boolean = false, var aborting: Boolean = false,
+        val endpoints: Map<String, LanSipEndpoint>, val account: Account,
+        val staged: MutableList<Call> = mutableListOf(), var mixer: Conference? = null)
     private var handoff: Handoff? = null
+    private var commitOriginal: Call? = null
+    private fun awaitingHostCommitCompletion() = commitOriginal?.state?.let {
+        it !in setOf(Call.State.End, Call.State.Error, Call.State.Released)
+    } == true
     private val _conferenceStatus = MutableStateFlow(ConferenceStatus())
     private val conferenceSession = LocalConferenceSession(object : LocalConferenceBackend<Call> {
         override fun number(call: Call): String = call.remoteAddress?.username.orEmpty()
@@ -145,6 +168,7 @@ class LinphoneVoipEngine : VoipEngine {
             address.username = number
             val params = checkNotNull(core.createCallParams(null))
             params.isVideoEnabled = false
+            params.account = currentAccount
             val conference = checkNotNull(localConference)
             val previousCalls = core.calls.toSet()
             conference.inviteParticipants(arrayOf(address), params)
@@ -229,7 +253,6 @@ class LinphoneVoipEngine : VoipEngine {
 
     private val coreListener = object : CoreListenerStub() {
         override fun onInfoReceived(core: Core, call: Call, message: InfoMessage) {
-            if (roomService.enabled) return
             val content = message.content ?: return
             if (content.type != "application" || content.subtype != ConferenceRoomWire.subtype) return
             when (val room = ConferenceRoomWire.decode(content.utf8Text.orEmpty())) {
@@ -243,7 +266,8 @@ class LinphoneVoipEngine : VoipEngine {
                         room.host.filter(Char::isDigit) != remote.filter(Char::isDigit) ||
                         (room.members + room.pending).none { it.filter(Char::isDigit) == own.filter(Char::isDigit) }) return
                     val previous = guestRoom
-                    if (previous != null && (previous.roomId != room.roomId || room.revision < previous.revision)) return
+                    if (previous != null && (previous.roomId != room.roomId || previous.creator != room.creator ||
+                        room.revision < previous.revision)) return
                     guestRoom = room
                     sendRoomMessage(call, RoomMessage.Microphone(room.roomId, microphoneMuted))
                 }
@@ -251,24 +275,34 @@ class LinphoneVoipEngine : VoipEngine {
             }
         }
         override fun onCallStateChanged(core: Core, call: Call, state: Call.State, message: String) {
+            val staging = handoff
+            if (staging != null && !staging.committed && !staging.aborting) {
+                if (call in staging.staged) return
+                val own = currentAccount?.params?.identityAddress?.username.orEmpty()
+                if (state == Call.State.IncomingReceived && own != staging.host &&
+                    LanHandoffAdmission.accepts(
+                        ConferenceHandoffPermit(staging.id, staging.host, staging.room.roomId, staging.expiresAt),
+                        call.remoteAddress?.username.orEmpty(), call.remoteParams?.getCustomHeader("X-QTalk-Handoff"),
+                        guestRoom?.roomId.orEmpty(), System.nanoTime(), staging.staged.isNotEmpty(),
+                        currentCall == staging.originalCall, call.remoteAddress?.domain,
+                        call.remoteContactAddress?.let { LanSipEndpoint.parse("${it.domain}:${it.port}") },
+                        staging.endpoints[staging.host])) {
+                    staging.connecting = true
+                    staging.staged += call
+                    val params = lanSip.params(staging.account, call)
+                    call.setMicrophoneMuted(true); call.setSpeakerMuted(true)
+                    if (call.acceptWithParams(params) != 0) {
+                        // Keep the admission consumed for this transaction even on native error.
+                        call.decline(Reason.NotAcceptable)
+                    }
+                    return
+                }
+            }
             val conferenceState = conferenceLegState(state)
             if (conferenceState != null && conferenceSession.onCallState(call, conferenceState)) return
             if (state == Call.State.IncomingReceived) {
-                val transition = handoff?.takeIf { it.committed && it.expiresAt > System.nanoTime() && it.host == call.remoteAddress?.username }
-                if (transition != null) {
-                    currentCall?.takeIf { it != call }?.terminate()
-                    currentCall = call
-                    clearRoom()
-                    conferenceSession.reset()
-                    microphoneMuted = transition.microphoneMuted
-                    speakerMuted = transition.speakerMuted
-                    handoff = null
-                    _callStatus.value = CallStatus(CallState.ACTIVE, transition.host,
-                        startedAtEpochMillis = System.currentTimeMillis(), connectedAtEpochMillis = System.currentTimeMillis())
-                    val params = checkNotNull(core.createCallParams(call)).apply { isVideoEnabled = false }
-                    if (call.acceptWithParams(params) == 0) {
-                        call.setMicrophoneMuted(microphoneMuted); call.setSpeakerMuted(speakerMuted)
-                    }
+                if (call.remoteParams?.getCustomHeader("X-QTalk-Handoff") != null || staging != null) {
+                    call.decline(Reason.NotAcceptable)
                     return
                 }
                 if (currentCall != null) {
@@ -464,7 +498,7 @@ class LinphoneVoipEngine : VoipEngine {
             _registrationMessage.value = "Подключение к ${account.domain}"
 
             val transports = core.transports
-            transports.udpPort = if (account.transport == SipTransport.UDP) -1 else 0
+            transports.udpPort = core.transportsUsed.udpPort.takeIf { it > 0 } ?: -1
             transports.tcpPort = if (account.transport == SipTransport.TCP) -1 else 0
             transports.tlsPort = if (account.transport == SipTransport.TLS) -1 else 0
             check(core.setTransports(transports) == 0) { "Не удалось настроить SIP-транспорт" }
@@ -609,8 +643,7 @@ class LinphoneVoipEngine : VoipEngine {
     }
 
     override suspend fun hangUp() = withContext(linphoneDispatcher) {
-        handoff = null
-        roomTransitionJob?.cancel(); roomTransitionJob = null
+        check(handoff == null && !awaitingHostCommitCompletion()) { "Дождитесь завершения передачи звонка" }
         if (conferenceSession.hasSession && conferenceSession.calls.size >= 2) transferConferenceHost()
         if (conferenceSession.hasSession) {
             val previous = _callStatus.value
@@ -685,11 +718,16 @@ class LinphoneVoipEngine : VoipEngine {
     }
 
     override suspend fun inviteConferenceParticipant(number: String) = withContext(linphoneDispatcher) {
+        check(hostTransfer == null && handoff == null && !awaitingHostCommitCompletion()) { "Дождитесь завершения передачи звонка" }
         check(!conferenceHeld) { "Сначала снимите звонок с удержания" }
         check(guestRoom == null) { "Приглашать участников может только организатор" }
         check(_registrationState.value == RegistrationState.REGISTERED) { "Нет связи с сервером телефонии" }
         val target = normalizeOutgoingNumber(number)
         require(target != currentAccount?.params?.identityAddress?.username) { "Нельзя добавить свой номер" }
+        if (roomId.isBlank()) {
+            roomId = UUID.randomUUID().toString()
+            roomCreator = currentAccount?.params?.identityAddress?.username.orEmpty()
+        }
         conferenceSession.begin(checkNotNull(currentCall) { "Нет активного звонка" }, target)
         conferenceInviteJob?.cancel()
         conferenceInviteJob = scope.launch {
@@ -710,10 +748,16 @@ class LinphoneVoipEngine : VoipEngine {
     }
 
     override suspend fun removeConferenceParticipant(number: String) = withContext(linphoneDispatcher) {
+        val own = currentAccount?.params?.identityAddress?.username.orEmpty()
+        check(hostTransfer == null && handoff == null && !awaitingHostCommitCompletion() &&
+            _conferenceStatus.value.canRemoveParticipant(own, number) && roomCreator == own && guestRoom == null) {
+            "Удалять подключённых участников может только создатель на устройстве организатора"
+        }
         conferenceSession.removeParticipant(number)
     }
 
     override suspend fun inviteConferenceParticipants(numbers: List<String>) = withContext(linphoneDispatcher) {
+        check(hostTransfer == null && handoff == null && !awaitingHostCommitCompletion()) { "Дождитесь завершения передачи звонка" }
         check(guestRoom == null && roomInviteJob?.isActive != true) { "Дождитесь завершения приглашения" }
         val own = currentAccount?.params?.identityAddress?.username.orEmpty()
         val existing = conferenceSession.calls.map { it.remoteAddress?.username } + currentCall?.remoteAddress?.username + own
@@ -721,7 +765,10 @@ class LinphoneVoipEngine : VoipEngine {
         require(targets.isNotEmpty() && targets.size + existing.filterNotNull().distinct().size <= MAX_CONFERENCE_PARTICIPANTS) {
             "Достигнут лимит участников"
         }
-        if (roomId.isBlank()) roomId = UUID.randomUUID().toString()
+        if (roomId.isBlank()) {
+            roomId = UUID.randomUUID().toString()
+            roomCreator = own
+        }
         roomInviteQueue = targets
         roomInviteJob = scope.launch {
             try {
@@ -766,6 +813,7 @@ class LinphoneVoipEngine : VoipEngine {
             currentAccount?.params?.identityAddress?.username !in targets) { "Выберите участников для группового звонка" }
         call(targets.first())
         roomId = UUID.randomUUID().toString()
+        roomCreator = currentAccount?.params?.identityAddress?.username.orEmpty()
         roomInviteJob = scope.launch {
             val active = withTimeoutOrNull(45_000) {
                 while (_callStatus.value.state in setOf(CallState.DIALING, CallState.RINGING)) delay(50)
@@ -778,7 +826,6 @@ class LinphoneVoipEngine : VoipEngine {
     }
 
     private fun sendRoomMessage(call: Call, message: RoomMessage): Boolean {
-        if (roomService.enabled) return false
         if (call.state in setOf(Call.State.Idle, Call.State.OutgoingInit, Call.State.OutgoingProgress,
                 Call.State.End, Call.State.Error, Call.State.Released)) return false
         val content = factory.createContent().apply {
@@ -791,6 +838,7 @@ class LinphoneVoipEngine : VoipEngine {
     private fun clearRoom() {
         lanRoom?.close(); lanRoom = null
         lastLanReceivedAt = 0L
+        advertisedSip = null
         lanAcknowledgement = ""
         conferenceHeld = false
         localSpeechDetector.reset()
@@ -808,7 +856,9 @@ class LinphoneVoipEngine : VoipEngine {
         guestLastSeenAt = 0L
         cloudLastSuccessAt = 0L
         roomInviteJob?.cancel(); roomInviteJob = null; roomInviteQueue = emptyList()
-        roomId = ""; guestRoom = null; roomRevision = 0L; roomLastSentAt = 0L; lastRoomSnapshot = null
+        roomId = ""; roomCreator = ""; guestRoom = null; roomRevision = 0L; roomLastSentAt = 0L; lastRoomSnapshot = null
+        hostTransfer = null
+        transferMessage = ""
         reportedMutes.clear()
         roomSentStates.clear()
         roomPeerSince.clear()
@@ -818,6 +868,7 @@ class LinphoneVoipEngine : VoipEngine {
         val now = System.nanoTime()
         if (now - lastConferenceAudioAt < 50_000_000L) return
         lastConferenceAudioAt = now
+        if (core.calls.isEmpty() && localConference == null && handoff == null && hostTransfer == null) lanSip.releaseUnused()
         val conference = localConference?.takeIf { conferenceSession.hasSession }
         val participants = conference?.participantList.orEmpty()
         val muted = participants.filter { participant ->
@@ -841,7 +892,7 @@ class LinphoneVoipEngine : VoipEngine {
         )
         conferenceSession.updateAudioState(microphoneMuted, speakerMuted, speaking, muted, localSpeaking)
         val own = currentAccount?.params?.identityAddress?.username.orEmpty()
-        if (roomId.isNotBlank() && roomService.enabled && lanRoom == null) {
+        if (roomId.isNotBlank() && lanRoom == null) {
             val routedAddress = runCatching {
                 java.net.DatagramSocket().use { socket ->
                     socket.connect(java.net.InetAddress.getByName(currentAccount?.params?.serverAddress?.domain), 5060)
@@ -852,7 +903,7 @@ class LinphoneVoipEngine : VoipEngine {
                 .flatMap { it.inetAddresses.toList() }.firstOrNull { it is java.net.Inet4Address && it.isSiteLocalAddress }
             if (address != null) lanRoom = runCatching { LanConferenceChannel(address) }.getOrNull()
         }
-        lanRoom?.peers?.filterValues { now - it.seenAt < 2_000_000_000L }?.let { peers ->
+        lanRoom?.peers?.filterValues { now - it.seenAt < ConferenceHandoffTiming.PEER_LIFETIME_NANOS }?.let { peers ->
             conferenceSession.calls.forEach { leg -> peers[leg.remoteAddress?.username]?.let { reportedMutes[leg] = it.muted } }
         }
         val guest = guestRoom
@@ -866,7 +917,8 @@ class LinphoneVoipEngine : VoipEngine {
                 mutedNumbers = (guest.muted - own) + if (microphoneMuted || conferenceHeld) setOf(own) else emptySet(),
                 speakingNumbers = (guest.speaking - own) + if (localSpeaking) setOf(own) else emptySet(),
                 localSpeaking = localSpeaking, isHost = false,
-                hostNumber = guest.host, roomId = guest.roomId, pendingNumbers = guest.pending.filterNot { it == own })
+                hostNumber = guest.host, roomId = guest.roomId, pendingNumbers = guest.pending.filterNot { it == own },
+                originalCreatorNumber = guest.creator, message = transferMessage)
                 .copy(held = conferenceHeld)
         } else {
             val status = conferenceSession.status.value
@@ -874,6 +926,7 @@ class LinphoneVoipEngine : VoipEngine {
                 phase = if (roomId.isNotBlank() && status.phase == ConferencePhase.NONE) ConferencePhase.ACTIVE else status.phase,
                 participants = status.participants.ifEmpty { if (roomId.isNotBlank()) listOfNotNull(currentCall?.remoteAddress?.username) else emptyList() },
                 hostNumber = own, roomId = roomId, pendingNumbers = roomInviteQueue,
+                originalCreatorNumber = roomCreator, message = transferMessage.ifBlank { status.message },
                 unsynchronizedNumbers = roomPeerSince.filter { (call, since) ->
                     roomId.isNotBlank() && now - since > (if (roomService.enabled) 20_000_000_000L else 8_000_000_000L) && call !in reportedMutes &&
                         call.state == Call.State.StreamsRunning
@@ -887,7 +940,9 @@ class LinphoneVoipEngine : VoipEngine {
                 val members = (listOf(own) + status.participants.ifEmpty { listOfNotNull(currentCall?.remoteAddress?.username) }).distinct()
                 val snapshot = RoomMessage.Snapshot(roomId, 0, own, members,
                     roomInviteQueue.filterNot { it in members }, _conferenceStatus.value.mutedNumbers +
-                        if (microphoneMuted || conferenceHeld) setOf(own) else emptySet(), speaking + if (localSpeaking) setOf(own) else emptySet())
+                        if (microphoneMuted || conferenceHeld) setOf(own) else emptySet(), speaking + if (localSpeaking) setOf(own) else emptySet(),
+                    endpoint = lanRoom?.endpoint.orEmpty(), creator = roomCreator.ifBlank { own })
+                lanRoom?.snapshot = snapshot.copy(revision = roomRevision)
                 if (roomService.enabled) {
                     val live = snapshot.copy(revision = ++roomRevision, endpoint = lanRoom?.endpoint.orEmpty(),
                         muted = snapshot.muted.intersect(members.toSet()), speaking = snapshot.speaking.intersect(members.toSet()))
@@ -896,11 +951,10 @@ class LinphoneVoipEngine : VoipEngine {
                     conferenceSession.calls.ifEmpty { listOfNotNull(currentCall) }.forEach {
                         roomPeerSince.putIfAbsent(it, now)
                     }
-                    return
                 }
                 val recipients = conferenceSession.calls.ifEmpty { listOfNotNull(currentCall) }
                 if (now - roomLastSentAt > 500_000_000L && (snapshot != lastRoomSnapshot ||
-                        recipients.any { roomSentStates[it] != it.state } || now - roomLastSentAt > 5_000_000_000L)) {
+                        recipients.any { roomSentStates[it] != it.state } || now - roomLastSentAt > ConferenceHandoffTiming.ROOM_SNAPSHOT_REFRESH_NANOS)) {
                     roomLastSentAt = now; lastRoomSnapshot = snapshot; roomRevision++
                     recipients.forEach { call ->
                         if (sendRoomMessage(call, snapshot.copy(revision = roomRevision))) {
@@ -913,78 +967,246 @@ class LinphoneVoipEngine : VoipEngine {
         }
     }
 
-    private fun handleRoomInstruction(instruction: String, room: RoomMessage.Snapshot) {
+    private fun handleRoomInstruction(instruction: String, room: RoomMessage.Snapshot, endpoints: Map<String, LanSipEndpoint>) {
         if (instruction.isBlank()) return
-        val parts = instruction.split('|')
-        if (parts.size == 2 && parts[0] == "direct" && parts[1] == room.roomId) {
+        val parts = instruction.removePrefix("LAN2|").split('|')
+        if (!instruction.startsWith("LAN2|")) {
+            return
+        }
+        if (parts.size == 2 && parts[0] == "direct" && parts[1] == room.roomId && handoff == null) {
             ignoredGuestRoom = room.roomId
             guestRoom = null
             return
         }
-        if (parts.size != 4 || parts[0] !in setOf("prepare", "switch") ||
-            !Regex("[a-f0-9-]{36}").matches(parts[1]) || parts[2] !in room.members || parts[2] == room.host) return
+        if (parts.size != 4 || parts[0] !in setOf("prepare", "connect", "commit", "abort") ||
+            !Regex("[a-f0-9-]{36}").matches(parts[1]) || parts[2] !in room.members || parts[2] == room.host) {
+            return
+        }
         val members = parts[3].split(',')
-        if (members.size !in 2..7 || members.distinct().size != members.size || members.any { it !in room.members || it == room.host }) return
+        if (members.size !in 2..7 || members.distinct().size != members.size || parts[2] !in members ||
+            members.toSet() != (room.members - room.host).toSet() || room.pending.isNotEmpty()) {
+            return
+        }
         val own = currentAccount?.params?.identityAddress?.username.orEmpty()
-        if (own !in members) return
+        val original = currentCall ?: return
+        if (own !in members || original.remoteAddress?.username != room.host) {
+            return
+        }
         val existing = handoff
-        if (parts[0] == "prepare") {
-            handoff = Handoff(parts[1], parts[2], members, System.nanoTime() + 20_000_000_000L, microphoneMuted, speakerMuted)
-            lanAcknowledgement = parts[1]
-        } else if (existing?.id == parts[1] && existing.expiresAt > System.nanoTime() && roomTransitionJob?.isActive != true) {
-            handoff = existing.copy(committed = true)
-            lanAcknowledgement = "switch:" + parts[1]
-            roomTransitionJob = scope.launch {
-                delay(700)
-                if (currentCall?.remoteAddress?.username?.let { it != room.host } == true) {
-                    handoff = null
-                    return@launch
+        if (parts[0] == "abort" && existing == null) {
+            lanAcknowledgement = "aborted:" + parts[1]
+            return
+        }
+        if (parts[0] == "prepare" && existing == null) {
+            if (consumedRoom != room.roomId) { consumedTransfers.clear(); consumedRoom = room.roomId }
+            if (parts[1] in consumedTransfers || consumedTransfers.size >= ConferenceHandoffLimits.MAX_REMEMBERED_TRANSFERS_PER_ROOM || endpoints.keys != members.toSet() ||
+                endpoints[own] != advertisedSip || guestRoom?.roomId != room.roomId) {
+                return
+            }
+            val account = try { lanSip.account(own, checkNotNull(advertisedSip)) }
+                catch (e: Exception) {
+                    return
                 }
-                currentCall?.terminate()
-                if (own == existing.host) {
-                    val disconnected = withTimeoutOrNull(5_000) { while (currentCall != null) delay(30); true } == true
-                    if (!disconnected) return@launch
-                    val targets = existing.members.filterNot { it == own }
-                    delay(500)
-                    handoff = null
-                    if (targets.size == 1) call(targets.single()) else startConference(targets)
-                    microphoneMuted = existing.microphoneMuted
-                    speakerMuted = existing.speakerMuted
-                    currentCall?.setMicrophoneMuted(microphoneMuted)
-                    currentCall?.setSpeakerMuted(speakerMuted)
+            rememberTransfer(parts[1])
+            handoff = Handoff(parts[1], parts[2], members, System.nanoTime() + ConferenceHandoffTiming.ADMISSION_LIFETIME_NANOS,
+                microphoneMuted, speakerMuted, room, original, endpoints = endpoints.toMap(), account = account)
+            transferMessage = "Подготовка передачи звонка…"
+            acknowledge("prepared:" + parts[1])
+        } else if (existing?.id == parts[1] && existing.room.roomId == room.roomId &&
+            existing.host == parts[2] && existing.members == members && endpoints == existing.endpoints &&
+            !existing.committed && !existing.aborting) {
+            when (parts[0]) {
+                "abort" -> abortGuestHandoff(existing)
+                "connect" -> if (!existing.connecting) {
+                    existing.connecting = true
+                    transferMessage = "Подключение нового организатора…"
+                    if (own == existing.host) roomTransitionJob = scope.launch {
+                        try {
+                            val mixer = lanSip.mixer(existing.account)
+                            existing.mixer = mixer
+                            // Keep the original SIP leg outside the replacement mixer until commit.
+                            for (target in existing.members.filterNot { it == own }) {
+                                val endpoint = checkNotNull(existing.endpoints[target])
+                                val leg = lanSip.invite(mixer, existing.account, target, endpoint, existing.id)
+                                existing.staged += leg
+                                leg.setMicrophoneMuted(true); leg.setSpeakerMuted(true)
+                            }
+                            val connected = withTimeoutOrNull(ConferenceHandoffTiming.REPLACEMENT_CONNECT_TIMEOUT_MILLIS) {
+                                while (existing.staged.any { it.state != Call.State.StreamsRunning }) delay(ConferenceHandoffTiming.STATE_POLL_MILLIS)
+                                true
+                            } == true
+                            check(connected) { "Новые аудиосоединения не готовы" }
+                            existing.staged.forEach { leg ->
+                                if (leg.conference != mixer) check(mixer.addParticipant(leg) == 0) { "Не удалось подготовить новый микшер" }
+                            }
+                            check(mixer.enter() == 0) { "Не удалось подготовить новый микшер" }
+                            mixer.microphoneMuted = true
+                        } catch (e: CancellationException) { throw e }
+                        catch (e: Exception) {
+                            transferMessage = "Не удалось подготовить прямое LAN-соединение. Исходный звонок сохранён"
+                        }
+                    }
+                }
+                "commit" -> if (guestHandoffReady(existing)) {
+                    existing.committed = true
+                    roomTransitionJob?.cancel()
+                    commitGuestHandoff(existing)
                 }
             }
         }
     }
 
+    private fun guestHandoffReady(transition: Handoff): Boolean {
+        val own = currentAccount?.params?.identityAddress?.username.orEmpty()
+        val expected = if (own == transition.host) transition.members.size - 1 else 1
+        return !transition.aborting && transition.connecting && LanHandoffSip.ready(transition.staged, expected, transition.mixer, own == transition.host)
+    }
+
+    private fun abortGuestHandoff(transition: Handoff) {
+        if (transition.committed || transition.aborting) return
+        transition.aborting = true
+        roomTransitionJob?.cancel(); roomTransitionJob = null
+        transition.staged.forEach { runCatching { it.terminate() } }
+        transition.mixer?.let { runCatching { it.terminate() }; localConference = null }
+        if (transition.originalCall.state in setOf(Call.State.End, Call.State.Error, Call.State.Released)) {
+            handoff = null
+            transferMessage = "Организатор отключился. Автоматическое восстановление звонка недоступно"
+            return
+        }
+        acknowledge("aborting:" + transition.id)
+        roomTransitionJob = scope.launch {
+            val original = transition.originalCall
+            try {
+                val released = withTimeoutOrNull(ConferenceHandoffTiming.REPLACEMENT_RELEASE_TIMEOUT_MILLIS) {
+                    while (transition.staged.any { it in core.calls } || original.state == Call.State.Pausing) delay(ConferenceHandoffTiming.STATE_POLL_MILLIS)
+                    true
+                } == true
+                check(released) { "Восстановление исходного звонка ещё не завершено" }
+                if (original.state == Call.State.Paused) check(original.resume() == 0) { "Не удалось восстановить исходный звонок" }
+                original.setMicrophoneMuted(transition.microphoneMuted)
+                original.setSpeakerMuted(transition.speakerMuted)
+                val restored = withTimeoutOrNull(ConferenceHandoffTiming.ORIGINAL_RESUME_TIMEOUT_MILLIS) {
+                    while (original.state != Call.State.StreamsRunning) delay(ConferenceHandoffTiming.STATE_POLL_MILLIS)
+                    true
+                } == true
+                check(restored) { "Восстановление исходного звонка ещё не завершено" }
+                acknowledge("aborted:" + transition.id)
+                transferMessage = "Передача отменена. Исходные соединения сохранены"
+                if (handoff === transition) handoff = null
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                transferMessage = "Восстановление исходного звонка ещё не завершено"
+            }
+            finally { transition.aborting = false }
+        }
+    }
+
+    private fun commitGuestHandoff(transition: Handoff) {
+        val own = currentAccount?.params?.identityAddress?.username.orEmpty()
+        val oldRoom = transition.room
+        val wasHeld = conferenceHeld
+        // Do not close the old host's discovery record: this client was a guest.
+        clearRoom()
+        microphoneMuted = transition.microphoneMuted
+        speakerMuted = transition.speakerMuted
+        conferenceHeld = wasHeld
+        if (own == transition.host) {
+            roomId = transition.id
+            roomCreator = oldRoom.creator
+            val mixer = checkNotNull(transition.mixer)
+            localConference = mixer
+            conferenceSession.adoptConnected(transition.staged)
+            mixer.microphoneMuted = microphoneMuted || conferenceHeld
+        } else {
+            currentCall = transition.staged.single()
+            guestRoom = RoomMessage.Snapshot(transition.id, 0, transition.host, transition.members,
+                emptyList(), emptySet(), emptySet(), creator = oldRoom.creator)
+        }
+        transition.staged.forEach {
+            it.setMicrophoneMuted(microphoneMuted || conferenceHeld); it.setSpeakerMuted(speakerMuted)
+        }
+        handoff = null
+        _callStatus.value = _callStatus.value.copy(state = CallState.ACTIVE,
+            number = currentCall?.remoteAddress?.username.orEmpty())
+        refreshConferenceAudio()
+        commitOriginal = transition.originalCall
+        roomTransitionJob = scope.launch {
+            try {
+                while (isActive && awaitingHostCommitCompletion()) {
+                    try {
+                        LanConferenceChannel.exchange(oldRoom.endpoint, oldRoom.roomId, own,
+                            microphoneMuted, false, "committed:" + transition.id, transition.endpoints[own])
+                    } catch (e: CancellationException) { throw e }
+                    catch (e: Exception) {
+                    }
+                    delay(ConferenceHandoffTiming.COMMIT_ACK_RETRY_MILLIS)
+                }
+            } finally {
+                if (commitOriginal == transition.originalCall) commitOriginal = null
+            }
+        }
+    }
+
     private suspend fun transferConferenceHost() {
-        check(roomInviteJob?.isActive != true && conferenceSession.status.value.phase == ConferencePhase.ACTIVE) {
+        check(roomInviteJob?.isActive != true && roomInviteQueue.isEmpty() &&
+            conferenceSession.status.value.phase == ConferencePhase.ACTIVE) {
             "Дождитесь завершения приглашения перед передачей организатора"
         }
-        val channel = checkNotNull(lanRoom) { "Нет прямого соединения для передачи организатора" }
+        val channel = checkNotNull(lanRoom) {
+            "Нет прямого соединения для передачи организатора. Звонок сохранён"
+        }
         val members = conferenceSession.calls.mapNotNull { it.remoteAddress?.username }.distinct()
         val now = System.nanoTime()
-        check(members.all { channel.peers[it]?.let { peer -> now - peer.seenAt < 2_000_000_000L } == true }) {
-            "Не все участники подключены напрямую. Передача организатора пока недоступна"
+        check(members.all { channel.peers[it]?.let { peer -> now - peer.seenAt < ConferenceHandoffTiming.PEER_LIFETIME_NANOS } == true }) {
+            "Обновите QTalk у всех участников и проверьте прямое LAN-соединение. Звонок сохранён"
         }
-        val successor = members.first()
-        val id = UUID.randomUUID().toString()
-        val command = "$id|$successor|${members.joinToString(",")}"
-        channel.instruction = "prepare|$command"
-        val prepared = withTimeoutOrNull(4_000) {
-            while (members.any { channel.peers[it]?.acknowledgement != id }) delay(40)
-            true
-        } == true
-        if (!prepared) {
-            channel.instruction = ""
-            error("Участники не подтвердили передачу организатора. Звонок продолжается")
+        hostTransfer?.takeIf { it.phase == ConferenceHandoff.Phase.ABORTED }?.let { aborted ->
+            check(aborted.rollbackAcknowledged || aborted.members.all {
+                channel.peers[it]?.acknowledgement == "aborted:" + aborted.id
+            }) { "Восстановление исходного звонка ещё не завершено. Оставьте QTalk открытым" }
+            hostTransfer = null
+            channel.handoffEndpoints = emptyMap()
         }
-        channel.instruction = "switch|$command"
-        val committed = withTimeoutOrNull(600) {
-            while (members.any { channel.peers[it]?.acknowledgement != "switch:$id" }) delay(20)
-            true
-        } == true
-        if (!committed) delay(200)
+        if (hostTransfer == null) {
+            check(members.all { channel.peers[it]?.capability == LanConferenceChannel.CAPABILITY &&
+                channel.peers[it]?.sipEndpoint != null }) {
+                "Обновите QTalk у всех участников. Исходный звонок сохранён"
+            }
+            channel.handoffEndpoints = members.associateWith { checkNotNull(channel.peers[it]?.sipEndpoint) }
+        }
+        val plan = hostTransfer ?: ConferenceHandoff(
+            UUID.randomUUID().toString(), members.sorted().first(), members).also { hostTransfer = it }
+        transferMessage = "Передача звонка новому организатору…"
+        try {
+            plan.transfer(object : ConferenceHandoff.Transport {
+                override fun instruct(instruction: String) {
+                    channel.instruction = "LAN2|$instruction"
+                }
+                override suspend fun awaitAcknowledgements(ack: String, timeoutMillis: Long): Boolean {
+                    fun missing(): List<String> = plan.members.filter { member ->
+                        val peer = channel.peers[member]
+                        val matches = peer != null && peer.acknowledgement == ack &&
+                            peer.capability == LanConferenceChannel.CAPABILITY &&
+                            peer.sipEndpoint == channel.handoffEndpoints[member] &&
+                            System.nanoTime() - peer.seenAt < ConferenceHandoffTiming.PEER_LIFETIME_NANOS
+                        !matches
+                    }
+                    val result = withTimeoutOrNull(timeoutMillis) {
+                        while (missing().isNotEmpty()) delay(ConferenceHandoffTiming.ACK_POLL_MILLIS)
+                        true
+                    } == true
+                    return result
+                }
+            })
+            transferMessage = "Передача звонка подтверждена"
+        } catch (e: Exception) {
+            transferMessage = e.message.orEmpty()
+            if (plan.phase == ConferenceHandoff.Phase.ABORTED && plan.rollbackAcknowledged) {
+                hostTransfer = null
+                channel.handoffEndpoints = emptyMap()
+            }
+            throw e
+        }
     }
 
     override suspend fun configureConferenceService(endpoint: String) = withContext(linphoneDispatcher) {
@@ -992,10 +1214,10 @@ class LinphoneVoipEngine : VoipEngine {
             while (isActive) {
                 if (conferenceSession.status.value.phase == ConferencePhase.ACTIVE &&
                     conferenceSession.calls.size == 1 && roomInviteJob?.isActive != true && roomId.isNotBlank() &&
-                    roomTransitionJob?.isActive != true) {
+                    roomTransitionJob?.isActive != true && handoff == null && hostTransfer == null) {
                     val remaining = conferenceSession.calls.single()
                     val channel = lanRoom
-                    channel?.instruction = "direct|$roomId"
+                    channel?.instruction = "LAN2|direct|$roomId"
                     delay(450)
                     if (conferenceSession.calls.singleOrNull() == remaining && conferenceSession.status.value.phase == ConferencePhase.ACTIVE &&
                         roomInviteJob?.isActive != true) {
@@ -1011,25 +1233,33 @@ class LinphoneVoipEngine : VoipEngine {
                         _conferenceStatus.value = ConferenceStatus(microphoneMuted = microphoneMuted, speakerMuted = speakerMuted)
                     }
                 }
-                delay(200)
+                delay(ConferenceHandoffTiming.ROOM_MAINTENANCE_POLL_MILLIS)
             }
         }
         if (lanRoomJob?.isActive != true) lanRoomJob = scope.launch {
             while (isActive) {
+                handoff?.takeIf { !it.committed && !it.aborting }?.let { transition ->
+                    if (transition.expiresAt < System.nanoTime() ||
+                        transition.originalCall.state in setOf(Call.State.End, Call.State.Error, Call.State.Released)) abortGuestHandoff(transition)
+                    else if (guestHandoffReady(transition)) acknowledge("ready:" + transition.id)
+                    else if (transition.connecting) acknowledge("connecting:" + transition.id)
+                }
                 val guest = guestRoom
                 val call = currentCall
                 val own = currentAccount?.params?.identityAddress?.username.orEmpty()
                 if (guest != null && guest.endpoint.isNotBlank() && call != null) {
                     try {
                         val reply = LanConferenceChannel.exchange(guest.endpoint, guest.roomId, own,
-                            microphoneMuted || conferenceHeld, _conferenceStatus.value.localSpeaking, lanAcknowledgement)
-                        if (currentCall == call && guestRoom?.roomId == reply.snapshot.roomId && reply.snapshot.host == guest.host && own in reply.snapshot.members) {
+                            microphoneMuted || conferenceHeld, _conferenceStatus.value.localSpeaking, lanAcknowledgement,
+                            localSipEndpoint(guest.endpoint))
+                        if (currentCall == call && guestRoom?.roomId == reply.snapshot.roomId &&
+                            reply.snapshot.host == guest.host && reply.snapshot.creator == guest.creator && own in reply.snapshot.members) {
                             guestRoom = reply.snapshot
                             guestLastSeenAt = System.nanoTime(); lastLanReceivedAt = guestLastSeenAt
-                            handleRoomInstruction(reply.instruction, reply.snapshot)
+                            handleRoomInstruction(reply.instruction, reply.snapshot, reply.endpoints)
                         }
                     } catch (e: CancellationException) { throw e }
-                    catch (_: Exception) {
+                    catch (e: Exception) {
                         if (guestRoom?.roomId == guest.roomId && System.nanoTime() - lastLanReceivedAt > 800_000_000L) {
                             guestRoom = guestRoom?.copy(speaking = emptySet())
                         }
@@ -1067,13 +1297,14 @@ class LinphoneVoipEngine : VoipEngine {
                                 }
                             }
                         } else if (roomId.isBlank() && !conferenceSession.hasSession &&
-                            System.nanoTime() - lastLanReceivedAt > 2_000_000_000L) {
+                            System.nanoTime() - lastLanReceivedAt > ConferenceHandoffTiming.PEER_LIFETIME_NANOS) {
                             val response = service.request("roomSync", mapOf("extension" to own,
                                 "host" to peer, "muted" to if (microphoneMuted || conferenceHeld) "1" else "0"))
                             if (currentCall == call && roomId.isBlank() && service === roomService) {
                                 val received = ConferenceRoomWire.decode(response) as? RoomMessage.Snapshot
                                 if (received != null && received.roomId != ignoredGuestRoom && received.host == peer && own in received.members &&
                                     (guestRoom == null || guestRoom?.roomId == received.roomId) &&
+                                    (guestRoom == null || guestRoom?.creator == received.creator) &&
                                     received.revision >= (guestRoom?.revision ?: 0)) {
                                     guestRoom = received
                                     guestLastSeenAt = System.nanoTime()
@@ -1108,6 +1339,7 @@ class LinphoneVoipEngine : VoipEngine {
 
     override suspend fun stop() {
         withContext(linphoneDispatcher) {
+            check(handoff == null && !awaitingHostCommitCompletion()) { "Дождитесь завершения передачи звонка" }
             if (conferenceSession.hasSession && conferenceSession.calls.size >= 2) transferConferenceHost()
         }
         roomTransitionJob?.cancelAndJoin(); roomTransitionJob = null
@@ -1135,6 +1367,7 @@ class LinphoneVoipEngine : VoipEngine {
 
             if (coreStarted) {
                 core.stop()
+                if (core.calls.isEmpty()) lanSip.releaseUnused()
                 core.removeListener(coreListener)
                 coreStarted = false
             }

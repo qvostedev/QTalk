@@ -22,8 +22,14 @@ data class ConferenceStatus(
     val roomId: String = "",
     val pendingNumbers: List<String> = emptyList(),
     val unsynchronizedNumbers: Set<String> = emptySet(),
-    val held: Boolean = false
+    val held: Boolean = false,
+    val originalCreatorNumber: String = ""
 )
+
+internal fun ConferenceStatus.canRemoveParticipant(own: String, target: String): Boolean =
+    phase == ConferencePhase.ACTIVE && isHost && own.isNotBlank() &&
+        own == hostNumber && own == originalCreatorNumber && target != own && target in participants &&
+        target !in pendingNumbers
 
 internal interface LocalConferenceBackend<T : Any> {
     fun number(call: T): String
@@ -54,6 +60,17 @@ internal class LocalConferenceSession<T : Any>(
     val foregroundCall: T? get() = second?.takeIf { status.value.phase == ConferencePhase.CONSULTING } ?: first ?: second
     val calls: List<T> get() = (joined + listOfNotNull(first, second)).distinct()
     val hasSession: Boolean get() = status.value.phase != ConferencePhase.NONE
+
+    /** Adopt already connected mixer legs after a committed host handoff. */
+    fun adoptConnected(legs: List<T>) {
+        require(legs.isNotEmpty() && legs.size < MAX_CONFERENCE_PARTICIPANTS)
+        require(legs.all { backend.state(it) == ConferenceLegState.ACTIVE })
+        reset()
+        joined.addAll(legs)
+        first = legs.first()
+        mutableStatus.value = ConferenceStatus(ConferencePhase.ACTIVE, legs.map(backend::number))
+        onPrimaryChanged(legs.first())
+    }
 
     fun begin(primary: T, number: String) {
         check(!hasSession || status.value.phase == ConferencePhase.ACTIVE) { "Конференция уже создаётся" }

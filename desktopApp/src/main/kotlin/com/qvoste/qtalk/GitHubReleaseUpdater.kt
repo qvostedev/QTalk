@@ -53,8 +53,8 @@ internal fun isNewerVersion(candidate: String, installed: String): Boolean {
 }
 
 private fun parseVersion(value: String): List<Int>? {
-    val match = Regex("^(\\d+)\\.(\\d+)\\.(\\d+)$").matchEntire(value) ?: return null
-    return match.groupValues.drop(1).map { it.toIntOrNull() ?: return null }
+    val match = Regex("^(\\d+)\\.(\\d+)\\.(\\d+)(?:-([0-9A-Za-z.-]+))?$").matchEntire(value) ?: return null
+    return (1..3).map { match.groupValues[it].toIntOrNull() ?: return null }
 }
 
 internal fun selectQTalkAsset(release: QTalkRelease, windows: Boolean): ReleaseAsset? =

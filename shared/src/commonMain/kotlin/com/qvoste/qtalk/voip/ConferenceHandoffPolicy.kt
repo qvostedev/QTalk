@@ -1,0 +1,27 @@
+package com.qvoste.qtalk.voip
+
+internal object ConferenceHandoffTiming {
+    const val PREPARE_TIMEOUT_MILLIS = 5_000L
+    const val READY_TIMEOUT_MILLIS = 15_000L
+    const val ROLLBACK_TIMEOUT_MILLIS = 5_000L
+    const val COMMIT_TIMEOUT_MILLIS = 8_000L
+    const val ADMISSION_LIFETIME_NANOS = 35_000_000_000L
+    const val REPLACEMENT_CONNECT_TIMEOUT_MILLIS = 12_000L
+    const val REPLACEMENT_RELEASE_TIMEOUT_MILLIS = 3_000L
+    const val ORIGINAL_RESUME_TIMEOUT_MILLIS = 2_000L
+    const val STATE_POLL_MILLIS = 30L
+    const val ACK_POLL_MILLIS = 40L
+    const val COMMIT_ACK_RETRY_MILLIS = 200L
+    const val PEER_LIFETIME_NANOS = 2_000_000_000L
+    const val ROOM_SNAPSHOT_REFRESH_NANOS = 5_000_000_000L
+    const val ROOM_MAINTENANCE_POLL_MILLIS = 200L
+    const val CONTROL_CONNECT_TIMEOUT_MILLIS = 650
+    const val CONTROL_READ_TIMEOUT_MILLIS = 1_000
+    const val CONTROL_REQUEST_TIMEOUT_MILLIS = 1_200
+    const val DIAGNOSTIC_THROTTLE_NANOS = 5_000_000_000L
+}
+
+internal object ConferenceHandoffLimits {
+    const val MAX_REMEMBERED_TRANSFERS_PER_ROOM = 64
+    const val MAX_CACHED_LAN_ACCOUNTS = 64
+}

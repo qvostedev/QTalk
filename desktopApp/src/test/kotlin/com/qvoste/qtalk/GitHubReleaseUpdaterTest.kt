@@ -38,6 +38,13 @@ class GitHubReleaseUpdaterTest {
     }
 
     @Test
+    fun betaBuildsNeverOfferStableOnePointOnePointOneAsAnUpdate() {
+        assertFalse(isNewerVersion("1.1.1", "1.1.1-beta"))
+        assertFalse(isNewerVersion("1.1.1-beta", "1.1.1-beta"))
+        assertTrue(isNewerVersion("1.1.2", "1.1.1-beta"))
+    }
+
+    @Test
     fun readsReleaseAssetsAndSelectsInstallerForPlatform() {
         val release = parseQTalkRelease(
             """{

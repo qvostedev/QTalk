@@ -11,6 +11,12 @@ class ConferenceRoomWireTest {
         val mute = RoomMessage.Microphone(snapshot.roomId, true)
         assertEquals(mute, ConferenceRoomWire.decode(ConferenceRoomWire.encode(mute)))
     }
+    @Test fun roomSnapshotPreservesImmutableCreatorAcrossHostHandoff() {
+        val handedOff = snapshot.copy(host = "102", creator = "101")
+        assertEquals(handedOff, ConferenceRoomWire.decode(ConferenceRoomWire.encode(handedOff)))
+        val oldSnapshot = snapshot.copy(creator = "101")
+        assertEquals(oldSnapshot, ConferenceRoomWire.decode(ConferenceRoomWire.encode(snapshot)))
+    }
     @Test fun rejectsMalformedOrOversizedMessages() {
         assertNull(ConferenceRoomWire.decode("x".repeat(4097)))
         assertNull(ConferenceRoomWire.decode(ConferenceRoomWire.encode(snapshot.copy(host = "999"))))

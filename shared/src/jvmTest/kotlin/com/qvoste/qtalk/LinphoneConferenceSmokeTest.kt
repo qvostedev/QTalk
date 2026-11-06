@@ -53,7 +53,7 @@ class LinphoneConferenceSmokeTest {
         Files.write(tone, wav.array())
         try {
             fun endpoint(name: String): Core {
-                val core = factory.createCoreWithConfig(factory.createConfigFromString(""), null)
+                val core = isolatedNativeCore(factory)
                 cores += core
                 core.useFiles = true
                 core.playFile = tone.toString()

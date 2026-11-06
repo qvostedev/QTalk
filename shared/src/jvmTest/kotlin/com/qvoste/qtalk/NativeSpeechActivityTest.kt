@@ -37,7 +37,7 @@ class NativeSpeechActivityTest {
             val file = temp.resolve(name); Files.write(file, data.array()); return file.toString()
         }
         fun endpoint(name: String, source: String): Core {
-            val core = factory.createCoreWithConfig(factory.createConfigFromString(""), null)
+            val core = isolatedNativeCore(factory)
             cores += core
             core.useFiles = true; core.playFile = source; core.audioPort = -1
             core.isIpv6Enabled = false

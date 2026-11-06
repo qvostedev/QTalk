@@ -40,6 +40,7 @@ internal fun ConferenceCallOverlay(
     onDtmf: (Char) -> Unit = {}, onHold: (Boolean) -> Unit = {}
 ) {
     var keypadVisible by remember { mutableStateOf(false) }
+    var removalCandidate by remember(conference.roomId) { mutableStateOf<String?>(null) }
     val pending = (conference.pendingNumbers + conference.invitedNumber.takeIf { conference.phase != ConferencePhase.ACTIVE }.orEmpty())
         .filter { it.isNotBlank() && it !in conference.participants && it != ownNumber }.distinct()
     val members = (listOf(ownNumber) + conference.participants + pending).filter(String::isNotBlank).distinct()
@@ -69,8 +70,22 @@ internal fun ConferenceCallOverlay(
                             }
                         }
                         Spacer(Modifier.height(12.dp))
-                        Text(contactForNumber(number)?.name ?: formatPhoneNumber(number), color = TextPrimary,
-                            fontSize = 16.sp, maxLines = 2, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(contactForNumber(number)?.name ?: formatPhoneNumber(number), color = TextPrimary,
+                                modifier = Modifier.weight(1f, fill = false), fontSize = 16.sp, maxLines = 2,
+                                textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
+                            if (conference.canRemoveParticipant(ownNumber, number)) {
+                                var menuOpen by remember { mutableStateOf(false) }
+                                Box {
+                                    TextButton(onClick = { menuOpen = true }) { Text("⋮", color = TextSecondary, fontSize = 20.sp) }
+                                    DropdownMenu(menuOpen, onDismissRequest = { menuOpen = false }) {
+                                        DropdownMenuItem(text = { Text(uiText("Удалить")) }, onClick = {
+                                            menuOpen = false; removalCandidate = number
+                                        })
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -83,6 +98,8 @@ internal fun ConferenceCallOverlay(
             error?.let {
                 Text(uiText(it), color = Danger, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
             }
+            if (conference.message.isNotBlank()) Text(uiText(conference.message), color = TextSecondary,
+                fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
             Spacer(Modifier.height(20.dp))
             if (keypadVisible) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -115,5 +132,15 @@ internal fun ConferenceCallOverlay(
             Spacer(Modifier.height(18.dp))
             CircleIconAction(Res.drawable.icon_phone, 42, Danger, onClick = onHangUp)
         }
+    }
+    removalCandidate?.takeIf { conference.canRemoveParticipant(ownNumber, it) }?.let { number ->
+        AlertDialog(onDismissRequest = { removalCandidate = null },
+            title = { Text(uiText("Удалить участника?")) },
+            text = { Text(uiText("Участник покинет групповой звонок.")) },
+            confirmButton = { TextButton(onClick = {
+                removalCandidate = null
+                if (conference.canRemoveParticipant(ownNumber, number)) onRemove(number)
+            }) { Text(uiText("Удалить")) } },
+            dismissButton = { TextButton(onClick = { removalCandidate = null }) { Text(uiText("Отмена")) } })
     }
 }

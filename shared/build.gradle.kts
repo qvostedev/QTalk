@@ -7,6 +7,24 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
+val generateQTalkBuildInfo by tasks.registering {
+    val displayVersion = providers.gradleProperty("qtalkVersion")
+    val generatedDirectory = layout.buildDirectory.dir("generated/qtalkBuildInfo/commonMain")
+    inputs.property("qtalkVersion", displayVersion)
+    outputs.dir(generatedDirectory)
+    doLast {
+        val source = generatedDirectory.get().file("com/qvoste/qtalk/QTalkBuildInfo.kt").asFile
+        source.parentFile.mkdirs()
+        source.writeText("""
+            package com.qvoste.qtalk
+
+            object QTalkBuildInfo {
+                const val VERSION = "${displayVersion.get()}"
+            }
+        """.trimIndent() + "\n")
+    }
+}
+
 kotlin {
     jvm()
 
@@ -48,6 +66,7 @@ kotlin {
     }
 
     sourceSets {
+        commonMain { kotlin.srcDir(generateQTalkBuildInfo) }
         jvmMain.dependencies {
             implementation("com.googlecode.soundlibs:mp3spi:1.9.5.4")
             implementation(
@@ -82,4 +101,12 @@ kotlin {
 
 dependencies {
     androidRuntimeClasspath(libs.compose.uiTooling)
+}
+
+// Native SDK tests must not share extracted DLLs with an installed, running QTalk.
+tasks.withType<Test>().configureEach {
+    val nativeTemp = layout.buildDirectory.dir("native-test-tmp").get().asFile
+    systemProperty("java.io.tmpdir", nativeTemp.absolutePath)
+    systemProperty("qtalk.version", providers.gradleProperty("qtalkVersion").get())
+    doFirst { nativeTemp.mkdirs() }
 }
