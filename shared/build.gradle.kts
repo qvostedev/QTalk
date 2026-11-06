@@ -75,6 +75,7 @@ kotlin {
         }
         jvmTest.dependencies {
             runtimeOnly(compose.desktop.currentOs)
+            implementation("org.jetbrains.compose.ui:ui-test-junit4:1.12.0")
         }
     }
 }

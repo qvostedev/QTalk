@@ -8,6 +8,10 @@ import com.qvoste.qtalk.ui.calls.i18n.uiText
 import qtalk.shared.generated.resources.icon_settings_language
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.constrainWidth
+import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.geometry.Size
@@ -484,6 +488,8 @@ private fun CallsContent(
     onDisconnectContactDatabase: () -> Unit
 ) {
     var section by rememberSaveable { mutableStateOf(AppSection.CALLS) }
+    var callsFilter by rememberSaveable { mutableStateOf(CallFilter.ALL) }
+    var contactsFilter by rememberSaveable { mutableStateOf(ContactFilter.ALL) }
     var sidebarAccountOpen by remember { mutableStateOf(false) }
     if (sidebarAccountOpen) {
         AccountSettingsDialog(account, onLogout, onDismiss = { sidebarAccountOpen = false })
@@ -645,6 +651,8 @@ private fun CallsContent(
                     compact = compact,
                     contacts = contacts,
                     history = history,
+                    selectedFilter = callsFilter,
+                    onFilterChange = { callsFilter = it },
                     onAddContact = {
                         editingContact = null
                         showAddContact = true
@@ -679,6 +687,8 @@ private fun CallsContent(
                     searchFocusRequester = searchFocusRequester
                 )
                 AppSection.CONTACTS -> ContactsSection(
+                    selectedFilter = contactsFilter,
+                    onFilterChange = { contactsFilter = it },
                     modifier = Modifier.weight(1f),
                     compact = compact,
                     contacts = contacts,
@@ -1016,9 +1026,11 @@ private fun CallsHome(
     onSearchFocusChange: (Boolean) -> Unit,
     search: String,
     onSearchChange: (String) -> Unit,
+    selectedFilter: CallFilter,
+    onFilterChange: (CallFilter) -> Unit,
     searchFocusRequester: FocusRequester
 ) {
-    var filter by remember { mutableStateOf(CallFilter.ALL) }
+    val filter = selectedFilter
     val unreadMissedCount = history.count { it.missed && !it.missedAcknowledged }
     LaunchedEffect(filter, unreadMissedCount) {
         if (filter == CallFilter.MISSED && unreadMissedCount > 0) {
@@ -1060,7 +1072,7 @@ private fun CallsHome(
         Spacer(Modifier.height(if (compact) 28.dp else 32.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween) {
-            FilterBar(filter, false, unreadMissedCount) { filter = it }
+            FilterBar(filter, false, unreadMissedCount, onFilterChange)
             onCreateConference?.let { create -> TextButton(onClick = create) {
                 Text(uiText("Создать конференцию"), color = Primary, fontSize = 11.sp)
             } }
@@ -2057,9 +2069,11 @@ private fun ContactsSection(
     onSearchFocusChange: (Boolean) -> Unit,
     search: String,
     onSearchChange: (String) -> Unit,
+    selectedFilter: ContactFilter,
+    onFilterChange: (ContactFilter) -> Unit,
     searchFocusRequester: FocusRequester
 ) {
-    var filter by remember { mutableStateOf(ContactFilter.ALL) }
+    val filter = selectedFilter
     val visibleContacts = contacts.filter {
         val matchesSearch = search.isBlank() || it.matchesSearch(search)
         val matchesType = when (filter) {
@@ -2099,7 +2113,7 @@ private fun ContactsSection(
             allCount = contacts.size,
             clientsCount = contacts.count { !it.isEmployee },
             employeesCount = contacts.count { it.isEmployee },
-            onSelect = { filter = it }
+            onSelect = onFilterChange
         )
         Spacer(Modifier.height(18.dp))
 
@@ -2180,56 +2194,52 @@ internal fun SegmentedBar(
     fillWidth: Boolean = false,
     indicatorIndex: Int? = null
 ) {
-    // Measure the actual cells: labels and translated text have different widths.
-    val bounds = remember(options.size) { mutableStateMapOf<Int, Pair<Float, Float>>() }
-    val target = bounds[selectedIndex]
+    if (options.isEmpty()) return
+    val animatedIndex by animateFloatAsState(selectedIndex.coerceIn(options.indices).toFloat(), tween(260), label = "filterSelection")
     val primary = Primary
-    Box(
+    SubcomposeLayout(
         Modifier.then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
             .background(ControlBackground, RoundedCornerShape(22.dp)).padding(3.dp)
-    ) {
-        // Start at the first measured bounds, so entering a section never animates
-        // from a zero-width pill. Subsequent selections keep the same animation state.
-        if (target != null) {
-            val left by animateFloatAsState(target.first, tween(260), label = "filterLeft")
-            val width by animateFloatAsState(target.second, tween(260), label = "filterWidth")
-            Canvas(Modifier.matchParentSize()) {
-                drawRoundRect(
-                    primary, topLeft = Offset(left, 0f), size = Size(width, size.height),
-                    cornerRadius = CornerRadius(18.dp.toPx())
-                )
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            options.forEachIndexed { index, title ->
-                val selected = selectedIndex == index
+    ) { constraints ->
+        val gap = 2.dp.roundToPx()
+        val cellWidth = if (fillWidth && constraints.hasBoundedWidth)
+            ((constraints.maxWidth - gap * (options.size - 1)) / options.size).coerceAtLeast(0) else null
+        val cells = options.mapIndexed { index, title ->
+            subcompose(index) {
                 val interactions = remember { MutableInteractionSource() }
-                Box(
-                    Modifier.then(if (fillWidth) Modifier.weight(1f) else Modifier)
-                        .onGloballyPositioned {
-                            bounds[index] = it.positionInParent().x to it.size.width.toFloat()
-                        }
-                        .clip(RoundedCornerShape(18.dp))
-                        .clickable(interactionSource = interactions, indication = null) { onSelect(index) }
-                        .padding(horizontal = if (fillWidth) 5.dp else 22.dp, vertical = 9.dp),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(Modifier.clip(RoundedCornerShape(18.dp))
+                    .clickable(interactionSource = interactions, indication = null) { onSelect(index) }
+                    .padding(horizontal = if (fillWidth) 5.dp else 22.dp, vertical = 9.dp),
+                    contentAlignment = Alignment.Center) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (indicatorIndex == index) {
                             Box(Modifier.size(5.dp).background(Danger, CircleShape))
                             Spacer(Modifier.width(5.dp))
                         }
-                        Text(
-                            uiText(title),
-                            color = if (selected) OnPrimary else TextSecondary,
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Text(uiText(title), color = if (selectedIndex == index) OnPrimary else TextSecondary,
+                            fontSize = 11.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                     }
                 }
+            }.single().measure(if (cellWidth != null) Constraints.fixedWidth(cellWidth)
+                else Constraints(maxWidth = constraints.maxWidth, maxHeight = constraints.maxHeight))
+        }
+        val lefts = cells.runningFold(0) { left, cell -> left + cell.width + gap }.dropLast(1)
+        val width = constraints.constrainWidth(cells.sumOf { it.width } + gap * (cells.size - 1))
+        val height = constraints.constrainHeight(cells.maxOf { it.height })
+        val lower = animatedIndex.toInt().coerceIn(cells.indices)
+        val upper = (lower + 1).coerceAtMost(cells.lastIndex)
+        val fraction = (animatedIndex - lower).coerceIn(0f, 1f)
+        val left = lefts[lower] + (lefts[upper] - lefts[lower]) * fraction
+        val pillWidth = cells[lower].width + (cells[upper].width - cells[lower].width) * fraction
+        val pill = subcompose("pill") {
+            Canvas(Modifier.fillMaxSize()) {
+                drawRoundRect(primary, topLeft = Offset(left, 0f), size = Size(pillWidth, size.height),
+                    cornerRadius = CornerRadius(18.dp.toPx()))
             }
+        }.single().measure(Constraints.fixed(width, height))
+        layout(width, height) {
+            pill.placeRelative(0, 0)
+            cells.forEachIndexed { index, cell -> cell.placeRelative(lefts[index], 0) }
         }
     }
 }
