@@ -15,11 +15,11 @@ class AudioGainControllerTest {
                 val controller = AudioGainController(scope, GainLevels(), { applied += it }, { saved += it })
                 withContext(dispatcher) {
                     repeat(100) { controller.target(GainLevels(it / 100f, it / 100f)) }
-                    controller.target(GainLevels(.2f, 0f, 6f))
+                    controller.target(GainLevels(.2f, 0f))
                 }
                 withTimeout(5_000) { while (withContext(dispatcher) { saved.isEmpty() }) delay(10) }
                 withContext(dispatcher) {
-                    assertEquals(listOf(GainLevels(.2f, 0f, 6f)), saved)
+                    assertEquals(listOf(GainLevels(.2f, 0f)), saved)
                     assertEquals(saved.last(), applied.last())
                     assertTrue(applied.size < 40)
                     assertTrue(applied.zipWithNext().all { (a, b) -> kotlin.math.abs(a.microphone - b.microphone) <= .041f })

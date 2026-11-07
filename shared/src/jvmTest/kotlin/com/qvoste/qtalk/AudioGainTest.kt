@@ -21,7 +21,7 @@ internal class MemoryAudioPreferences : AbstractPreferences(null, "") {
 
 class AudioGainTest {
     @Test fun regularControlsHaveUnitySilenceAndFiniteBounds() {
-        assertEquals(1f, AudioSettings().microphoneSensitivity)
+        assertEquals(.5f, AudioSettings().microphoneSensitivity)
         assertEquals(1f, AudioSettings().speakerVolume)
         assertEquals(0f, AudioGain.db(1f))
         assertEquals(0f, AudioGain.level(Float.NaN))
@@ -46,13 +46,12 @@ class AudioGainTest {
             val store = AudioGainPreferences(prefs)
             val expected = 10.0.pow((old * 60 - 30) / 20.0).toFloat().coerceAtMost(1f)
             val migrated = store.load()
-            assertEquals(expected, migrated.microphone, .000001f)
+            assertEquals(expected / 2f, migrated.microphone, .000001f)
             assertEquals(expected, migrated.speaker, .000001f)
-            assertEquals(0f, migrated.boostDb)
-            assertEquals(3, prefs.getInt("gainSchema", 0))
+            assertEquals(4, prefs.getInt("gainSchema", 0))
             assertEquals(migrated, AudioGainPreferences(prefs).load())
-            store.save(GainLevels(.2f, 0f, 6f))
-            assertEquals(GainLevels(.2f, 0f, 6f), AudioGainPreferences(prefs).load())
+            store.save(GainLevels(.2f, 0f))
+            assertEquals(GainLevels(.2f, 0f), AudioGainPreferences(prefs).load())
             assertEquals(GainLevels(), store.reset())
             assertEquals(GainLevels(), store.reset())
             assertEquals(GainLevels(), store.load())
@@ -64,10 +63,9 @@ class AudioGainTest {
     @Test fun rampMovesInSmallMonotonicStepsAndLatestTargetWins() {
         var applied = GainLevels(0f, 0f)
         repeat(10) {
-            val next = applied.step(GainLevels(1f, 1f, 6f))
+            val next = applied.step(GainLevels(1f, 1f))
             assertTrue(next.microphone > applied.microphone && next.microphone - applied.microphone <= .041f)
             assertTrue(next.speaker > applied.speaker && next.speaker - applied.speaker <= .041f)
-            assertTrue(next.boostDb - applied.boostDb <= .51f)
             applied = next
         }
         val target = GainLevels(.1f, .2f)

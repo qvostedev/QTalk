@@ -46,7 +46,7 @@ interface VoipEngine {
     suspend fun selectOutputAudioDevice(deviceId: String)
     suspend fun setMicrophoneSensitivity(value: Float)
     suspend fun setSpeakerVolume(value: Float)
-    suspend fun setMicrophoneBoost(enabled: Boolean) = Unit
+
     suspend fun setRingtoneVolume(value: Float)
     fun previewRingtone(ringtoneId: String)
     fun stopRingtonePreview() = Unit

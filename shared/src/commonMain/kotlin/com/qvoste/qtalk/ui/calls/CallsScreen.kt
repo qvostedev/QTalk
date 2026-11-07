@@ -264,7 +264,7 @@ fun CallsScreen(
         onSelectInputAudioDevice = viewModel::selectInputAudioDevice,
         onSelectOutputAudioDevice = viewModel::selectOutputAudioDevice,
         onMicrophoneSensitivityChange = viewModel::setMicrophoneSensitivity,
-        onMicrophoneBoostChange = viewModel::setMicrophoneBoost,
+
         onSpeakerVolumeChange = viewModel::setSpeakerVolume,
         onRingtoneVolumeChange = viewModel::setRingtoneVolume,
         onPreviewRingtone = viewModel::previewRingtone,
@@ -477,7 +477,7 @@ private fun CallsContent(
     onSelectInputAudioDevice: (String) -> Unit,
     onSelectOutputAudioDevice: (String) -> Unit,
     onMicrophoneSensitivityChange: (Float) -> Unit,
-    onMicrophoneBoostChange: (Boolean) -> Unit,
+
     onSpeakerVolumeChange: (Float) -> Unit,
     onRingtoneVolumeChange: (Float) -> Unit,
     onPreviewRingtone: (String) -> Unit,
@@ -740,7 +740,7 @@ private fun CallsContent(
                     onSelectInputAudioDevice = onSelectInputAudioDevice,
                     onSelectOutputAudioDevice = onSelectOutputAudioDevice,
                     onMicrophoneSensitivityChange = onMicrophoneSensitivityChange,
-                    onMicrophoneBoostChange = onMicrophoneBoostChange,
+
                     onSpeakerVolumeChange = onSpeakerVolumeChange,
                     onRingtoneVolumeChange = onRingtoneVolumeChange,
                     onPreviewRingtone = onPreviewRingtone,
@@ -1100,9 +1100,20 @@ private fun CallsHome(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween) {
             FilterBar(filter, false, unreadMissedCount, onFilterChange)
-            onCreateConference?.let { create -> TextButton(onClick = create) {
-                Text(uiText("Создать конференцию"), color = Primary, fontSize = 11.sp)
-            } }
+            onCreateConference?.let { create ->
+                Box(
+                    Modifier.heightIn(min = 40.dp)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            role = androidx.compose.ui.semantics.Role.Button,
+                            onClick = create
+                        ).padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(uiText("Создать конференцию"), color = Primary, fontSize = 11.sp)
+                }
+            }
         }
         Spacer(Modifier.height(18.dp))
 
@@ -1370,7 +1381,7 @@ private fun SipSettings(
     onSelectInputAudioDevice: (String) -> Unit,
     onSelectOutputAudioDevice: (String) -> Unit,
     onMicrophoneSensitivityChange: (Float) -> Unit,
-    onMicrophoneBoostChange: (Boolean) -> Unit,
+
     onSpeakerVolumeChange: (Float) -> Unit,
     onRingtoneVolumeChange: (Float) -> Unit,
     onPreviewRingtone: (String) -> Unit,
@@ -1521,12 +1532,7 @@ private fun SipSettings(
                 onValueChange = { microphoneSensitivity = it },
                 onValueChangeFinished = { onMicrophoneSensitivityChange(microphoneSensitivity) }
             )
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(uiText("Усиление микрофона +6 дБ"), color = TextSecondary, fontSize = 11.sp,
-                    modifier = Modifier.weight(1f))
-                androidx.compose.material3.Switch(checked = audioSettings.microphoneBoost,
-                    onCheckedChange = onMicrophoneBoostChange)
-            }
+
             Spacer(Modifier.height(20.dp))
             SettingsActionRow(
                 icon = Res.drawable.icon_settings_headphones,

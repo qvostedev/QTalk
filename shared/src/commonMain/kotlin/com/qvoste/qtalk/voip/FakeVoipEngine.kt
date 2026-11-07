@@ -65,9 +65,7 @@ class FakeVoipEngine : VoipEngine {
         _audioSettings.value = _audioSettings.value.copy(speakerVolume = value.coerceIn(0f, 1f))
     }
 
-    override suspend fun setMicrophoneBoost(enabled: Boolean) {
-        _audioSettings.value = _audioSettings.value.copy(microphoneBoost = enabled)
-    }
+
 
     override suspend fun setRingtoneVolume(value: Float) {
         _audioSettings.value = _audioSettings.value.copy(ringtoneVolume = value.coerceIn(0f, 1f))

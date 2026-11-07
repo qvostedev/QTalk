@@ -290,7 +290,7 @@ class CallsViewModel(
     fun setSpeakerVolume(value: Float) = scope.launch {
         voipEngine.setSpeakerVolume(value)
     }
-    fun setMicrophoneBoost(enabled: Boolean) = scope.launch { voipEngine.setMicrophoneBoost(enabled) }
+
     fun setRingtoneVolume(value: Float) = execute {
         voipEngine.setRingtoneVolume(value)
     }

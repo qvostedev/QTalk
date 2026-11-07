@@ -6,7 +6,7 @@ import org.linphone.core.*
 internal fun applyAudioGain(core: Core, conference: Conference?, levels: GainLevels,
     microphoneMuted: Boolean, speakerMuted: Boolean, held: Boolean, staged: Set<Call>,
     zeroMicrophone: Boolean = false, zeroSpeaker: Boolean = false) {
-    core.micGainDb = AudioGain.db(levels.microphone) + levels.boostDb.coerceIn(0f, 6f)
+    core.micGainDb = AudioGain.microphoneDb(levels.microphone)
     core.playbackGainDb = AudioGain.db(levels.speaker)
     val mic = AudioGain.muted(microphoneMuted || zeroMicrophone, held, levels.microphone)
     core.isMicEnabled = !mic

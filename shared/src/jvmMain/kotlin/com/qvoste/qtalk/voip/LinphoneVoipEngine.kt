@@ -255,7 +255,7 @@ class LinphoneVoipEngine : VoipEngine {
         AudioSettings(
             microphoneSensitivity = initialGain.microphone,
             speakerVolume = initialGain.speaker,
-            microphoneBoost = initialGain.boostDb > 0f,
+
             ringtoneVolume = audioPreferences.getFloat("ringtoneVolume", 0.5f),
             selectedRingtoneId = storedRingtoneId()
         )
@@ -1504,10 +1504,7 @@ class LinphoneVoipEngine : VoipEngine {
         audioGain.target(audioGain.target.copy(speaker = normalized))
     }
 
-    override suspend fun setMicrophoneBoost(enabled: Boolean) = withContext(linphoneDispatcher) {
-        _audioSettings.value = _audioSettings.value.copy(microphoneBoost = enabled)
-        audioGain.target(audioGain.target.copy(boostDb = if (enabled) 6f else 0f))
-    }
+
 
     override suspend fun setRingtoneVolume(value: Float) = withContext(linphoneDispatcher) {
         val normalized = value.coerceIn(0f, 1f)
@@ -1578,7 +1575,7 @@ class LinphoneVoipEngine : VoipEngine {
             selectedOutputDeviceId = selectedOutput?.id,
             microphoneSensitivity = microphoneSensitivity,
             speakerVolume = speakerVolume,
-            microphoneBoost = audioGain.target.boostDb > 0f,
+
             previewRingtoneId = ringtonePreview.playing.value,
             ringtoneVolume = ringtoneVolume,
             selectedRingtoneId = ringtoneId,

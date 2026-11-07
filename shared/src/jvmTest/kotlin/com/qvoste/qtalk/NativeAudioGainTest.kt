@@ -63,9 +63,11 @@ class NativeAudioGainTest {
             assertTrue(call.microphoneMuted); assertTrue(call.speakerMuted)
             apply(GainLevels())
             assertTrue(a.isMicEnabled); assertFalse(call.microphoneMuted); assertFalse(call.speakerMuted)
-            apply(GainLevels(.5f, .5f, 6f))
-            assertEquals(AudioGain.db(.5f) + 6f, a.micGainDb, .001f)
+            apply(GainLevels(.5f, .5f))
+            assertEquals(0f, a.micGainDb, .001f)
             assertEquals(AudioGain.db(.5f), a.playbackGainDb, .001f)
+            apply(GainLevels(1f, .5f))
+            assertEquals(6.0206f, a.micGainDb, .001f)
             val conference = assertNotNull(a.createConferenceWithParams(a.createConferenceParams(null).apply {
                 isAudioEnabled = true; isVideoEnabled = false; isLocalParticipantEnabled = true
                 isOneParticipantConferenceEnabled = true; account = a.defaultAccount; conferenceFactoryAddress = null

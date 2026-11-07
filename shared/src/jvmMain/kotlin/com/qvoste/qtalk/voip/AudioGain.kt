@@ -7,6 +7,8 @@ internal object AudioGain {
     fun level(value: Float): Float = if (value.isNaN()) 0f else value.coerceIn(0f, 1f)
     // Zero is gated separately. A finite floor keeps the native API free of infinities.
     fun db(value: Float): Float = if (level(value) == 0f) -120f else 20f * log10(level(value))
+    // Midpoint is unmodified input; full scale is bounded at 2x (+6.02 dB).
+    fun microphoneDb(value: Float): Float = if (level(value) == 0f) -120f else 20f * log10(2f * level(value))
     fun muted(manual: Boolean, held: Boolean, level: Float, staged: Boolean = false): Boolean =
         manual || held || level(level) == 0f || staged
     // Old zero meant -30 dB, not mute: preserve that quiet nonzero level deliberately.
@@ -17,31 +19,35 @@ internal object AudioGain {
     }
 }
 
-internal data class GainLevels(val microphone: Float = 1f, val speaker: Float = 1f, val boostDb: Float = 0f) {
+internal data class GainLevels(val microphone: Float = .5f, val speaker: Float = 1f) {
     fun step(target: GainLevels): GainLevels {
         fun move(value: Float, to: Float, amount: Float): Float = value + (to - value).coerceIn(-amount, amount)
-        return GainLevels(move(microphone, target.microphone, .04f), move(speaker, target.speaker, .04f),
-            move(boostDb, target.boostDb, .5f))
+        return GainLevels(move(microphone, target.microphone, .02f), move(speaker, target.speaker, .04f))
     }
 }
 
 internal class AudioGainPreferences(private val prefs: Preferences) {
     fun load(): GainLevels {
-        val migrated = prefs.getInt("gainSchema", 0) >= 3
-        fun read(key: String): Float {
-            val stored = prefs.get(key, null)?.toFloatOrNull()
-            return if (migrated) AudioGain.level(stored ?: 1f) else AudioGain.migrate(stored)
-        }
-        return GainLevels(read("microphoneSensitivity"), read("speakerVolume"),
-            if (migrated && prefs.getBoolean("microphoneBoost", false)) 6f else 0f).also {
-            if (!migrated) save(it)
+        val schema = prefs.getInt("gainSchema", 0)
+        fun stored(key: String): Float? = prefs.get(key, null)?.toFloatOrNull()
+        val microphone = stored("microphoneSensitivity")
+        val speaker = stored("speakerVolume")
+        return GainLevels(
+            when {
+                schema >= 4 -> AudioGain.level(microphone ?: .5f)
+                schema >= 3 -> AudioGain.level(microphone ?: 1f) / 2f
+                else -> AudioGain.migrate(microphone) / 2f
+            },
+            if (schema >= 3) AudioGain.level(speaker ?: 1f) else AudioGain.migrate(speaker)
+        ).also {
+            if (schema < 4 || prefs.get("microphoneBoost", null) != null) save(it)
         }
     }
     fun save(levels: GainLevels) {
         prefs.putFloat("microphoneSensitivity", AudioGain.level(levels.microphone))
         prefs.putFloat("speakerVolume", AudioGain.level(levels.speaker))
-        prefs.putBoolean("microphoneBoost", levels.boostDb > 0f)
-        prefs.putInt("gainSchema", 3)
+        prefs.remove("microphoneBoost")
+        prefs.putInt("gainSchema", 4)
         prefs.flush()
     }
     fun reset(): GainLevels = GainLevels().also(::save)
