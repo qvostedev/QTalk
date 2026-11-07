@@ -114,7 +114,7 @@ internal fun ConferenceCallOverlay(
                 Spacer(Modifier.height(14.dp))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CallControl(Res.drawable.icon_call_microphone, "Микрофон", conference.microphoneMuted, 16, 25,
+                CallControl(Res.drawable.icon_call_microphone, "Микрофон", conference.microphoneMuted, 13, 20,
                     crossedOut = conference.microphoneMuted, enabled = !conference.held) { onMicrophone(!conference.microphoneMuted) }
                 CallControl(Res.drawable.icon_call_speaker, "Динамик", conference.speakerMuted, 22, 17,
                     crossedOut = conference.speakerMuted, enabled = !conference.held) { onSpeaker(!conference.speakerMuted) }

@@ -20,9 +20,11 @@ data class AudioSettings(
     val outputDevices: List<AudioDeviceInfo> = emptyList(),
     val selectedInputDeviceId: String? = null,
     val selectedOutputDeviceId: String? = null,
-    val microphoneSensitivity: Float = 0.5f,
-    val speakerVolume: Float = 0.5f,
+    val microphoneSensitivity: Float = 1f,
+    val speakerVolume: Float = 1f,
+    val microphoneBoost: Boolean = false,
     val ringtoneVolume: Float = 0.5f,
     val ringtones: List<RingtoneInfo> = QTalkRingtones,
-    val selectedRingtoneId: String = QTalkRingtones.first().id
+    val selectedRingtoneId: String = QTalkRingtones.first().id,
+    val previewRingtoneId: String? = null
 )

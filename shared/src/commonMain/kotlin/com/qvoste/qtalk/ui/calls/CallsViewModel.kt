@@ -284,18 +284,18 @@ class CallsViewModel(
     fun selectOutputAudioDevice(deviceId: String) = execute {
         voipEngine.selectOutputAudioDevice(deviceId)
     }
-    fun setMicrophoneSensitivity(value: Float) = execute {
+    fun setMicrophoneSensitivity(value: Float) = scope.launch {
         voipEngine.setMicrophoneSensitivity(value)
     }
-    fun setSpeakerVolume(value: Float) = execute {
+    fun setSpeakerVolume(value: Float) = scope.launch {
         voipEngine.setSpeakerVolume(value)
     }
+    fun setMicrophoneBoost(enabled: Boolean) = scope.launch { voipEngine.setMicrophoneBoost(enabled) }
     fun setRingtoneVolume(value: Float) = execute {
         voipEngine.setRingtoneVolume(value)
     }
-    fun previewRingtone(ringtoneId: String) = execute {
-        voipEngine.previewRingtone(ringtoneId)
-    }
+    fun previewRingtone(ringtoneId: String) = voipEngine.previewRingtone(ringtoneId)
+    fun stopRingtonePreview() = voipEngine.stopRingtonePreview()
     fun selectRingtone(ringtoneId: String) = execute {
         voipEngine.selectRingtone(ringtoneId)
     }

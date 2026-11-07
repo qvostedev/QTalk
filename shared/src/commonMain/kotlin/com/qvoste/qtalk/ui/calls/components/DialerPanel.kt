@@ -393,7 +393,10 @@ internal fun DialerPanel(
                         Modifier.fillMaxWidth().align(Alignment.BottomCenter),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        onDeleteContact?.let { deleteContact ->
+                        if (displayedContact == null) {
+                            ContactTextAction("Очистить", TextPrimary,
+                                enabled = number.isNotEmpty() && !call.state.isInProgress) { onNumberChange("") }
+                        } else onDeleteContact?.let { deleteContact ->
                             ContactTextAction("Удалить", Danger, onClick = deleteContact)
                         }
                         Spacer(Modifier.weight(1f))

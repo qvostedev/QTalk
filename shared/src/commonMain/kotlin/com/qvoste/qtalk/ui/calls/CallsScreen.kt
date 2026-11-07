@@ -68,6 +68,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -263,9 +264,11 @@ fun CallsScreen(
         onSelectInputAudioDevice = viewModel::selectInputAudioDevice,
         onSelectOutputAudioDevice = viewModel::selectOutputAudioDevice,
         onMicrophoneSensitivityChange = viewModel::setMicrophoneSensitivity,
+        onMicrophoneBoostChange = viewModel::setMicrophoneBoost,
         onSpeakerVolumeChange = viewModel::setSpeakerVolume,
         onRingtoneVolumeChange = viewModel::setRingtoneVolume,
         onPreviewRingtone = viewModel::previewRingtone,
+        onStopRingtonePreview = viewModel::stopRingtonePreview,
         onSelectRingtone = viewModel::selectRingtone,
         onAddContact = viewModel::addContact,
         onUpdateContact = viewModel::updateContact,
@@ -474,9 +477,11 @@ private fun CallsContent(
     onSelectInputAudioDevice: (String) -> Unit,
     onSelectOutputAudioDevice: (String) -> Unit,
     onMicrophoneSensitivityChange: (Float) -> Unit,
+    onMicrophoneBoostChange: (Boolean) -> Unit,
     onSpeakerVolumeChange: (Float) -> Unit,
     onRingtoneVolumeChange: (Float) -> Unit,
     onPreviewRingtone: (String) -> Unit,
+    onStopRingtonePreview: () -> Unit,
     onSelectRingtone: (String) -> Unit,
     onAddContact: (Contact) -> Unit,
     onUpdateContact: (Contact, Contact) -> Unit,
@@ -735,9 +740,11 @@ private fun CallsContent(
                     onSelectInputAudioDevice = onSelectInputAudioDevice,
                     onSelectOutputAudioDevice = onSelectOutputAudioDevice,
                     onMicrophoneSensitivityChange = onMicrophoneSensitivityChange,
+                    onMicrophoneBoostChange = onMicrophoneBoostChange,
                     onSpeakerVolumeChange = onSpeakerVolumeChange,
                     onRingtoneVolumeChange = onRingtoneVolumeChange,
                     onPreviewRingtone = onPreviewRingtone,
+                    onStopRingtonePreview = onStopRingtonePreview,
                     onSelectRingtone = onSelectRingtone,
                     contactDatabaseState = contactDatabaseState,
                     themeMode = themeMode,
@@ -1363,9 +1370,11 @@ private fun SipSettings(
     onSelectInputAudioDevice: (String) -> Unit,
     onSelectOutputAudioDevice: (String) -> Unit,
     onMicrophoneSensitivityChange: (Float) -> Unit,
+    onMicrophoneBoostChange: (Boolean) -> Unit,
     onSpeakerVolumeChange: (Float) -> Unit,
     onRingtoneVolumeChange: (Float) -> Unit,
     onPreviewRingtone: (String) -> Unit,
+    onStopRingtonePreview: () -> Unit,
     onSelectRingtone: (String) -> Unit,
     contactDatabaseState: ContactDatabaseState,
     themeMode: ThemeMode,
@@ -1388,6 +1397,7 @@ private fun SipSettings(
     var showAccount by remember { mutableStateOf(false) }
     var showInputDevices by remember { mutableStateOf(false) }
     var showOutputDevices by remember { mutableStateOf(false) }
+    DisposableEffect(Unit) { onDispose { onStopRingtonePreview() } }
     var showRingtones by remember { mutableStateOf(false) }
     var showDatabase by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
@@ -1511,6 +1521,12 @@ private fun SipSettings(
                 onValueChange = { microphoneSensitivity = it },
                 onValueChangeFinished = { onMicrophoneSensitivityChange(microphoneSensitivity) }
             )
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(uiText("Усиление микрофона +6 дБ"), color = TextSecondary, fontSize = 11.sp,
+                    modifier = Modifier.weight(1f))
+                androidx.compose.material3.Switch(checked = audioSettings.microphoneBoost,
+                    onCheckedChange = onMicrophoneBoostChange)
+            }
             Spacer(Modifier.height(20.dp))
             SettingsActionRow(
                 icon = Res.drawable.icon_settings_headphones,
@@ -1659,6 +1675,8 @@ private fun SipSettings(
             ringtones = audioSettings.ringtones,
             selectedRingtoneId = audioSettings.selectedRingtoneId,
             onPreview = onPreviewRingtone,
+            playingRingtoneId = audioSettings.previewRingtoneId,
+            onStop = onStopRingtonePreview,
             onSave = {
                 onSelectRingtone(it)
                 showRingtones = false
@@ -1999,13 +2017,16 @@ private fun AudioDeviceDialog(
 }
 
 @Composable
-private fun RingtoneDialog(
+internal fun RingtoneDialog(
     ringtones: List<RingtoneInfo>,
     selectedRingtoneId: String,
     onPreview: (String) -> Unit,
+    playingRingtoneId: String?,
+    onStop: () -> Unit,
     onSave: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    DisposableEffect(Unit) { onDispose { onStop() } }
     var pendingRingtoneId by remember(selectedRingtoneId) { mutableStateOf(selectedRingtoneId) }
     var imported by remember { mutableStateOf(customRingtones()) }
     var importError by remember { mutableStateOf<String?>(null) }
@@ -2024,8 +2045,8 @@ private fun RingtoneDialog(
                                 else Color.Transparent
                             )
                             .clickable {
+                                onStop()
                                 pendingRingtoneId = ringtone.id
-                                onPreview(ringtone.id)
                             }
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -2035,9 +2056,13 @@ private fun RingtoneDialog(
                     }
                 }
                 TextButton(onClick = {
+                    if (playingRingtoneId != null) onStop() else onPreview(pendingRingtoneId)
+                }) { Text(uiText(if (playingRingtoneId != null) "Остановить" else "Прослушать"), color = Primary) }
+                TextButton(onClick = {
+                    onStop()
                     importScope.launch {
                         try {
-                            importLocalMedia(false)?.let { pendingRingtoneId = it; imported = customRingtones(); onPreview(it) }
+                            importLocalMedia(false)?.let { pendingRingtoneId = it; imported = customRingtones() }
                             importError = null
                         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
                         catch (e: Exception) { importError = e.message }
@@ -2047,7 +2072,7 @@ private fun RingtoneDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(pendingRingtoneId) }) { Text(uiText("Сохранить"), color = Primary) }
+            TextButton(onClick = { onStop(); onSave(pendingRingtoneId) }) { Text(uiText("Сохранить"), color = Primary) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(uiText("Отмена"), color = TextPrimary) }

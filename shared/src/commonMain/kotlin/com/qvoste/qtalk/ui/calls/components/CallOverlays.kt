@@ -211,8 +211,8 @@ internal fun ActiveCallOverlay(
                         Res.drawable.icon_call_microphone,
                         "Микрофон",
                         microphoneMuted,
-                        16,
-                        25,
+                        13,
+                        20,
                         crossedOut = microphoneMuted
                     ) {
                         microphoneMuted = !microphoneMuted

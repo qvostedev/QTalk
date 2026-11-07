@@ -32,14 +32,9 @@ import org.linphone.core.Factory
 import org.linphone.core.RegistrationState as LinphoneRegistrationState
 import java.nio.file.Files
 import java.nio.file.Path
-import java.io.BufferedInputStream
 import java.net.NetworkInterface
 import java.util.concurrent.Executors
 import java.util.prefs.Preferences
-import javax.sound.sampled.AudioSystem
-import javax.sound.sampled.Clip
-import javax.sound.sampled.FloatControl
-import kotlin.math.log10
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -80,6 +75,7 @@ class LinphoneVoipEngine : VoipEngine {
     private val scope = CoroutineScope(linphoneDispatcher)
     private var iterateJob: Job? = null
     private var coreStarted = false
+    @Volatile private var stopping = false
     private var currentAccount: Account? = null
     @Volatile private var diagnosticExtension = ""
     private val lanSip by lazy { LanHandoffSip(core, factory) }
@@ -163,7 +159,7 @@ class LinphoneVoipEngine : VoipEngine {
             val conference = ensureLocalConference()
             if (call.conference != conference) check(conference.addParticipant(call) == 0) { "Не удалось подключить звук конференции" }
             check(conference.enter() == 0) { "Не удалось подключить звук конференции" }
-            conference.microphoneMuted = microphoneMuted
+            conference.microphoneMuted = effectiveMicrophoneMute()
             return true
         }
         override fun resume(call: Call) {
@@ -183,8 +179,8 @@ class LinphoneVoipEngine : VoipEngine {
             conference.inviteParticipants(arrayOf(address), params)
             val invited = core.calls.firstOrNull { it !in previousCalls && it.remoteAddress?.username == number }
             return checkNotNull(invited) { "Не удалось добавить участника" }.also {
-                it.setMicrophoneMuted(microphoneMuted)
-                it.setSpeakerMuted(speakerMuted)
+                it.setMicrophoneMuted(effectiveMicrophoneMute())
+                it.setSpeakerMuted(effectiveSpeakerMute())
             }
         }
         override fun merge(first: Call, second: Call) {
@@ -213,7 +209,7 @@ class LinphoneVoipEngine : VoipEngine {
                     addedSecond = true
                 }
                 check(conference.enter() == 0) { "Не удалось подключить звук конференции" }
-                conference.microphoneMuted = microphoneMuted
+                conference.microphoneMuted = effectiveMicrophoneMute()
             } catch (error: Exception) {
                 if (addedFirst) runCatching { conference.removeParticipant(first) }
                 if (addedSecond) runCatching { conference.removeParticipant(second) }
@@ -240,17 +236,39 @@ class LinphoneVoipEngine : VoipEngine {
     private val _callStatus = MutableStateFlow(CallStatus())
     override val callStatus = _callStatus.asStateFlow()
     private val audioPreferences = Preferences.userRoot().node("com/qvoste/qtalk/audio")
-    private val ringtonePreviewLock = Any()
-    private var ringtonePreview: Clip? = null
+    private val gainPreferences = AudioGainPreferences(audioPreferences)
+    private val initialGain = gainPreferences.load()
+    private val audioGain = AudioGainController(scope, initialGain, { levels ->
+        applyAudioGain(core, localConference, levels, microphoneMuted, speakerMuted, conferenceHeld,
+            handoff?.takeIf { !it.committed }?.staged?.toSet().orEmpty(),
+            _audioSettings.value.microphoneSensitivity == 0f, _audioSettings.value.speakerVolume == 0f)
+    }, { levels -> withContext(Dispatchers.IO) { gainPreferences.save(levels) } })
+    private fun effectiveMicrophoneMute(manual: Boolean = microphoneMuted, held: Boolean = conferenceHeld) =
+        AudioGain.muted(manual, held, audioGain.target.microphone)
+    private fun effectiveSpeakerMute(manual: Boolean = speakerMuted, held: Boolean = conferenceHeld) =
+        AudioGain.muted(manual, held, audioGain.target.speaker)
+
+    private val ringtonePreview = RingtonePreview(CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)) { id, volume ->
+        openRingtonePreview(bundledRingtone(id), volume)
+    }.apply { setAllowed(false) }
     private val _audioSettings = MutableStateFlow(
         AudioSettings(
-            microphoneSensitivity = audioPreferences.getFloat("microphoneSensitivity", 0.5f),
-            speakerVolume = audioPreferences.getFloat("speakerVolume", 0.5f),
+            microphoneSensitivity = initialGain.microphone,
+            speakerVolume = initialGain.speaker,
+            microphoneBoost = initialGain.boostDb > 0f,
             ringtoneVolume = audioPreferences.getFloat("ringtoneVolume", 0.5f),
             selectedRingtoneId = storedRingtoneId()
         )
     )
     override val audioSettings = _audioSettings.asStateFlow()
+
+    init {
+        scope.launch {
+            ringtonePreview.playing.collect { id ->
+                _audioSettings.value = _audioSettings.value.copy(previewRingtoneId = id)
+            }
+        }
+    }
 
     private val _registrationState =
         MutableStateFlow(RegistrationState.DISCONNECTED)
@@ -284,6 +302,8 @@ class LinphoneVoipEngine : VoipEngine {
             }
         }
         override fun onCallStateChanged(core: Core, call: Call, state: Call.State, message: String) {
+            if (state == Call.State.IncomingReceived || state == Call.State.OutgoingInit ||
+                state == Call.State.Connected || state == Call.State.StreamsRunning) ringtonePreview.setAllowed(false)
             diagnostic("native_call", peer = call.remoteAddress?.username.orEmpty(), state = state.toString(),
                 reason = call.reason.toString(), protocol = call.errorInfo?.protocolCode ?: 0)
             val staging = handoff
@@ -312,7 +332,10 @@ class LinphoneVoipEngine : VoipEngine {
                 }
             }
             val conferenceState = conferenceLegState(state)
-            if (conferenceState != null && conferenceSession.onCallState(call, conferenceState)) return
+            if (conferenceState != null && conferenceSession.onCallState(call, conferenceState)) {
+                audioGain.restore()
+                return
+            }
             if (state == Call.State.IncomingReceived) {
                 if (call.remoteParams?.getCustomHeader("X-QTalk-Handoff") != null || staging != null) {
                     diagnostic("admission_deny", peer = call.remoteAddress?.username.orEmpty(), reason = "permit_or_endpoint_mismatch")
@@ -329,6 +352,7 @@ class LinphoneVoipEngine : VoipEngine {
                 conferenceSession.reset()
                 microphoneMuted = false
                 speakerMuted = false
+                audioGain.restore()
                 val caller = call.remoteAddress?.username.orEmpty()
                 _callStatus.value = CallStatus(
                     state = CallState.INCOMING,
@@ -341,6 +365,7 @@ class LinphoneVoipEngine : VoipEngine {
 
             if (state == Call.State.OutgoingInit && currentCall == null) currentCall = call
             if (call != currentCall) return
+            audioGain.restore()
             logger.fine("Call state: $state")
             val next = when (state) {
                 Call.State.OutgoingInit, Call.State.OutgoingProgress -> CallState.DIALING
@@ -355,6 +380,7 @@ class LinphoneVoipEngine : VoipEngine {
                 }
                 else -> return
             }
+            if (!next.isInProgress && coreStarted && !stopping) ringtonePreview.setAllowed(true)
             val previous = _callStatus.value
             _callStatus.value = previous.copy(
                 state = next,
@@ -436,6 +462,7 @@ class LinphoneVoipEngine : VoipEngine {
 
 
     override suspend fun start() = withContext(linphoneDispatcher) {
+        stopping = false
         if (iterateJob?.isActive == true) {
             return@withContext
         }
@@ -477,6 +504,7 @@ class LinphoneVoipEngine : VoipEngine {
             }
         }
         refreshAudioDevicesInternal()
+        ringtonePreview.setAllowed(!_callStatus.value.state.isInProgress)
 
         iterateJob = scope.launch {
 
@@ -617,6 +645,7 @@ class LinphoneVoipEngine : VoipEngine {
         check(_registrationState.value == RegistrationState.REGISTERED) { "Сначала подключитесь к SIP-серверу" }
         check(currentCall == null) { "Предыдущий звонок ещё не завершён" }
         val extension = normalizeOutgoingNumber(number)
+        ringtonePreview.setAllowed(false)
         conferenceSession.reset()
         clearRoom()
         microphoneMuted = false
@@ -632,18 +661,22 @@ class LinphoneVoipEngine : VoipEngine {
         )
         val call = core.inviteAddressWithParams(server, params)
         if (call == null) {
+            ringtonePreview.setAllowed(true)
             _callStatus.value = CallStatus(CallState.FAILED, extension, "Не удалось начать звонок")
         } else {
             currentCall = call
+            audioGain.restore()
         }
     }
 
     override suspend fun acceptCall() = withContext(linphoneDispatcher) {
+        ringtonePreview.setAllowed(false)
         val call = checkNotNull(currentCall) { "Нет входящего звонка" }
         check(_callStatus.value.state == CallState.INCOMING) { "Звонок уже обработан" }
 
         val params = checkNotNull(core.createCallParams(call))
         params.isVideoEnabled = false
+        audioGain.restore()
         if (call.acceptWithParams(params) != 0) {
             error("Не удалось принять звонок")
         }
@@ -689,33 +722,26 @@ class LinphoneVoipEngine : VoipEngine {
     }
 
     override suspend fun setMicrophoneMuted(muted: Boolean) = withContext(linphoneDispatcher) {
-        microphoneMuted = muted
-        localConference?.microphoneMuted = muted || conferenceHeld
         val call = checkNotNull(conferenceSession.foregroundCall ?: currentCall) { "Нет активного звонка" }
-        call.setMicrophoneMuted(muted || conferenceHeld)
+        microphoneMuted = muted
+        audioGain.restore()
         guestRoom?.let { sendRoomMessage(call, RoomMessage.Microphone(it.roomId, muted)) }
         Unit
     }
 
     override suspend fun setSpeakerMuted(muted: Boolean) = withContext(linphoneDispatcher) {
+        checkNotNull(conferenceSession.foregroundCall ?: currentCall) { "Нет активного звонка" }
         speakerMuted = muted
-        val call = checkNotNull(conferenceSession.foregroundCall ?: currentCall) { "Нет активного звонка" }
-        (conferenceSession.calls.ifEmpty { listOf(call) }).forEach { it.setSpeakerMuted(muted || conferenceHeld) }
+        audioGain.restore()
     }
 
     override suspend fun setConferenceHeld(held: Boolean) = withContext(linphoneDispatcher) {
         check(_conferenceStatus.value.phase != ConferencePhase.NONE) { "Нет группового звонка" }
         localConference?.let { conference ->
             check((if (held) conference.leave() else conference.enter()) == 0) { "Не удалось изменить удержание" }
-            conferenceHeld = held
-            conference.microphoneMuted = microphoneMuted || held
-            return@withContext
         }
         conferenceHeld = held
-        (conferenceSession.calls.ifEmpty { listOfNotNull(currentCall) }).forEach {
-            it.setMicrophoneMuted(microphoneMuted || held)
-            it.setSpeakerMuted(speakerMuted || held)
-        }
+        audioGain.restore()
     }
 
     private fun ensureLocalConference(): Conference {
@@ -1105,8 +1131,8 @@ class LinphoneVoipEngine : VoipEngine {
                 } == true
                 check(released) { "Восстановление исходного звонка ещё не завершено" }
                 if (original.state == Call.State.Paused) check(original.resume() == 0) { "Не удалось восстановить исходный звонок" }
-                original.setMicrophoneMuted(transition.microphoneMuted)
-                original.setSpeakerMuted(transition.speakerMuted)
+                original.setMicrophoneMuted(effectiveMicrophoneMute(manual = transition.microphoneMuted))
+                original.setSpeakerMuted(effectiveSpeakerMute(manual = transition.speakerMuted))
                 val restored = withTimeoutOrNull(ConferenceHandoffTiming.ORIGINAL_RESUME_TIMEOUT_MILLIS) {
                     while (original.state != Call.State.StreamsRunning) delay(ConferenceHandoffTiming.STATE_POLL_MILLIS)
                     true
@@ -1141,14 +1167,14 @@ class LinphoneVoipEngine : VoipEngine {
             val mixer = checkNotNull(transition.mixer)
             localConference = mixer
             conferenceSession.adoptConnected(transition.staged)
-            mixer.microphoneMuted = microphoneMuted || conferenceHeld
+            mixer.microphoneMuted = effectiveMicrophoneMute()
         } else {
             currentCall = transition.staged.single()
             guestRoom = RoomMessage.Snapshot(transition.id, 0, transition.host, transition.members,
                 emptyList(), emptySet(), emptySet(), creator = oldRoom.creator)
         }
         transition.staged.forEach {
-            it.setMicrophoneMuted(microphoneMuted || conferenceHeld); it.setSpeakerMuted(speakerMuted)
+            it.setMicrophoneMuted(effectiveMicrophoneMute()); it.setSpeakerMuted(effectiveSpeakerMute())
         }
         handoff = null
         _callStatus.value = _callStatus.value.copy(state = CallState.ACTIVE,
@@ -1270,10 +1296,10 @@ class LinphoneVoipEngine : VoipEngine {
                         // Removing the final native mixer leg terminates it in this SDK.
                         // Keep its audio path and return only the room/UI to one-to-one mode.
                         localConference?.enter()
-                        localConference?.microphoneMuted = microphoneMuted
+                        localConference?.microphoneMuted = effectiveMicrophoneMute()
                         currentCall = remaining
-                        remaining.setMicrophoneMuted(microphoneMuted)
-                        remaining.setSpeakerMuted(speakerMuted)
+                        remaining.setMicrophoneMuted(effectiveMicrophoneMute())
+                        remaining.setSpeakerMuted(effectiveSpeakerMute())
                         clearRoom()
                         _conferenceStatus.value = ConferenceStatus(microphoneMuted = microphoneMuted, speakerMuted = speakerMuted)
                     }
@@ -1387,6 +1413,8 @@ class LinphoneVoipEngine : VoipEngine {
 
 
     override suspend fun stop() {
+        stopping = true
+        ringtonePreview.setAllowed(false)
         withContext(linphoneDispatcher) {
             check(handoff == null && !awaitingHostCommitCompletion()) { "Дождитесь завершения передачи звонка" }
             if (conferenceSession.hasSession && conferenceSession.calls.size >= 2) transferConferenceHost()
@@ -1402,6 +1430,7 @@ class LinphoneVoipEngine : VoipEngine {
         iterateJob = null
 
         withContext(linphoneDispatcher) {
+            audioGain.flush()
             clearRoom()
 
             currentAccount?.let { account ->
@@ -1464,19 +1493,20 @@ class LinphoneVoipEngine : VoipEngine {
     }
 
     override suspend fun setMicrophoneSensitivity(value: Float) = withContext(linphoneDispatcher) {
-        val normalized = value.coerceIn(0f, 1f)
-        core.micGainDb = normalized * 60f - 30f
-        audioPreferences.putFloat("microphoneSensitivity", normalized)
-        audioPreferences.flush()
+        val normalized = AudioGain.level(value)
         _audioSettings.value = _audioSettings.value.copy(microphoneSensitivity = normalized)
+        audioGain.target(audioGain.target.copy(microphone = normalized))
     }
 
     override suspend fun setSpeakerVolume(value: Float) = withContext(linphoneDispatcher) {
-        val normalized = value.coerceIn(0f, 1f)
-        core.playbackGainDb = normalized * 60f - 30f
-        audioPreferences.putFloat("speakerVolume", normalized)
-        audioPreferences.flush()
+        val normalized = AudioGain.level(value)
         _audioSettings.value = _audioSettings.value.copy(speakerVolume = normalized)
+        audioGain.target(audioGain.target.copy(speaker = normalized))
+    }
+
+    override suspend fun setMicrophoneBoost(enabled: Boolean) = withContext(linphoneDispatcher) {
+        _audioSettings.value = _audioSettings.value.copy(microphoneBoost = enabled)
+        audioGain.target(audioGain.target.copy(boostDb = if (enabled) 6f else 0f))
     }
 
     override suspend fun setRingtoneVolume(value: Float) = withContext(linphoneDispatcher) {
@@ -1487,46 +1517,13 @@ class LinphoneVoipEngine : VoipEngine {
         _audioSettings.value = _audioSettings.value.copy(ringtoneVolume = normalized)
     }
 
-    override suspend fun previewRingtone(ringtoneId: String) = withContext(Dispatchers.IO) {
-        val ringtone = (QTalkRingtones + customRingtones()).firstOrNull { it.id == ringtoneId } ?: return@withContext
-        val resource = Files.newInputStream(bundledRingtone(ringtone.id))
-        val clip = AudioSystem.getClip()
-        resource.use { input ->
-            BufferedInputStream(input).use { buffered ->
-                AudioSystem.getAudioInputStream(buffered).use(clip::open)
-            }
-        }
-
-        val volume = _audioSettings.value.ringtoneVolume.coerceIn(0f, 1f)
-        if (clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
-            val gain = clip.getControl(FloatControl.Type.MASTER_GAIN) as FloatControl
-            val decibels = if (volume <= 0f) gain.minimum else (20f * log10(volume)).coerceIn(gain.minimum, gain.maximum)
-            gain.value = decibels
-        }
-
-        synchronized(ringtonePreviewLock) {
-            ringtonePreview?.stop()
-            ringtonePreview?.close()
-            ringtonePreview = clip
-            clip.start()
-        }
-
-        Thread({
-            Thread.sleep(minOf(2_000L, clip.microsecondLength / 1_000L))
-            synchronized(ringtonePreviewLock) {
-                if (ringtonePreview === clip) {
-                    clip.stop()
-                    clip.close()
-                    ringtonePreview = null
-                }
-            }
-        }, "QTalk-RingtonePreview").apply {
-            isDaemon = true
-            start()
-        }
+    override fun previewRingtone(ringtoneId: String) {
+        if ((QTalkRingtones + customRingtones()).none { it.id == ringtoneId }) return
+        ringtonePreview.play(ringtoneId, _audioSettings.value.ringtoneVolume)
     }
 
     override suspend fun selectRingtone(ringtoneId: String) = withContext(linphoneDispatcher) {
+        stopRingtonePreview()
         val ringtone = (QTalkRingtones + customRingtones()).firstOrNull { it.id == ringtoneId } ?: return@withContext
         val volume = _audioSettings.value.ringtoneVolume.coerceIn(0f, 1f)
         audioPreferences.put("ringtoneId", ringtone.id)
@@ -1535,13 +1532,7 @@ class LinphoneVoipEngine : VoipEngine {
         _audioSettings.value = _audioSettings.value.copy(selectedRingtoneId = ringtone.id, ringtones = QTalkRingtones + customRingtones())
     }
 
-    private fun stopRingtonePreview() {
-        synchronized(ringtonePreviewLock) {
-            ringtonePreview?.stop()
-            ringtonePreview?.close()
-            ringtonePreview = null
-        }
-    }
+    override fun stopRingtonePreview() = ringtonePreview.stop()
 
     private fun refreshAudioDevicesInternal() {
         val devices = core.extendedAudioDevices.toList()
@@ -1567,18 +1558,13 @@ class LinphoneVoipEngine : VoipEngine {
             core.setRingerDevice(it.id)
         }
 
-        val microphoneSensitivity = audioPreferences
-            .getFloat("microphoneSensitivity", 0.5f)
-            .coerceIn(0f, 1f)
-        val speakerVolume = audioPreferences
-            .getFloat("speakerVolume", 0.5f)
-            .coerceIn(0f, 1f)
+        val microphoneSensitivity = audioGain.target.microphone
+        val speakerVolume = audioGain.target.speaker
         val ringtoneVolume = audioPreferences
             .getFloat("ringtoneVolume", 0.5f)
             .coerceIn(0f, 1f)
         val ringtoneId = storedRingtoneId()
-        core.micGainDb = microphoneSensitivity * 60f - 30f
-        core.playbackGainDb = speakerVolume * 60f - 30f
+        audioGain.restore()
         applyRingtoneVolume(ringtoneVolume, ringtoneId)
 
         _audioSettings.value = AudioSettings(
@@ -1592,6 +1578,8 @@ class LinphoneVoipEngine : VoipEngine {
             selectedOutputDeviceId = selectedOutput?.id,
             microphoneSensitivity = microphoneSensitivity,
             speakerVolume = speakerVolume,
+            microphoneBoost = audioGain.target.boostDb > 0f,
+            previewRingtoneId = ringtonePreview.playing.value,
             ringtoneVolume = ringtoneVolume,
             selectedRingtoneId = ringtoneId,
             ringtones = QTalkRingtones + customRingtones()

@@ -47,6 +47,8 @@ private val english = mapOf(
     "Восстановление исходного звонка ещё не завершено. Оставьте QTalk открытым" to "Restoring the original call is not complete yet. Keep QTalk open",
     "Обновите QTalk у всех участников. Исходный звонок сохранён" to "Update QTalk for all participants. Original call retained",
 
+    "Очистить" to "Clear", "Прослушать" to "Play", "Остановить" to "Stop",
+    "Усиление микрофона +6 дБ" to "Microphone boost +6 dB",
     "Не все участники подтвердили общий экран. Проверьте подключение к сервису конференций и версию QTalk у участников." to "Some participants have not confirmed the shared view. Check the conference service connection and participants' QTalk versions.",
     "Выберите участников для группового звонка" to "Select participants for the group call",
     "Создать конференцию" to "Create group call", "Добавить участников" to "Add participants",
