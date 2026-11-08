@@ -44,7 +44,7 @@ QTalk объединяет звонки, контакты, избранное и
 | Платформа | Статус |
 | --- | --- |
 | Windows (x64) | ✅ Готово; установщик в [релизах](https://github.com/qvostedev/QTalk/releases/latest) |
-| Linux (x86_64) | ✅ Готово; сборка из исходников |
+| Linux (x86_64) | DEB для Ubuntu 24.04 / Debian 13; остальные дистрибутивы: сборка из исходников/Nix |
 | Android | В разработке |
 | iOS | В разработке |
 
@@ -52,7 +52,7 @@ QTalk объединяет звонки, контакты, избранное и
 
 ## Установка
 
-На Windows скачайте установщик `QTalk-Setup-*.exe` из [последнего релиза](https://github.com/qvostedev/QTalk/releases/latest) и запустите его. Для Linux инструкция по сборке настольной версии приведена ниже.
+На Windows скачайте установщик `QTalk-Setup-*.exe` из [последнего релиза](https://github.com/qvostedev/QTalk/releases/latest) и запустите его. На Ubuntu 24.04 / Debian 13 amd64 скачайте `QTalk_*.deb` и установите его командой `sudo apt install ./QTalk_*_amd64.deb`. Java включена в пакет. Подробнее — в [инструкции для Linux](installer/linux/README.md). Для остальных дистрибутивов доступна сборка из исходников ниже.
 
 ## Сборка из исходников
 

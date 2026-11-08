@@ -1,0 +1,5 @@
+#!/bin/sh
+if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+    export _JAVA_AWT_WM_NONREPARENTING="${_JAVA_AWT_WM_NONREPARENTING:-1}"
+fi
+exec /opt/qtalk/bin/QTalk "$@"

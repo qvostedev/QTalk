@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=QTalk
+Comment=SIP calls and contacts
+Exec=/usr/bin/qtalk %u
+TryExec=/usr/bin/qtalk
+Icon=qtalk
+Terminal=false
+Categories=Network;Telephony;
+MimeType=x-scheme-handler/qtalk;
+StartupNotify=true

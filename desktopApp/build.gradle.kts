@@ -72,6 +72,14 @@ compose.desktop {
             packageVersion = qTalkPackageVersion
             description = "QTalk desktop SIP client"
             vendor = "Qvoste"
+            linux {
+                packageName = "qtalk"
+                installationPath = "/opt"
+                appRelease = "1"
+                debMaintainer = "qvostedev@gmail.com"
+                appCategory = "Network"
+                iconFile.set(rootProject.file("branding/logo.png"))
+            }
             windows {
                 iconFile.set(project.file("src/main/resources/logo_black.ico"))
                 menu = true
@@ -82,6 +90,28 @@ compose.desktop {
                 upgradeUuid = "a915f19b-b466-4db7-bc2f-5cc05ec43e75"
             }
         }
+    }
+}
+
+tasks.register<Exec>("packageQTalkDeb") {
+    group = "distribution"
+    description = "Builds the QTalk Linux DEB with native dependencies and desktop integration"
+    notCompatibleWithConfigurationCache("Discovers the jpackage DEB after packageDeb completes")
+    dependsOn("packageDeb")
+    val outputDirectory = layout.buildDirectory.dir("compose/binaries/main/deb-release")
+    inputs.dir(rootProject.layout.projectDirectory.dir("installer/linux"))
+    inputs.file(rootProject.file("branding/logo.png"))
+    inputs.dir(layout.buildDirectory.dir("compose/binaries/main/deb"))
+    outputs.dir(outputDirectory)
+    doFirst {
+        check(System.getProperty("os.name").contains("linux", ignoreCase = true)) {
+            "The DEB installer must be built on Linux"
+        }
+        val deb = layout.buildDirectory.dir("compose/binaries/main/deb").get().asFile
+            .listFiles().orEmpty().single { it.extension == "deb" && it.name.contains(qTalkPackageVersion) }
+        commandLine("python3", rootProject.file("installer/linux/package_deb.py").absolutePath,
+            deb.absolutePath, "--version", qTalkPackageVersion,
+            "--output", outputDirectory.get().asFile.absolutePath)
     }
 }
 

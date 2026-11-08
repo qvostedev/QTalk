@@ -44,7 +44,7 @@ These screenshots show the dark and light themes with sample data.
 | Platform | Status |
 | --- | --- |
 | Windows (x64) | ✅ Ready; installer in [Releases](https://github.com/qvostedev/QTalk/releases/latest) |
-| Linux (x86_64) | ✅ Ready; build from source |
+| Linux (x86_64) | DEB for Ubuntu 24.04 / Debian 13; other distributions: source/Nix build |
 | Android | In development |
 | iOS | In development |
 
@@ -52,7 +52,7 @@ Desktop builds are usable and continue to evolve. Calls require your own SIP acc
 
 ## Install
 
-On Windows, download the `QTalk-Setup-*.exe` installer from the [latest release](https://github.com/qvostedev/QTalk/releases/latest) and run it. Linux users can build the desktop app using the instructions below.
+On Windows, download the `QTalk-Setup-*.exe` installer from the [latest release](https://github.com/qvostedev/QTalk/releases/latest) and run it. On Ubuntu 24.04 / Debian 13 amd64, download the `QTalk_*.deb` asset and install it with `sudo apt install ./QTalk_*_amd64.deb`. Java is bundled. See [Linux installation and build notes](installer/linux/README.md). Other distributions can use the source build below.
 
 ## Build from source
 
