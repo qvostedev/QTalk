@@ -1,4 +1,5 @@
 import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 import java.security.MessageDigest
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 
@@ -37,11 +38,22 @@ gradle.projectsEvaluated {
                     'https://download.linphone.org/releases/android/maven_repository/' :
                     component.group.startsWith('androidx.') ?
                     'https://dl.google.com/dl/android/maven2/' : 'https://repo.maven.apache.org/maven2/'
+                def checksum = digest.digest()
+                def directory = "${base}${component.group.replace('.', '/')}/${component.module}/${component.version}/"
+                def artifactUrl = directory + file.name
+                if (!file.name.startsWith(component.module + '-')) {
+                    def metadata = new JsonSlurper().parse(new URL(directory + "${component.module}-${component.version}.module"))
+                    def match = metadata.variants.collectMany { it.files ?: [] }.find {
+                        it.name == file.name && it.sha256 == checksum.encodeHex().toString()
+                    }
+                    if (match == null) throw new GradleException("Cannot find published URL for ${file.name}")
+                    artifactUrl = new URI(directory).resolve(match.url).toString()
+                }
                 dependencies << [
                     id: "${component.group}:${component.module}:${component.version}".toString(),
                     name: file.name,
-                    url: "${base}${component.group.replace('.', '/')}/${component.module}/${component.version}/${file.name}".toString(),
-                    hash: 'sha256-' + digest.digest().encodeBase64().toString(),
+                    url: artifactUrl.toString(),
+                    hash: 'sha256-' + checksum.encodeBase64().toString(),
                     linphone: component.group == 'org.linphone'
                 ]
             }

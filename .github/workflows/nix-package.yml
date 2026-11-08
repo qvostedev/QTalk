@@ -75,9 +75,15 @@ jobs:
             build/nix-release/profile.json
             nix/application.json
             nix/runtime-lock.json
-            desktopApp/build/compose/binaries/main/deb-release/*
-            /tmp/qtalk-nix-startup.log
+            build/nix-release/qtalk-nix-startup.log
           if-no-files-found: warn
+      - name: Save compact DEB
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: QTalk-Nix-DEB
+          path: desktopApp/build/compose/binaries/main/deb-release/*
+          if-no-files-found: ignore
       - name: Save test evidence
         if: always()
         uses: actions/upload-artifact@v4

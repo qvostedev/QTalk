@@ -10,12 +10,13 @@ let
     inherit (application) url hash;
     name = application.name;
   };
+  stripScript = builtins.toFile "qtalk-strip-sdk.py" (builtins.unsafeDiscardStringContext (builtins.readFile ../installer/linux/strip_sdk.py));
   artifacts = map (artifact:
     let original = fetchurl { inherit (artifact) name url hash; };
     in if artifact.linphone then runCommand "linphone-sdk-stripped.jar" {
       nativeBuildInputs = [ python3 binutils ];
     } ''
-      python3 ${../installer/linux/strip_sdk.py} ${original} "$out"
+      python3 ${stripScript} ${original} "$out"
     '' else original
   ) runtime.dependencies;
   classpath = lib.concatStringsSep ":" (map toString artifacts);

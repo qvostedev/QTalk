@@ -1,6 +1,7 @@
 import argparse
 import io
 import json
+import shutil
 import subprocess
 import tarfile
 import zipfile
@@ -11,8 +12,8 @@ def command(*args):
     return subprocess.check_output(args, text=True).strip()
 
 
-def build(root, archive):
-    expression = ('let flake = builtins.getFlake ' + json.dumps('git+file://' + root.as_posix()) + '; in '
+def build(root, archive, scheme="git+file"):
+    expression = ('let flake = builtins.getFlake ' + json.dumps(("git+file://" if scheme == "git+file" else "path:") + root.as_posix()) + '; in '
                   'flake.packages.x86_64-linux.qtalk.override { appArchive = builtins.path { path = builtins.toPath '
                   + json.dumps(archive.as_posix()) + '; name = "qtalk-app.tar.xz"; }; }')
     return command('nix', 'build', '--impure', '--no-link', '--print-out-paths', '--expr', expression)
@@ -46,7 +47,25 @@ def main():
                 data = stream.getvalue()
             info.size = len(data)
             output.addfile(info, io.BytesIO(data))
-    updated = build(root, probe)
+    probe_root = root / 'build/nix-update-probe-source'
+    if probe_root.exists():
+        shutil.rmtree(probe_root)
+    tracked = subprocess.check_output(['git', 'ls-files', '-z'], cwd=root).decode().split('\0')
+    for name in filter(None, tracked):
+        source = root / name
+        if source.is_file():
+            target = probe_root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
+    application_file = probe_root / 'nix/application.json'
+    application = json.loads(application_file.read_text())
+    original_version = application['version']
+    application['version'] += '-update-probe'
+    application_file.write_text(json.dumps(application))
+    properties = probe_root / 'gradle.properties'
+    properties.write_text(properties.read_text().replace('qtalkVersion=' + original_version,
+                                                         'qtalkVersion=' + application['version']))
+    updated = build(probe_root, probe, scheme='path')
     after = closure(updated)
     added = set(after) - set(before)
     if added != {updated}:
@@ -58,7 +77,7 @@ def main():
               'initial_closure_nar_bytes': sum(x['narSize'] for x in before.values()),
               'app_only_update_new_nar_bytes': added_bytes,
               'unchanged_store_paths_reused': len(set(after) & set(before)),
-              'update_probe': 'Only application JAR content changed; no runtime dependency paths changed'}
+              'update_probe': 'Application JAR, package version and flake source changed; no runtime dependency paths changed'}
     args.output.write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2))
 
