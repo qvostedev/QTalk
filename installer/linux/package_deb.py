@@ -40,6 +40,23 @@ def update_control(control, version):
     return "\n".join(key + ": " + value for key, value in fields.items()) + "\n"
 
 
+def configure_desktop_integration(stage):
+    control_directory = stage / "DEBIAN"
+    for name in ["preinst", "postinst", "prerm", "postrm"]:
+        (control_directory / name).unlink(missing_ok=True)
+    script = """#!/bin/sh
+set -e
+if [ -d /usr/share/applications ] && command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database -q /usr/share/applications
+fi
+exit 0
+"""
+    for name in ["postinst", "postrm"]:
+        path = control_directory / name
+        path.write_text(script)
+        path.chmod(0o755)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("deb", type=Path)
@@ -68,6 +85,14 @@ def main():
         shutil.copyfile(root / "branding/logo.png", icon)
         icon.chmod(0o644)
         subprocess.run(["desktop-file-validate", str(stage / "usr/share/applications/qtalk.desktop")], check=True)
+        configure_desktop_integration(stage)
+        checksums = []
+        for path in sorted(stage.rglob("*")):
+            relative = path.relative_to(stage)
+            if path.is_file() and not path.is_symlink() and relative.parts[0] != "DEBIAN":
+                digest = hashlib.md5(path.read_bytes(), usedforsecurity=False).hexdigest()
+                checksums.append(digest + "  " + relative.as_posix())
+        (stage / "DEBIAN/md5sums").write_text(chr(10).join(checksums) + chr(10))
         subprocess.run(["dpkg-deb", "--build", "--root-owner-group", str(stage), str(output)], check=True)
     with output.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()
