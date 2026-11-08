@@ -212,6 +212,16 @@ private val english = mapOf(
     "Проверка загруженного установщика…" to "Verifying downloaded installer…",
     "Обновление установлено. Перезапустите QTalk." to "Update installed. Restart QTalk.",
     "Автообновление для этой системы пока недоступно" to "Automatic updates are not available for this system yet",
+    "QTalk установлен через Nix. Для установки в профиле выполните: nix profile upgrade qtalk. Если приложение управляется системой, обновите его через свою конфигурацию NixOS. Автоматическая установка не выполнялась." to
+        "QTalk is installed through Nix. For a profile installation, run: nix profile upgrade qtalk. For a system-managed installation, update it through your NixOS configuration. No automatic installation was performed.",
+    "Автообновление доступно только для Debian/Ubuntu на amd64. Установите подходящую версию QTalk вручную для вашей системы." to
+        "Automatic updates are available only for Debian/Ubuntu on amd64. Install the appropriate QTalk version for your system manually.",
+    "Автообновление DEB доступно только для amd64. Для вашей архитектуры установите подходящую версию QTalk вручную." to
+        "Automatic DEB updates are available only for amd64. Install the appropriate QTalk version for your architecture manually.",
+    "Автообновление недоступно: нужны системные /usr/bin/apt и /usr/bin/pkexec с владельцем root, безопасными правами и setuid у pkexec. Установите обновление вручную через системный менеджер пакетов." to
+        "Automatic updates are unavailable: system /usr/bin/apt and /usr/bin/pkexec must be root-owned with safe permissions and pkexec must have setuid. Install the update manually using your system package manager.",
+    "Установка обновления… Нужен графический агент авторизации. Проверка прав apt/pkexec не гарантирует возможность повышения привилегий в текущем сеансе." to
+        "Installing update… A graphical authentication agent is required. Checking apt/pkexec file permissions does not guarantee that this session can elevate privileges.",
     "Установщик релиза не содержит контрольную сумму SHA-256" to "The release installer has no SHA-256 checksum",
     "Некорректный размер установщика" to "Invalid installer size",
     "Некорректный адрес установщика" to "Invalid installer URL",
