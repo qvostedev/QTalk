@@ -1,0 +1,445 @@
+{
+  "dependencies": [
+    {
+      "id": "org.jetbrains.compose.desktop:desktop-jvm:1.12.0",
+      "name": "desktop-jvm-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/desktop/desktop-jvm/1.12.0/desktop-jvm-1.12.0.jar",
+      "hash": "sha256-ra6m7GMEIHEtz9UqNWtGrvYDEpyn92y6IEVpES+oDhw=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.material3:material3-desktop:1.12.0-alpha03",
+      "name": "material3-desktop-1.12.0-alpha03.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/material3/material3-desktop/1.12.0-alpha03/material3-desktop-1.12.0-alpha03.jar",
+      "hash": "sha256-J6yA2hw/ZbZzEb+uV9efEwt9TQrI4cW+HKfOiwS30Nc=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.components:components-resources-desktop:1.12.0",
+      "name": "library-desktop-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/components/components-resources-desktop/1.12.0/components-resources-desktop-1.12.0.jar",
+      "hash": "sha256-nVrQfQgv/8GccoUW6H1R0+Q5wACHzAZ/ghoRbyfosp4=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.material:material-desktop:1.12.0",
+      "name": "material-desktop-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/material/material-desktop/1.12.0/material-desktop-1.12.0.jar",
+      "hash": "sha256-DB3Tl7RafNgwI03fMNJTtYYlnnJqXNgWzKLnkRmkf6I=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.animation:animation-core-desktop:1.12.0",
+      "name": "animation-core-desktop-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/animation/animation-core-desktop/1.12.0/animation-core-desktop-1.12.0.jar",
+      "hash": "sha256-2Yi2t9hnFGglqdo44VIvxQWAqhSYarIqi3JPzc7xeHU=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.material:material-ripple-desktop:1.12.0",
+      "name": "material-ripple-desktop-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/material/material-ripple-desktop/1.12.0/material-ripple-desktop-1.12.0.jar",
+      "hash": "sha256-BqxypfV7LnJOoSnvvHGXOiep4c7rf1aCgdyw0e9ESP0=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.animation:animation-desktop:1.12.0",
+      "name": "animation-desktop-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/animation/animation-desktop/1.12.0/animation-desktop-1.12.0.jar",
+      "hash": "sha256-BMCtsZYYUmcXPO9QZYo62ymHpPoDKHM8po8CkyToagk=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.foundation:foundation-layout-desktop:1.12.0",
+      "name": "foundation-layout-desktop-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/foundation/foundation-layout-desktop/1.12.0/foundation-layout-desktop-1.12.0.jar",
+      "hash": "sha256-V7VMEEuunuoOkLsmSH+LZOrQmkc/GzLL7YV5CE9IXns=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.foundation:foundation-desktop:1.12.0",
+      "name": "foundation-desktop-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/foundation/foundation-desktop/1.12.0/foundation-desktop-1.12.0.jar",
+      "hash": "sha256-F9OfyBgqtGHX71LNmGGLSJ6XCzpIpJs81oRBqCnhMx4=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.ui:ui-unit-desktop:1.12.0",
+      "name": "ui-unit-desktop-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/ui/ui-unit-desktop/1.12.0/ui-unit-desktop-1.12.0.jar",
+      "hash": "sha256-fEmY8SJPJB2+iPpZcB1pfVmP6JeaSsrtcXuDZdTNkwA=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.ui:ui-graphics-desktop:1.12.0",
+      "name": "ui-graphics-desktop-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/ui/ui-graphics-desktop/1.12.0/ui-graphics-desktop-1.12.0.jar",
+      "hash": "sha256-WuBG8HReT0hPOaAgLlVFuP/dGTDFUKYNdvbBypU06v8=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.ui:ui-geometry-desktop:1.12.0",
+      "name": "ui-geometry-desktop-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/ui/ui-geometry-desktop/1.12.0/ui-geometry-desktop-1.12.0.jar",
+      "hash": "sha256-LN5E2VuiFlTcztOjCYvdFxs+9bF+9/xs7A0lmD28n6A=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.ui:ui-util-desktop:1.12.0",
+      "name": "ui-util-desktop-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/ui/ui-util-desktop/1.12.0/ui-util-desktop-1.12.0.jar",
+      "hash": "sha256-u4HpdIybyt6uuZurZH4hRC5i4lOjpJeiE8aOBAyys4U=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.ui:ui-text-desktop:1.12.0",
+      "name": "ui-text-desktop-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/ui/ui-text-desktop/1.12.0/ui-text-desktop-1.12.0.jar",
+      "hash": "sha256-ZyMx1+FEDyQG9qm209YUdTFs9iLQ276RDke9vWmGHDg=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.ui:ui-backhandler-desktop:1.12.0",
+      "name": "ui-backhandler-desktop-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/ui/ui-backhandler-desktop/1.12.0/ui-backhandler-desktop-1.12.0.jar",
+      "hash": "sha256-C8AhrMxhbCqZr+DDnKHsKQgvp4p7mYaO0SLRYuq4KL0=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.ui:ui-tooling-preview-desktop:1.12.0",
+      "name": "ui-tooling-preview-desktop-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/ui/ui-tooling-preview-desktop/1.12.0/ui-tooling-preview-desktop-1.12.0.jar",
+      "hash": "sha256-GfUAW6on378/Q1/u1E37qck4ujhqxnU9AKZ6JwzXIjE=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.ui:ui-desktop:1.12.0",
+      "name": "ui-desktop-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/ui/ui-desktop/1.12.0/ui-desktop-1.12.0.jar",
+      "hash": "sha256-o0Wgci/OgK44f4s8YHd0kt9gUcCVN+UMlW94nyw0HQA=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.150.1",
+      "name": "skiko-awt-runtime-linux-x64-0.150.1.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/skiko/skiko-awt-runtime-linux-x64/0.150.1/skiko-awt-runtime-linux-x64-0.150.1.jar",
+      "hash": "sha256-kgwcsDOr+3kgL59FX7hkkb7F5FwVbxhsASWxD86X4JM=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.skiko:skiko-awt:0.150.1",
+      "name": "skiko-awt-0.150.1.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/skiko/skiko-awt/0.150.1/skiko-awt-0.150.1.jar",
+      "hash": "sha256-u2EK2ihQnr7jpiPARpr/NmVon77HPRGAVfPb9aNyEfU=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.lifecycle:lifecycle-viewmodel-desktop:2.11.0",
+      "name": "lifecycle-viewmodel-desktop-2.11.0.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-viewmodel-desktop/2.11.0/lifecycle-viewmodel-desktop-2.11.0.jar",
+      "hash": "sha256-F1w0kmbMu2ogNmFXJbcGbuPzMZZlyYr0IgarOlgqQ8M=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.androidx.savedstate:savedstate-compose-desktop:1.3.6",
+      "name": "savedstate-compose-desktop-1.3.6.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/androidx/savedstate/savedstate-compose-desktop/1.3.6/savedstate-compose-desktop-1.3.6.jar",
+      "hash": "sha256-Dz0EXF/X4TAatsOM0HeAZ7BITPOaysEjO+cacjpqgHU=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.savedstate:savedstate-compose-desktop:1.4.0",
+      "name": "savedstate-compose-desktop-1.4.0.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/savedstate/savedstate-compose-desktop/1.4.0/savedstate-compose-desktop-1.4.0.jar",
+      "hash": "sha256-wCqYsMKzXN3iRcC/5uf/RTx7bQal64aB0lt/VLh06kg=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.savedstate:savedstate-desktop:1.4.0",
+      "name": "savedstate-desktop-1.4.0.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/savedstate/savedstate-desktop/1.4.0/savedstate-desktop-1.4.0.jar",
+      "hash": "sha256-6WXtegEb6DonGsfYIkmndjaEee46KweUjDRFtR1kCFY=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.lifecycle:lifecycle-common-jvm:2.11.0",
+      "name": "lifecycle-common-jvm-2.11.0.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-common-jvm/2.11.0/lifecycle-common-jvm-2.11.0.jar",
+      "hash": "sha256-5qZuZ7n2Og+2NE8WXB2HI3bl/m0jW/+xOK9FEiz0Uqk=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.lifecycle:lifecycle-runtime-compose-desktop:2.11.0",
+      "name": "lifecycle-runtime-compose-desktop-2.11.0.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-runtime-compose-desktop/2.11.0/lifecycle-runtime-compose-desktop-2.11.0.jar",
+      "hash": "sha256-1TNnU+pNWIHM+4sGE+A06yQfDYtDSVNt8c0OyGz2NmQ=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.lifecycle:lifecycle-runtime-desktop:2.11.0",
+      "name": "lifecycle-runtime-desktop-2.11.0.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-runtime-desktop/2.11.0/lifecycle-runtime-desktop-2.11.0.jar",
+      "hash": "sha256-CfdaSo12PO5davNvQiE5oCBdP23y4sUojK5Cg28LNuo=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.androidx.lifecycle:lifecycle-runtime-desktop:2.11.0",
+      "name": "lifecycle-runtime-desktop-2.11.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/androidx/lifecycle/lifecycle-runtime-desktop/2.11.0/lifecycle-runtime-desktop-2.11.0.jar",
+      "hash": "sha256-PltWxUyCbbwqjYFir00CCEDb0+dCuL4794VGr9wvc3Y=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-desktop:2.11.0",
+      "name": "lifecycle-viewmodel-desktop-2.11.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/androidx/lifecycle/lifecycle-viewmodel-desktop/2.11.0/lifecycle-viewmodel-desktop-2.11.0.jar",
+      "hash": "sha256-ODhK0RTzIxpb/gRgjCxRR0dXT/8+NHpyZuEuatNaahw=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.androidx.lifecycle:lifecycle-common-jvm:2.11.0",
+      "name": "lifecycle-common-jvm-2.11.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/androidx/lifecycle/lifecycle-common-jvm/2.11.0/lifecycle-common-jvm-2.11.0.jar",
+      "hash": "sha256-UKgm7w0b0n/zhOTdnRR70fNDzHjQRPezKn7Gzps/0ro=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-savedstate-desktop:2.11.0",
+      "name": "lifecycle-viewmodel-savedstate-desktop-2.11.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/androidx/lifecycle/lifecycle-viewmodel-savedstate-desktop/2.11.0/lifecycle-viewmodel-savedstate-desktop-2.11.0.jar",
+      "hash": "sha256-Xb+WPlvlVbYc5H4Y+N+oL607XA55y+7XydymxVb1OEc=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.lifecycle:lifecycle-viewmodel-savedstate-desktop:2.11.0",
+      "name": "lifecycle-viewmodel-savedstate-desktop-2.11.0.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-viewmodel-savedstate-desktop/2.11.0/lifecycle-viewmodel-savedstate-desktop-2.11.0.jar",
+      "hash": "sha256-yiFyDOfzcMshyrtTKblZ7aYkEH7AYoLjvcklgpF7HSc=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.lifecycle:lifecycle-viewmodel-compose-desktop:2.11.0",
+      "name": "lifecycle-viewmodel-compose-desktop-2.11.0.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-viewmodel-compose-desktop/2.11.0/lifecycle-viewmodel-compose-desktop-2.11.0.jar",
+      "hash": "sha256-G0xYElx7NpNET0DIq3aIHRf6dHJoYMJIcqPew+D600s=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.androidx.navigationevent:navigationevent-compose-desktop:1.1.0",
+      "name": "navigationevent-compose-desktop-1.1.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/androidx/navigationevent/navigationevent-compose-desktop/1.1.0/navigationevent-compose-desktop-1.1.0.jar",
+      "hash": "sha256-BRT11cFN47QixIpOrx2d0s4mUEEznkxRzjDbjaFpCHQ=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.navigationevent:navigationevent-compose-desktop:1.1.1",
+      "name": "navigationevent-compose-desktop-1.1.1.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/navigationevent/navigationevent-compose-desktop/1.1.1/navigationevent-compose-desktop-1.1.1.jar",
+      "hash": "sha256-HX0g14JqLMY6zphizd2KcIWhGj6iz/JYwos9WOV/FDs=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.navigationevent:navigationevent-desktop:1.1.1",
+      "name": "navigationevent-desktop-1.1.1.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/navigationevent/navigationevent-desktop/1.1.1/navigationevent-desktop-1.1.1.jar",
+      "hash": "sha256-TJJQjUvTucr7J4XoIRBX057YRltSlmAiOGShliXO21s=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.compose.runtime:runtime-annotation-jvm:1.12.0",
+      "name": "runtime-annotation-jvm-1.12.0.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/compose/runtime/runtime-annotation-jvm/1.12.0/runtime-annotation-jvm-1.12.0.jar",
+      "hash": "sha256-4pGmrgGrcaf0ilaOyXRMa/mz9G73L7zesow0B65THF4=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.compose.runtime:runtime-retain-desktop:1.12.0",
+      "name": "runtime-retain-desktop-1.12.0.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/compose/runtime/runtime-retain-desktop/1.12.0/runtime-retain-desktop-1.12.0.jar",
+      "hash": "sha256-m35ip98zPDPv+eGm1sJQik2P5LekN3gHVTj+PaS8RIU=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.compose.runtime:runtime-saveable-desktop:1.12.0",
+      "name": "runtime-saveable-desktop-1.12.0.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/compose/runtime/runtime-saveable-desktop/1.12.0/runtime-saveable-desktop-1.12.0.jar",
+      "hash": "sha256-BplJZnQJq23iEFP5/b/whpriofcKchLNuJ59QJ/SVSw=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.runtime:runtime-saveable-desktop:1.12.0",
+      "name": "runtime-saveable-desktop-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/runtime/runtime-saveable-desktop/1.12.0/runtime-saveable-desktop-1.12.0.jar",
+      "hash": "sha256-2Blz3O0iPWrqe/n21OrShUlMZW6gA7WQcrq+/SVHDHs=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose-desktop:2.11.0",
+      "name": "lifecycle-runtime-compose-desktop-2.11.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/androidx/lifecycle/lifecycle-runtime-compose-desktop/2.11.0/lifecycle-runtime-compose-desktop-2.11.0.jar",
+      "hash": "sha256-TJSl+pi4OKNLhO7LD8pbKRtBerOvhRiGK0iPhYaKIZU=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose-desktop:2.11.0",
+      "name": "lifecycle-viewmodel-compose-desktop-2.11.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/androidx/lifecycle/lifecycle-viewmodel-compose-desktop/2.11.0/lifecycle-viewmodel-compose-desktop-2.11.0.jar",
+      "hash": "sha256-tErijCVXCeukNxkXmrWkont6jSB14gAw4uJlIR8yCg8=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.compose.runtime:runtime-desktop:1.12.0",
+      "name": "runtime-desktop-1.12.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/runtime/runtime-desktop/1.12.0/runtime-desktop-1.12.0.jar",
+      "hash": "sha256-mkD7msm5ihsti+Uc5X289zPnaPoGqeSFmhd1y1K/aAY=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.compose.runtime:runtime-desktop:1.12.0",
+      "name": "runtime-desktop-1.12.0.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/compose/runtime/runtime-desktop/1.12.0/runtime-desktop-1.12.0.jar",
+      "hash": "sha256-7TkNe/e9upUTWdEn9MHd0iP1NfWmpjB4xcWsa2kk6wg=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.11.0",
+      "name": "kotlinx-coroutines-core-jvm-1.11.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm/1.11.0/kotlinx-coroutines-core-jvm-1.11.0.jar",
+      "hash": "sha256-0ddaoB3/u00cUg5n5MTn9fYXRxjny0YyQSUD8vDmBPo=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.11.0",
+      "name": "kotlinx-coroutines-swing-1.11.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlinx/kotlinx-coroutines-swing/1.11.0/kotlinx-coroutines-swing-1.11.0.jar",
+      "hash": "sha256-f2WP6VK1YXYRH6rYrCdSaJBGCJFdbHk3T6DID7KI+2A=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.11.0",
+      "name": "kotlinx-serialization-core-jvm-1.11.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlinx/kotlinx-serialization-core-jvm/1.11.0/kotlinx-serialization-core-jvm-1.11.0.jar",
+      "hash": "sha256-9KgBxkfUNRMnzZ4axBE+K+nqN6ZKsKuuJpwlpS4o810=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.11.0",
+      "name": "kotlinx-serialization-json-jvm-1.11.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlinx/kotlinx-serialization-json-jvm/1.11.0/kotlinx-serialization-json-jvm-1.11.0.jar",
+      "hash": "sha256-VjoltOtckSiunCR589GlxE3NF2ESuRzwNoLpBuulyTU=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.kotlinx:kotlinx-datetime-jvm:0.7.1",
+      "name": "kotlinx-datetime-jvm-0.7.1.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlinx/kotlinx-datetime-jvm/0.7.1/kotlinx-datetime-jvm-0.7.1.jar",
+      "hash": "sha256-O4uYZXya/zvn9rS1denz+5o6H0UqgB2g9DiQFzSs2t4=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.graphics:graphics-shapes-desktop:1.1.0",
+      "name": "graphics-shapes-desktop-1.1.0.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/graphics/graphics-shapes-desktop/1.1.0/graphics-shapes-desktop-1.1.0.jar",
+      "hash": "sha256-jXpNOBLK4uPvgnLpf26ZF65Fkx8XzxOR8CRqkslV2fQ=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.collection:collection-jvm:1.5.0",
+      "name": "collection-jvm-1.5.0.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/collection/collection-jvm/1.5.0/collection-jvm-1.5.0.jar",
+      "hash": "sha256-cLNZJOS6vN/6N9Dlde4DnFai2XEjNCYkxItgMjNwQ0E=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.arch.core:core-common:2.2.0",
+      "name": "core-common-2.2.0.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/arch/core/core-common/2.2.0/core-common-2.2.0.jar",
+      "hash": "sha256-ZTCKBrHADuGGy54ZMhOD8EO5k4E/FSLEf0o+MwO9ukE=",
+      "linphone": false
+    },
+    {
+      "id": "androidx.annotation:annotation-jvm:1.9.1",
+      "name": "annotation-jvm-1.9.1.jar",
+      "url": "https://dl.google.com/dl/android/maven2/androidx/annotation/annotation-jvm/1.9.1/annotation-jvm-1.9.1.jar",
+      "hash": "sha256-HjQ5F+vye6lv5NxSscrX/TK3OPvGNVu2zVs7MF1yEtA=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.kotlinx:atomicfu-jvm:0.28.0",
+      "name": "atomicfu-jvm-0.28.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlinx/atomicfu-jvm/0.28.0/atomicfu-jvm-0.28.0.jar",
+      "hash": "sha256-OVduxGuDQS/3opCdJMzLupBADpH5qmeyUDCbwIcuz1I=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.kotlin:kotlin-stdlib:2.4.20",
+      "name": "kotlin-stdlib-2.4.20.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.4.20/kotlin-stdlib-2.4.20.jar",
+      "hash": "sha256-IibeRj0wnUpVAKSBMgs96lFaaYHcrh3vUx+8FYiE4l8=",
+      "linphone": false
+    },
+    {
+      "id": "net.java.dev.jna:jna:5.17.0",
+      "name": "jna-5.17.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/net/java/dev/jna/jna/5.17.0/jna-5.17.0.jar",
+      "hash": "sha256-s6lAjnxR4I7w47/MCPRD9uwPYZG6jNfBjVPSsi5b28A=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains:annotations:23.0.0",
+      "name": "annotations-23.0.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/annotations/23.0.0/annotations-23.0.0.jar",
+      "hash": "sha256-ew8ZckCCy/y8ZuWr6iubySzwih6hHhkZM+1DgB6zzQU=",
+      "linphone": false
+    },
+    {
+      "id": "com.googlecode.soundlibs:mp3spi:1.9.5.4",
+      "name": "mp3spi-1.9.5.4.jar",
+      "url": "https://repo.maven.apache.org/maven2/com/googlecode/soundlibs/mp3spi/1.9.5.4/mp3spi-1.9.5.4.jar",
+      "hash": "sha256-8r1NC2NTK1Lq+cCGUo7YN55aiAWvdZxNvepbekDk6H4=",
+      "linphone": false
+    },
+    {
+      "id": "org.linphone:linphone-sdk:5.5.23",
+      "name": "linphone-sdk-5.5.23-ubuntu.24.04.jar",
+      "url": "https://download.linphone.org/releases/android/maven_repository/org/linphone/linphone-sdk/5.5.23/linphone-sdk-5.5.23-ubuntu.24.04.jar",
+      "hash": "sha256-2x8s12hh0ZAPMPhIcpS6zAk/WTEkBvUDT4FvFYb/X0E=",
+      "linphone": true
+    },
+    {
+      "id": "com.googlecode.soundlibs:jlayer:1.0.1.4",
+      "name": "jlayer-1.0.1.4.jar",
+      "url": "https://repo.maven.apache.org/maven2/com/googlecode/soundlibs/jlayer/1.0.1.4/jlayer-1.0.1.4.jar",
+      "hash": "sha256-hjpRRwq01YHGJp3NWgRxoiaTLsWy7z95/oarVZOHrFw=",
+      "linphone": false
+    },
+    {
+      "id": "com.googlecode.soundlibs:tritonus-share:0.3.7.4",
+      "name": "tritonus-share-0.3.7.4.jar",
+      "url": "https://repo.maven.apache.org/maven2/com/googlecode/soundlibs/tritonus-share/0.3.7.4/tritonus-share-0.3.7.4.jar",
+      "hash": "sha256-b2JrQdxyB0ZWBZ3holvG8cWrsgK1fTfFOPVxT1Tv2rQ=",
+      "linphone": false
+    },
+    {
+      "id": "org.jetbrains.runtime:jbr-api:1.9.0",
+      "name": "jbr-api-1.9.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/runtime/jbr-api/1.9.0/jbr-api-1.9.0.jar",
+      "hash": "sha256-fjcoTjO1swTuYXTcqpLblJslfMTImRyoZefa9RE9gnk=",
+      "linphone": false
+    },
+    {
+      "id": "junit:junit:3.8.2",
+      "name": "junit-3.8.2.jar",
+      "url": "https://repo.maven.apache.org/maven2/junit/junit/3.8.2/junit-3.8.2.jar",
+      "hash": "sha256-7NzAgYNwjqP3sN3Jbxlnig24rx+zl3kdSErtYyAFWLA=",
+      "linphone": false
+    },
+    {
+      "id": "org.jspecify:jspecify:1.0.0",
+      "name": "jspecify-1.0.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jspecify/jspecify/1.0.0/jspecify-1.0.0.jar",
+      "hash": "sha256-H61ua+dVd4Hk0zcp1Jrhzcj92m/kd7sMxozjUer9+6s=",
+      "linphone": false
+    }
+  ]
+}
