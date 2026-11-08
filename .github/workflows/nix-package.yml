@@ -4,9 +4,14 @@ on:
   push:
     branches: [build/nix-package]
   workflow_dispatch:
+    inputs:
+      publish_tag:
+        description: Existing same-version release to replace after all checks pass
+        required: false
+        default: ''
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: nix-package-${{ github.ref }}
@@ -64,6 +69,25 @@ jobs:
                 xvfb-run -a dbus-run-session -- bash /checks/smoke-test.sh
               '
           done
+      - name: Replace existing same-version release
+        if: inputs.publish_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.publish_tag }}
+        run: |
+          test "$GITHUB_REF" = refs/heads/main
+          version=$(python3 -c 'import json; print(json.load(open("nix/application.json"))["version"])')
+          test "$REQUESTED_TAG" = "v$version"
+          git diff --exit-code HEAD -- nix/application.json nix/runtime-lock.json
+          gh release view "$REQUESTED_TAG" > /dev/null
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$REQUESTED_TAG" -f sha="$GITHUB_SHA" -F force=true
+          archive=$(python3 -c 'import json; print("build/nix-release/" + json.load(open("nix/application.json"))["name"])')
+          gh release upload "$REQUESTED_TAG" "$archive#QTalk NixOS application (x86_64)" "desktopApp/build/compose/binaries/main/deb-release/QTalk_${version}-1_amd64.deb#QTalk Linux installer (.deb)" --clobber
+          gh release edit "$REQUESTED_TAG" --notes-file "docs/releases/$version.md" --target "$GITHUB_SHA" --latest
+          nix profile install --profile "$RUNNER_TEMP/qtalk-published-profile" github:qvostedev/QTalk#qtalk --refresh
+          nix profile upgrade qtalk --profile "$RUNNER_TEMP/qtalk-published-profile" --refresh
+          test "$(cat "$RUNNER_TEMP/qtalk-published-profile/share/qtalk/version")" = "$version"
+          xvfb-run -a dbus-run-session -- bash installer/nix/smoke-test.sh "$RUNNER_TEMP/qtalk-published-profile/bin/qtalk"
       - name: Save packages and metadata
         if: always()
         uses: actions/upload-artifact@v4
