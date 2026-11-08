@@ -45,6 +45,8 @@ dependencies {
 }
 
 tasks.jar {
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
     manifest.attributes["Implementation-Version"] = qTalkDisplayVersion
     manifest.attributes["QTalk-Build"] = "RELEASE-$qTalkDisplayVersion"
 }

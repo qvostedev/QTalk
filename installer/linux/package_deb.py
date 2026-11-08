@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from strip_sdk import strip_sdk
 
 NATIVE_DEPENDENCIES = [
     "libc6 (>= 2.39)", "libstdc++6", "libgcc-s1", "libasound2t64", "libpulse0",
@@ -85,6 +86,12 @@ def main():
         shutil.copyfile(root / "branding/logo.png", icon)
         icon.chmod(0o644)
         subprocess.run(["desktop-file-validate", str(stage / "usr/share/applications/qtalk.desktop")], check=True)
+        sdk_jars = list(stage.rglob("linphone-sdk-*.jar"))
+        if len(sdk_jars) != 1:
+            raise RuntimeError("Expected one Linux Linphone SDK JAR")
+        stripped_sdk = Path(temp) / "stripped-sdk.jar"
+        strip_sdk(sdk_jars[0], stripped_sdk)
+        stripped_sdk.replace(sdk_jars[0])
         configure_desktop_integration(stage)
         checksums = []
         for path in sorted(stage.rglob("*")):
@@ -93,7 +100,7 @@ def main():
                 digest = hashlib.md5(path.read_bytes(), usedforsecurity=False).hexdigest()
                 checksums.append(digest + "  " + relative.as_posix())
         (stage / "DEBIAN/md5sums").write_text(chr(10).join(checksums) + chr(10))
-        subprocess.run(["dpkg-deb", "--build", "--root-owner-group", str(stage), str(output)], check=True)
+        subprocess.run(["dpkg-deb", "-Zxz", "-z9", "--uniform-compression", "--build", "--root-owner-group", str(stage), str(output)], check=True)
     with output.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()
     report = {"file": output.name, "version": args.version, "architecture": "amd64",

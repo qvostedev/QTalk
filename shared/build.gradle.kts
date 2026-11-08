@@ -104,6 +104,11 @@ dependencies {
 }
 
 // Native SDK tests must not share extracted DLLs with an installed, running QTalk.
+tasks.withType<org.gradle.api.tasks.bundling.AbstractArchiveTask>().configureEach {
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+}
+
 tasks.withType<Test>().configureEach {
     val nativeTemp = layout.buildDirectory.dir("native-test-tmp").get().asFile
     systemProperty("java.io.tmpdir", nativeTemp.absolutePath)

@@ -1,5 +1,5 @@
 {
-  description = "QTalk development environment";
+  description = "QTalk desktop package and development environment";
 
   inputs = {
         nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -23,11 +23,24 @@
         libx11
         libxv
         fontconfig
+        freetype
+        alsa-lib
+        libpulseaudio
+        glib
+        gtk3
+        zlib
         stdenv.cc.cc.lib
         oldPkgs.glew
       ];
+      fontsConf = pkgs.makeFontsConf { fontDirectories = [ pkgs.dejavu_fonts ]; };
+      qtalk = pkgs.callPackage ./nix/package.nix { nativeLibraries = nativeLibs; inherit fontsConf; };
     in
     {
+      packages.${system} = { inherit qtalk; default = qtalk; };
+      apps.${system} = {
+        qtalk = { type = "app"; program = "${qtalk}/bin/qtalk"; };
+        default = self.apps.${system}.qtalk;
+      };
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [
           jdk21

@@ -1,0 +1,53 @@
+import groovy.json.JsonOutput
+import java.security.MessageDigest
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+
+gradle.projectsEvaluated {
+    def desktop = gradle.rootProject.project(':desktopApp')
+    def shared = gradle.rootProject.project(':shared')
+    desktop.tasks.register('exportNixRuntime') {
+        dependsOn desktop.tasks.named('jar'), shared.tasks.named('jvmJar')
+        doLast {
+            def output = gradle.rootProject.file('build/nix-export')
+            def app = new File(output, 'app')
+            app.mkdirs()
+            desktop.copy {
+                from desktop.tasks.named('jar').get().archiveFile
+                into app
+                rename { 'desktopApp.jar' }
+            }
+            desktop.copy {
+                from shared.tasks.named('jvmJar').get().archiveFile
+                into app
+                rename { 'shared-jvm.jar' }
+            }
+            def dependencies = []
+            desktop.configurations.runtimeClasspath.incoming.artifacts.artifacts.each { artifact ->
+                def component = artifact.id.componentIdentifier
+                if (!(component instanceof ModuleComponentIdentifier)) return
+                def file = artifact.file
+                if (!file.name.endsWith('.jar')) throw new GradleException("Unsupported runtime artifact: ${file.name}")
+                def digest = MessageDigest.getInstance('SHA-256')
+                file.withInputStream { stream ->
+                    byte[] buffer = new byte[65536]
+                    int count
+                    while ((count = stream.read(buffer)) > 0) digest.update(buffer, 0, count)
+                }
+                def base = component.group == 'org.linphone' ?
+                    'https://download.linphone.org/releases/android/maven_repository/' :
+                    component.group.startsWith('androidx.') ?
+                    'https://dl.google.com/dl/android/maven2/' : 'https://repo.maven.apache.org/maven2/'
+                dependencies << [
+                    id: "${component.group}:${component.module}:${component.version}".toString(),
+                    name: file.name,
+                    url: "${base}${component.group.replace('.', '/')}/${component.module}/${component.version}/${file.name}".toString(),
+                    hash: 'sha256-' + digest.digest().encodeBase64().toString(),
+                    linphone: component.group == 'org.linphone'
+                ]
+            }
+            def result = [version: desktop.providers.gradleProperty('qtalkVersion').get(), dependencies: dependencies]
+            new File(output, 'runtime-lock.json').text = JsonOutput.prettyPrint(JsonOutput.toJson(result)) + '\n'
+            println("Exported ${dependencies.size()} independently cached runtime artifacts")
+        }
+    }
+}

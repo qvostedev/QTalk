@@ -1,0 +1,90 @@
+name: Nix package
+
+on:
+  push:
+    branches: [build/nix-package]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nix-package-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Linux test tools
+        run: |
+          sudo apt-get update
+          packages=$(python3 -c 'import sys; sys.path.insert(0,"installer/linux"); from package_deb import NATIVE_DEPENDENCIES; print(" ".join(x.split()[0] for x in NATIVE_DEPENDENCIES))')
+          sudo apt-get install -y $packages fakeroot binutils xvfb xauth xdotool dbus-x11
+      - name: Test and export application-only bundle
+        run: |
+          chmod +x gradlew
+          python3 -m unittest discover -s installer/linux -p 'test_*.py'
+          xvfb-run -a ./gradlew -I installer/nix/export-runtime.gradle :shared:jvmTest :desktopApp:test :desktopApp:exportNixRuntime :desktopApp:packageQTalkDeb --no-configuration-cache
+          python3 installer/nix/prepare_bundle.py --export build/nix-export --output build/nix-release --metadata nix
+          git add nix/application.json nix/runtime-lock.json
+      - uses: cachix/install-nix-action@v31
+      - name: Build Nix package and measure app-only update
+        run: |
+          archive=$(python3 -c 'import json; print("build/nix-release/" + json.load(open("nix/application.json"))["name"])')
+          python3 installer/nix/verify_package.py "$archive" --output build/nix-release/nix-verification.json
+      - name: Launch native Nix package
+        run: |
+          package=$(python3 -c 'import json; print(json.load(open("build/nix-release/nix-verification.json"))["package"])')
+          test ! -d "$package/lib/runtime"
+          desktop-file-validate "$package/share/applications/qtalk.desktop"
+          xvfb-run -a dbus-run-session -- bash installer/nix/smoke-test.sh "$package/bin/qtalk"
+          nix profile install --profile "$RUNNER_TEMP/qtalk-profile" "$package"
+          nix profile list --profile "$RUNNER_TEMP/qtalk-profile" --json > build/nix-release/profile.json
+      - name: Launch compact DEB on clean distributions
+        run: |
+          mkdir -p build/linux-release
+          cp desktopApp/build/compose/binaries/main/deb-release/* build/linux-release/
+          for image in ubuntu:24.04 debian:13; do
+            docker run --rm -e DEBIAN_FRONTEND=noninteractive \
+              -v "$PWD/build/linux-release:/packages:ro" \
+              -v "$PWD/installer/linux:/checks:ro" "$image" bash -euc '
+                apt-get update
+                apt-get install -y /packages/QTalk_*.deb xvfb xauth xdotool dbus-x11
+                desktop-file-validate /usr/share/applications/qtalk.desktop
+                xvfb-run -a dbus-run-session -- bash /checks/smoke-test.sh
+              '
+          done
+      - name: Save packages and metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: QTalk-Nix-build
+          path: |
+            build/nix-release/QTalk-*.tar.xz
+            build/nix-release/nix-verification.json
+            build/nix-release/profile.json
+            nix/application.json
+            nix/runtime-lock.json
+            desktopApp/build/compose/binaries/main/deb-release/*
+            /tmp/qtalk-nix-startup.log
+          if-no-files-found: warn
+      - name: Save test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: QTalk-Nix-tests
+          path: |
+            shared/build/test-results/jvmTest/
+            desktopApp/build/test-results/test/
+            desktopApp/build/compose/logs/
+          if-no-files-found: ignore
