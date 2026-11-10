@@ -6,6 +6,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.IndicationNodeFactory
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.node.DelegatableNode
@@ -53,7 +54,9 @@ private object PlainIndication : IndicationNodeFactory {
 @Composable
 fun CallsTheme(mode: ThemeMode, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalCallsPalette provides if (mode == ThemeMode.LIGHT) lightPalette else darkPalette,
-        LocalIndication provides PlainIndication) {
+        LocalIndication provides PlainIndication,
+        // Material controls use their own ripple, bypassing LocalIndication.
+        LocalRippleConfiguration provides null) {
         content()
     }
 }

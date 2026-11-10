@@ -25,6 +25,7 @@ internal fun uiText(source: String): String = translateUiText(source, LocalAppLa
 fun translateUiText(source: String, language: AppLanguage): String {
     if (language == AppLanguage.RUSSIAN) return source
     english[source]?.let { return it }
+    com.qvoste.qtalk.support.supportEnglish[source]?.let { return it }
     for (label in countedLabels) {
         if (source.startsWith("$label ")) return english.getValue(label) + source.removePrefix(label)
     }

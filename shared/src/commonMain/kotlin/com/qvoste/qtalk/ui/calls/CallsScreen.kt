@@ -8,6 +8,8 @@ import com.qvoste.qtalk.ui.calls.i18n.AppLanguage
 import com.qvoste.qtalk.ui.calls.i18n.LocalAppLanguage
 import com.qvoste.qtalk.ui.calls.i18n.uiText
 import qtalk.shared.generated.resources.icon_settings_language
+import qtalk.shared.generated.resources.icon_settings_support
+import com.qvoste.qtalk.support.SupportScreen
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.layout.SubcomposeLayout
@@ -1406,6 +1408,11 @@ private fun SipSettings(
     searchFocusRequester: FocusRequester
 ) {
     var showAccount by remember { mutableStateOf(false) }
+    var showSupport by remember { mutableStateOf(false) }
+    if (showSupport) {
+        SupportScreen(onBack = { showSupport = false }, modifier = modifier)
+        return
+    }
     var showInputDevices by remember { mutableStateOf(false) }
     var showOutputDevices by remember { mutableStateOf(false) }
     DisposableEffect(Unit) { onDispose { onStopRingtonePreview() } }
@@ -1597,6 +1604,12 @@ private fun SipSettings(
                 title = "О приложении",
                 subtitle = "Версия, лицензия, правовая информация",
                 onClick = { showAbout = true }
+            )
+            SettingsActionRow(
+                icon = Res.drawable.icon_settings_support,
+                title = "Техническая поддержка",
+                subtitle = "Сообщить о проблеме и сохранить диагностику",
+                onClick = { showSupport = true }
             )
             SettingsActionRow(
                 icon = Res.drawable.icon_settings_logout,

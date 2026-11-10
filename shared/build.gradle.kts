@@ -68,6 +68,7 @@ kotlin {
     sourceSets {
         commonMain { kotlin.srcDir(generateQTalkBuildInfo) }
         jvmMain.dependencies {
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
             implementation("com.googlecode.soundlibs:mp3spi:1.9.5.4")
             implementation(
                 "org.linphone:linphone-sdk:5.5.23:$linphoneClassifier"
@@ -79,6 +80,7 @@ kotlin {
             implementation(libs.compose.uiTooling)
         }
         commonMain.dependencies {
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
@@ -112,6 +114,10 @@ tasks.withType<org.gradle.api.tasks.bundling.AbstractArchiveTask>().configureEac
 tasks.withType<Test>().configureEach {
     val nativeTemp = layout.buildDirectory.dir("native-test-tmp").get().asFile
     systemProperty("java.io.tmpdir", nativeTemp.absolutePath)
+    val testHome = layout.buildDirectory.dir("support-test-home").get().asFile
+    systemProperty("user.home", testHome.absolutePath)
+    environment("LOCALAPPDATA", testHome.resolve("AppData/Local").absolutePath)
+    environment("XDG_STATE_HOME", testHome.resolve(".local/state").absolutePath)
     systemProperty("qtalk.version", providers.gradleProperty("qtalkVersion").get())
-    doFirst { nativeTemp.mkdirs() }
+    doFirst { nativeTemp.mkdirs(); testHome.mkdirs() }
 }

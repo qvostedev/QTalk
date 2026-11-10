@@ -67,6 +67,10 @@ import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main(args: Array<String>) {
+    if ("--support-preview" in args) {
+        supportPreview()
+        return
+    }
     val widgetSmokeIncoming = "--widget-smoke-incoming" in args
     val widgetSmokeTest = "--widget-smoke-test" in args || widgetSmokeIncoming
     // Telegram может быть доступен только через системный прокси Windows.
@@ -91,8 +95,42 @@ fun main(args: Array<String>) {
 
     try {
     application {
-        val voipEngine = remember { LinphoneVoipEngine() }
+
         val accountStore = remember { PreferencesSipAccountStore() }
+        val supportSanitizer = remember(accountStore) {
+            com.qvoste.qtalk.support.DiagnosticSanitizer {
+                accountStore.load()?.let { listOfNotNull(it.password, it.ha1, it.username, it.domain, it.realm) } ?: emptyList()
+            }
+        }
+        val supportSession = remember {
+            com.qvoste.qtalk.support.SupportSession(com.qvoste.qtalk.support.DesktopSupportService(
+                com.qvoste.qtalk.support.SupportConfiguration.endpoint(),
+                com.qvoste.qtalk.support.DiagnosticsCollector(
+                    com.qvoste.qtalk.support.DiagnosticsCollector.defaultLogDirectories(), supportSanitizer, QTalkBuildInfo.VERSION),
+                allowLocal = System.getenv("QTALK_SUPPORT_ALLOW_LOCAL") == "1"))
+        }
+        val supportLogger = remember {
+            com.qvoste.qtalk.support.DiagnosticsCollector.defaultLogDirectories().firstOrNull()?.let { directory ->
+                runCatching {
+                    com.qvoste.qtalk.support.SupportAppLogger.install(directory, supportSanitizer, QTalkBuildInfo.VERSION).also {
+                        java.util.logging.Logger.getLogger("com.qvoste.qtalk").info(
+                            "event=bootstrap build=${QTalkBuildInfo.VERSION} installMethod=${com.qvoste.qtalk.support.DiagnosticsCollector.currentInstallMethod()}")
+                    }
+                }.getOrNull()
+            }
+        }
+        DisposableEffect(supportLogger) {
+
+            onDispose { supportLogger?.close() }
+        }
+        val voipEngine = remember {
+            try { LinphoneVoipEngine() }
+            catch (error: Throwable) {
+                java.util.logging.Logger.getLogger("com.qvoste.qtalk").severe(
+                    "event=voip_start_failed type=${error.javaClass.simpleName}")
+                throw error
+            }
+        }
         val contactStore = remember { PreferencesContactStore() }
         val contactNoteStore = remember { PreferencesContactNoteStore() }
         val callHistoryStore = remember { PreferencesCallHistoryStore() }
@@ -129,6 +167,7 @@ fun main(args: Array<String>) {
         LaunchedEffect(updater) {
             while (true) {
                 runCatching { updater.availableRelease() }
+                    .onFailure { java.util.logging.Logger.getLogger("com.qvoste.qtalk").warning("event=updater_check_failed") }
                     .onSuccess { release ->
                         availableUpdateVersion = release?.version
                         availableUpdateDescription = release?.description
@@ -386,6 +425,7 @@ fun main(args: Array<String>) {
                     minOf(1f, maxWidth.value / 1100f, maxHeight.value / 960f).coerceAtLeast(0.65f)
                 } else interfaceScale
                 CompositionLocalProvider(
+                    com.qvoste.qtalk.support.LocalSupportSession provides supportSession,
                     com.qvoste.qtalk.ui.calls.components.LocalModalVisibility provides modalVisibility,
                     com.qvoste.qtalk.ui.calls.components.LocalCallBackdropVisibility provides callBackdropVisibility,
                     LocalAppLanguage provides LanguageSettings(appLanguage) {
@@ -417,7 +457,12 @@ fun main(args: Array<String>) {
                         availableUpdateVersion = availableUpdateVersion,
                         availableUpdateDescription = availableUpdateDescription,
                         onCheckForUpdates = { onStatus ->
-                            if (updater.checkAndInstall(onStatus)) closeApplication()
+                            try {
+                                if (updater.checkAndInstall(onStatus)) closeApplication()
+                            } catch (error: Exception) {
+                                java.util.logging.Logger.getLogger("com.qvoste.qtalk").warning("event=updater_failed")
+                                throw error
+                            }
                         },
                         callOverlayCollapsed = callOverlayCollapsed,
                         onCollapseCall = { callOverlayCollapsed = true },

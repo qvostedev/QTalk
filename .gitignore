@@ -18,3 +18,24 @@ captures
 **/xcshareddata/WorkspaceSettings.xcsettings
 node_modules/
 .direnv/
+
+# Local credentials and private key material
+.env
+.env.*
+!.env.example
+!.env.sample
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+credentials.json
+service-account*.json
+*-service-account.json
+
+# Local build evidence, not release sources
+/*_BUILD_REPORT.md

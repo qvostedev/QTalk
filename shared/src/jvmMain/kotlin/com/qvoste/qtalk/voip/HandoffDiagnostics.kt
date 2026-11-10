@@ -32,7 +32,7 @@ internal class HandoffDiagnostics(directory: Path, limit: Int = 262144, count: I
                 .digest(id.toByteArray()).take(8).joinToString("") { "%02x".format(it) } } ?: "none"
             val line = "event=${safe(code)} ext=${number(extension)} tx=$correlation phase=${safe(phase)} " +
                 "peer=${number(peer)} state=${safe(state)} reason=${safe(reason)} protocol=$protocol target=${target ?: "none"}"
-            handler?.publish(LogRecord(Level.INFO, line)); handler?.flush()
+            handler?.publish(LogRecord(Level.INFO, com.qvoste.qtalk.support.DiagnosticSanitizer().clean(line))); handler?.flush()
         }
     }
     override fun close() { runCatching { handler?.close() } }
@@ -40,8 +40,9 @@ internal class HandoffDiagnostics(directory: Path, limit: Int = 262144, count: I
 
 internal object Lan2Diagnostics {
     private val sink by lazy { runCatching {
-        val local = System.getenv("LOCALAPPDATA") ?: return@runCatching null
-        HandoffDiagnostics(Path.of(local, "QTalk", "logs"))
+        val directory = com.qvoste.qtalk.support.DiagnosticsCollector.defaultLogDirectories().firstOrNull()
+            ?: return@runCatching null
+        HandoffDiagnostics(directory)
     }.getOrNull() }
     fun event(code: String, extension: String = "", transfer: String? = null, phase: String = "",
         peer: String = "", state: String = "", reason: String = "", protocol: Int = 0, target: LanSipEndpoint? = null) {

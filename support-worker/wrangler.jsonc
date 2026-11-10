@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "qtalk-support",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-30",
+  "workers_dev": true,
+  "upload_source_maps": false,
+  "observability": { "enabled": false },
+  "durable_objects": {
+    "bindings": [{ "name": "COORDINATOR", "class_name": "SupportCoordinator" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SupportCoordinator"] }]
+}

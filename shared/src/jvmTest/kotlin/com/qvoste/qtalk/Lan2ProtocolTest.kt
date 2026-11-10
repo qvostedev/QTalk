@@ -99,7 +99,8 @@ class Lan2ProtocolTest {
         val logs = Files.list(dir).use { paths -> paths.filter { it.toString().endsWith(".log") }.toList() }
         assertTrue(logs.size in 1..3)
         val text = logs.joinToString("\n") { Files.readString(it) }
-        assertTrue(text.contains("LAN2") && text.contains("tx=") && text.contains("ext=102"))
+        assertTrue(text.contains("LAN2") && text.contains("tx=") && text.contains("[redacted]"))
+        assertFalse(text.contains("ext=102"))
         assertFalse(text.contains(id)); assertFalse(text.contains("Authorization")); assertFalse(text.contains("secret"))
         HandoffDiagnostics(Files.createTempFile("qtalk-unwritable-", ".tmp")).use { it.event("test") }
     }

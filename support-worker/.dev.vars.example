@@ -1,0 +1,4 @@
+TELEGRAM_BOT_TOKEN=replace-using-wrangler-secret-put
+TELEGRAM_CHAT_ID=replace-using-wrangler-secret-put
+# Optional topic; omit when unused.
+# TELEGRAM_MESSAGE_THREAD_ID=replace-using-wrangler-secret-put
