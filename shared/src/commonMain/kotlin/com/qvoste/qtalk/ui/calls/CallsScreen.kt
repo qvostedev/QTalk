@@ -9,6 +9,9 @@ import com.qvoste.qtalk.ui.calls.i18n.LocalAppLanguage
 import com.qvoste.qtalk.ui.calls.i18n.uiText
 import qtalk.shared.generated.resources.icon_settings_language
 import qtalk.shared.generated.resources.icon_settings_support
+import qtalk.shared.generated.resources.icon_github
+import com.qvoste.qtalk.ui.calls.components.QTALK_REPOSITORY_URL
+import com.qvoste.qtalk.ui.calls.components.openExternalUrl
 import com.qvoste.qtalk.support.SupportScreen
 
 import androidx.compose.animation.core.animateFloatAsState
@@ -1608,7 +1611,7 @@ private fun SipSettings(
             SettingsActionRow(
                 icon = Res.drawable.icon_settings_support,
                 title = "Техническая поддержка",
-                subtitle = "Сообщить о проблеме и сохранить диагностику",
+                subtitle = "Сообщить о проблеме и предложить улучшения",
                 onClick = { showSupport = true }
             )
             SettingsActionRow(
@@ -1816,27 +1819,39 @@ private fun SipSettings(
                 TextButton(onClick = { showAbout = false }) { Text(uiText("Готово"), color = TextPrimary) }
             },
             dismissButton = {
-                TextButton(
-                    enabled = !updating,
-                    onClick = {
-                        updateScope.launch {
-                            updating = true
-                            try {
-                                onCheckForUpdates { message, progress ->
-                                    updateMessage = message
-                                    updateProgress = progress
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { openExternalUrl(QTALK_REPOSITORY_URL) }) {
+                        Image(
+                            painterResource(Res.drawable.icon_github),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            colorFilter = ColorFilter.tint(Primary)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("GitHub", color = Primary)
+                    }
+                    TextButton(
+                        enabled = !updating,
+                        onClick = {
+                            updateScope.launch {
+                                updating = true
+                                try {
+                                    onCheckForUpdates { message, progress ->
+                                        updateMessage = message
+                                        updateProgress = progress
+                                    }
+                                } catch (error: CancellationException) {
+                                    throw error
+                                } catch (error: Exception) {
+                                    updateMessage = "Ошибка обновления: ${error.message ?: "проверьте подключение"}"
+                                    updateProgress = null
+                                } finally {
+                                    updating = false
                                 }
-                            } catch (error: CancellationException) {
-                                throw error
-                            } catch (error: Exception) {
-                                updateMessage = "Ошибка обновления: ${error.message ?: "проверьте подключение"}"
-                                updateProgress = null
-                            } finally {
-                                updating = false
                             }
                         }
-                    }
-                ) { Text(uiText("Обновить"), color = Primary) }
+                    ) { Text(uiText("Обновить"), color = Primary) }
+                }
             }
         )
     }
